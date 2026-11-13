@@ -1,0 +1,22 @@
+{
+  "name": "riftrubbish",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "RiftRubbish — isekai survivor-like: reborn with trash skills, fuse them into god-tier, survive 7 nights.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite": "7.3.8",
+    "vitest": "3.2.7"
+  }
+}
