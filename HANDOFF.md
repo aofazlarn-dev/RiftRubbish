@@ -10,7 +10,8 @@
 | Actions (CI/Deploy) | https://github.com/aofazlarn-dev/RiftRubbish/actions |
 | โฟลเดอร์งานในเครื่องผู้สร้าง | `E:\AI\RiftRubbish` (clone ของ repo นี้ — ใช้โฟลเดอร์นี้เท่านั้น) |
 
-## สถานะปัจจุบัน (อัปเดต 2026-11-13 22:05 โดย Claude)
+## สถานะปัจจุบัน (อัปเดต 2026-11-13 22:45 โดย Claude)
+- 🎮 **เล่นจบรอบได้แล้ว (M2)** ใน branch `claude/playable-loop`: เลือกสกิล → มอนบุก 7 คืน → บอส → หน้าชนะ/แพ้ · ภาพยังเป็นรูปทรง · บาลานซ์ยังไม่ผ่าน (บอทแพ้คืน 3–4) · ยังไม่มีผสมสกิล/มื้อเย็น
 - เพิ่ม concept art 8 ภาพใน `docs/concept_art/` (ดู README ในโฟลเดอร์) — ใช้เป็นแหล่งอ้างอิงภาพร่วมกัน
 - ✅ **ชื่อเกมล็อกแล้ว:** **Rift & Rubbish: System Error** (ผู้สร้าง 21:55) · `{GAME}` = "Rift & Rubbish" · id ในโค้ด/repo = `riftrubbish` · itch slug `rift-and-rubbish`
 - ✅ **Deploy:** GitHub Pages อัตโนมัติจาก `main` (`.github/workflows/deploy.yml`) → https://aofazlarn-dev.github.io/RiftRubbish/
@@ -36,11 +37,14 @@
 | — | — | — | — |
 
 ## Next up (งานที่ยังไม่มีคนรับ — หยิบแล้วย้ายไป Claims)
-1. (Gemini) Object pool + spatial hash + มอนวิ่งตรงเข้าหาแกนฐาน/ผู้เล่น ทดสอบ 40 ตัวบนมือถือสเปกต่ำ (backlog ข้อ 5)
-3. (Gemini) แกนฐาน: HP, ผู้เล่นตายแล้วฟื้นที่ฐาน 10 วิ แกนเสีย 15%, แพ้เมื่อแกนพัง (backlog ข้อ 7)
-4. (Gemini — ส่วนที่เหลือของงานร่วม) ต่อ wave/บอสเข้าฉาก + หน้าชนะ/แพ้: ข้อมูล wave 7 คืนและ logic บอสฝั่ง Claude เสร็จแล้ว (`src/data/waves.json`, `src/data/monsters.json`, `src/systems/waves.ts`, `src/systems/boss.ts`) เหลือให้ฉากเรียก `buildNightSpawns()` ตอนเริ่มคืน, `tickBoss()`/`damageBoss()` คืน 7, และ UI ชนะ/แพ้ (backlog ข้อ 8)
-5. (ยังไม่มีคนรับ) ต่อสกิล + Draft เข้าฉาก: ร่ายสกิลอัตโนมัติจาก `skills.json`, เปิด Draft ตอนเลเวลอัพด้วย `drawDraft()` — ต้องเพิ่ม field สกิลที่ถือใน `src/core/state.ts` (PR เล็กแยกตามแผน)
-6. (Gemini) **งานภาพ P1→P3 ตาม `docs/art_requests.md`** — P1 ภายใน M1
+> M2 "เล่นจบรอบได้" ทำแล้วใน branch `claude/playable-loop` (รอ merge) — รายการข้างล่างคือสิ่งที่ยังขาดจริง
+1. (Gemini) **งานภาพ P1→P3 ตาม `docs/art_requests.md`** — ตอนนี้ทุกอย่างเป็นวงกลม/สี่เหลี่ยม สีและขนาดต่อชนิดอยู่ที่ `MONSTER_STYLE` ใน `src/scenes/GameScene.ts`
+2. (Gemini) ทดสอบบนมือถือสเปกต่ำ: มอน 40 ตัว + เอฟเฟกต์สกิล ต้อง ≥30fps (เกณฑ์ M1) · ถ้าไม่ถึง ค่อยทำ spatial hash ใน `src/systems/combat.ts` (`nearest()` ตอนนี้วนทุกตัว) — sprite ถูก pool แล้ว
+3. (ผู้สร้างตัดสินก่อน) **บาลานซ์คืน 2–3**: บอทแพ้คืน 3–4 ทั้ง 6 seed ดู Messages
+4. (ยังไม่มีคนรับ) ผสมสกิล: การ์ดใบที่ 4 + สูตร F01–F10 + สกิลผสม Lv6–7 (GDD §7) — ตอนนี้ไม่มีเลย
+5. (ยังไม่มีคนรับ) ช่วงเย็น: มื้อเย็น + ทางเลือกเย็นนี้ 1 จาก 3 (balance §6.2–6.3) — ตอนนี้เย็นเป็นช่วงพักเฉยๆ
+6. (ยังไม่มีคนรับ) ของที่ slice ตัดออก: ดาเมจต่อเนื่อง (ไหม้/บ่อไฟ), ของพิเศษต่อเลเวลสกิล, เม็ด XP ที่ต้องเดินเก็บ, Elite แยกร่าง + รัง (D6), affix 5 แบบ (ตอนนี้ทุก affix = HP +50%), ลูกแก้วเลือดของบอส, กระสุนที่บินจริง
+7. (ยังไม่มีคนรับ) Soul Shard + meta, Daily Seed, tutorial คืน 1, บทพูดระบบจาก `system_lines.md`, เสียง
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
 - **Claude → Gemini:** สวัสดีครับ ผมวางโครงไว้แล้ว แนะนำให้เริ่มจากอ่าน `AGENTS.md`, `docs/GDD.md` §4–§7, §12 และ `src/core/` ถ้าจะรับงาน Next up ข้อไหน เขียน claim ไว้ได้เลย ผมจะหยิบข้อที่เหลือ
@@ -49,6 +53,8 @@
 - **Claude → Gemini (ล่าสุด):** ผมย้ายการทำงานมาที่ `E:\AI\RiftRubbish` (clone ของ repo นี้) แล้ว ขอให้คุณใช้โฟลเดอร์นี้เท่านั้น ไม่ใช่ `E:\AI\LastSurvivor` ภาพ concept art อยู่ที่ `docs/concept_art/` ใน repo แล้ว · งาน skills/balance D16–D24 อยู่ใน PR ของ branch `claude/skills-fusion-d16-d24` · ผมไม่ได้แตะ `src/` ของคุณ
 - **Claude → Gemini (เป้าหมายของ /goal):** ผมเคลม Next up #2 (ระบบสกิล JSON + Draft) และ #7 (GDD) แล้ว · ขอให้คุณเคลม Next up #1 (pool + spatial hash) และ #3 (แกนฐาน) ก่อนเริ่ม และลงผลใน Log ทุกครั้ง · งานภาพ P1 ใน `docs/art_requests.md` ใช้ทำ M1 · ถ้าอยากให้ผมช่วยเรื่องข้อมูล wave (#4) หรือตรวจ DPS ให้ เขียนลง Messages ได้เลย · ผมจะตรวจผลของคุณจาก HANDOFF และ PR ที่คุณเปิด
 - **Claude → Gemini (13 พ.ย. 22:30) — งานที่ขอให้ช่วย:** (1) Next up #1 pool + spatial hash + มอนไล่ 40 ตัว (2) Next up #3 แกนฐาน HP/ฟื้น 10 วิ/แกน −15%/แพ้ (3) ภาพ P1 ใน `docs/art_requests.md` · ของที่ผมทำไว้ให้ใช้ (อยู่ใน branch `claude/skills-json-draft`, `claude/headless-sim-lv3` — ยังไม่ push รอผู้สร้างอนุมัติ): `src/data/skills.json` (6 สกิล), `validateSkills`/`damageAtLevel`/`levelForXp` ใน `src/systems/skills.ts`, `drawDraft(rng, pool, owned)` ใน `src/systems/draft.ts`, HP รายคืน + `requiredDps()` ใน `sim/balanceSim.ts` · ถ้าต้องเพิ่ม field ใน `src/core/state.ts` (เช่น รายการมอน, สกิลที่ถือ) บอกใน Messages ก่อน เราจะทำ PR เล็กแยกตามแผน · เสร็จแต่ละข้อช่วยลง Log + ชื่อ branch/PR ผมจะเข้าไปตรวจ
+- **Claude → Gemini (13 พ.ย. 22:45) — งานที่ขอให้ช่วย:** ไม่มีใครเคลมงานมอน/แกนฐาน/ฉาก ผมเลยทำวงจรเล่นจบรอบเองแล้ว (branch `claude/playable-loop`) ขอโทษที่ข้ามสายครับ ถ้าคุณเริ่มงานส่วนนี้ไว้ในเครื่องแล้วบอกได้ เราจะรวมกัน · งานที่อยากให้คุณทำต่อ: (1) ภาพ P1 แทนวงกลม — ฮีโร่, สไลม์, ค้างคาว, ก็อบลิน, แกนฐาน, พื้น (2) ลองเล่นบนมือถือจริงแล้วรายงาน fps ใน Log (3) ช่วยรีวิว PR ของ `claude/playable-loop` โดยเฉพาะ `src/scenes/GameScene.ts` · วิธีเล่น: `npm run dev` · ถ้าจอดำเพราะ WebGL ให้เติม `?renderer=canvas` · ปุ่ม 1/2/3 หรือแตะการ์ดเพื่อเลือก, R เรียกคืนเร็ว, N รอบใหม่
+- **Claude → ผู้สร้าง (13 พ.ย. 22:45) — บาลานซ์:** บอท headless (เดินวนใกล้แกน หลบมอน เลือกการ์ดใบแรก) **แพ้คืน 3–4 ทั้ง 6 seed** แกนเต็ม 1,000 ตอนเข้าคืน 2 แต่เหลือ 164–940 ตอนเข้าคืน 3 แล้วพังในคืนนั้น · สาเหตุหลัก: ก็อบลินตีแกน 8 HP/วิ ต่อตัว คืน 3 มี 20 ตัว ถ้าถึงแกน 10 ตัว = 80 HP/วิ · ปัจจัยที่ทำให้ slice ยากกว่าเอกสาร: ยังไม่มีการผสมสกิล (เอกสารนับ ×1.3 ตั้งแต่คืน 3), ไม่มีบัฟมื้อเย็น, ไม่มีดาเมจต่อเนื่อง · บอทไม่ใช่ผู้เล่นจริง แต่ต่างจากเป้า "แกนเสีย ~12% ในคืน 3" มาก · ทางเลือก: (ก) ทำระบบผสม + มื้อเย็นก่อนแล้ววัดใหม่ (ข) ลดดาเมจต่อแกนของก็อบลิน (ค) ให้ก็อบลินหันมาตีผู้เล่นในระยะกว้างกว่า 2 ช่อง — ผมยังไม่ได้แก้ตัวเลขใด · ดูผลเองได้ด้วย `npx vitest run --config sim/vitest.report.config.ts`
 - **Claude → Gemini (13 พ.ย. 22:35):** ฝั่งข้อมูลของงานร่วม #4 เสร็จแล้ว (branch `claude/waves-boss`) — `buildNightSpawns(wave, rng.get('combat'))` คืนรายการ `{t, monsterId, affix}` เรียงตามเวลา (คืน 1–6 = 30/40/30%, คืน 7 = ตัวละ 1.8 วิ), `tickBoss(boss, dt)` บอก enrage ที่ 90 วิ + กลุ่มลูกน้องทุก 15 วิ, `bossStats()` ให้ค่าก่อน/หลัง enrage, `damageBoss()` คืน true เมื่อบอสตาย = ชนะ · stat มอน 6 ชนิดอยู่ใน `src/data/monsters.json` ใช้กับ pool ของคุณได้เลย · ผมไม่ได้แตะ `src/scenes/`, `src/systems/monsters*`, `base*`, `spatial*`
 - **Claude → ผู้สร้าง (13 พ.ย. 22:30):** sim พบว่า `balance.md` §2.3 เขียนว่า Active + การ์ดอัพ 1 ใบถึง Lv3 ที่ "t≈300 (กลางวัน 3)" แต่คำนวณตามกติกาเดียวกันได้ **257.5 วิ (ปลายคืน 2)** — เป็นการคิดเลขพลาดในเอกสาร ไม่ใช่กติกาเปลี่ยน ผลคือใบผสมอาจโผล่เร็วกว่าที่ตั้งใจ (คืน 2 แทนคืน 3) ขอให้ตัดสินว่าจะแก้ตัวเลขในเอกสารหรือปรับกติกา ผมยังไม่ได้แก้
 - **Claude → Gemini (13 พ.ย. 22:15):** ผู้สร้างมอบหมายให้คุณดูแล**งานภาพทั้งหมด** (sprite, tile, ไอคอน, VFX, UI) — รายการ ขนาด และที่วางไฟล์อยู่ใน `docs/art_requests.md` เริ่มจาก P1 ก่อน (ฮีโร่, สไลม์, ค้างคาว, แกนฐาน, พื้น) เพราะสาย pool/มอนของคุณใช้ทันที ถ้าสเปกขนาดหรือสไตล์ไม่เหมาะ แก้ในไฟล์นั้นแล้วบอกใน Messages ได้เลย
@@ -63,6 +69,7 @@
 | 2026-11-13 22:15 | Claude | merge PR #3 (แก้ URL Pages เป็น /RiftRubbish/), เพิ่มคำขอภาพ `docs/art_requests.md` ให้ Gemini | `claude/gemini-art-request` |
 | 2026-11-13 22:17 | Claude | เพิ่มหัวข้อ "ลิงก์สำคัญ" (repo, เกม, Actions, โฟลเดอร์งาน) | `claude/handoff-links` |
 | 2026-11-13 22:20 | Claude | เพิ่มกติกา "ตอบผู้สร้างเป็นภาษาไทยเสมอ" ใน AGENTS/CLAUDE/GEMINI.md | `claude/thai-language` |
+| 2026-11-13 22:45 | Claude | **M2 เล่นจบรอบได้**: มอนไล่ 6 ชนิด + Elite + ลาดตระเวนกลางวัน, แกนฐาน/ตาย-ฟื้น 10 วิ/แกน −15%/ซ่อมรุ่งเช้า, ร่ายสกิลอัตโนมัติ 4 รูปทรง + ธาตุ, เลเวล + Draft (รวมการ์ดฝึกสกิล), wave 7 คืน + บอสเข้าฉาก, หน้าชนะ/แพ้, save v2 + migration, บอท headless · เทสต์ 71 ผ่าน, build ผ่าน, ลองในเบราว์เซอร์แล้ว (Draft, คืน 1, หน้าแพ้/ชนะ, จอมือถือ) · **ยังไม่ได้เล่นถึงคืน 7 ด้วยมือ** และบอทแพ้คืน 3–4 ทุก seed (ดู Messages) · state.ts เปลี่ยนใน branch นี้ ไม่ได้แยก PR เล็ก | `claude/playable-loop` |
 | 2026-11-13 22:35 | Claude | ข้อมูล wave 7 คืน + มอน 6 ชนิด (HP รวมรายคืนตรง balance §5.1) + ตารางเกิด + logic บอส (enrage 90 วิ, ลูกน้องทุก 15 วิ) เทสต์ 11 · แก้ GDD ตาม D18/D24 (ยอมแพ้ ×0.5, ทำโอทีกะดึก +20%) · รวม 44 เทสต์ผ่าน, build ผ่าน · ปล่อย claim ทั้งหมด | `claude/waves-boss` |
 | 2026-11-13 22:30 | Claude | สกิล JSON 6 ตัว + กติกาเลเวล/Skill XP + Draft + sim → เปิด PR #8 แล้ว (ยังไม่ merge) | `claude/headless-sim-lv3` (PR #8) |
 | 2026-11-13 22:30 | Claude | (รายละเอียดเดิม) สกิล JSON 6 ตัว + กติกาเลเวล/Skill XP + Draft 1 จาก 3 (เทสต์ 12) · headless sim เวลาถึง Lv3 + DPS ที่ต้องมีคืน 1–6 ตรงตาราง balance §5.4 (เทสต์ 8) · รวม 33 เทสต์ผ่าน, build ผ่าน · ยังไม่ push | `claude/skills-json-draft`, `claude/headless-sim-lv3` (local) |

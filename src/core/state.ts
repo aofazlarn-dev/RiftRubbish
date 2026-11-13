@@ -5,10 +5,13 @@
 
 import type { Phase } from './events';
 import { RunRng, type RngState } from './rng';
+import type { BossState } from '../systems/boss';
+import type { SpawnEvent } from '../systems/waves';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export type Mode = 'casual' | 'daily';
+export type RunStatus = 'playing' | 'won' | 'lost';
 
 /** Phase lengths in game seconds (GDD §4). Night 7 has no timer: it ends on boss kill or core loss. */
 export const PHASE_SECONDS: Record<Phase, number> = { day: 70, evening: 20, night: 40 };
@@ -24,6 +27,40 @@ export interface PlayerState {
   xp: number;
 }
 
+export interface OwnedSkill {
+  id: string;
+  /** Skill XP; the level is derived with levelForXp(). */
+  xp: number;
+  /** Seconds until an Active can cast again. Unused for Passives. */
+  cooldownLeft: number;
+}
+
+export interface MonsterInstance {
+  uid: number;
+  defId: string;
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  /** Seconds until the next ranged shot (skeleton). */
+  attackTimer: number;
+  /** Seconds until the next hit on the base core. */
+  coreTimer: number;
+  /** Seconds of slow remaining. */
+  slowLeft: number;
+  affix: boolean;
+  /** Daytime patrol: idles until the player comes close, never attacks the core. */
+  patrol: boolean;
+}
+
+export interface BossInstance {
+  x: number;
+  y: number;
+  slamTimer: number;
+  coreTimer: number;
+  rules: BossState;
+}
+
 export interface GameState {
   version: number;
   seed: string;
@@ -37,6 +74,22 @@ export interface GameState {
   coreHp: number;
   coreMaxHp: number;
   rng: RngState;
+  status: RunStatus;
+  skills: OwnedSkill[];
+  monsters: MonsterInstance[];
+  nextUid: number;
+  /** Tonight's remaining spawns, ordered by time. */
+  spawnQueue: SpawnEvent[];
+  boss: BossInstance | null;
+  /** Cards on offer; the game is paused while this is set. "skill:<id>" or "up:<id>". */
+  pendingDraft: string[] | null;
+  /** Level-ups that have not shown their Draft yet. */
+  draftsOwed: number;
+  /** >0 while the player is down and waiting to respawn at the base. */
+  respawnIn: number;
+  /** i-frames after a hit (balance §1.1: 0.5 s). */
+  invulnLeft: number;
+  kills: number;
 }
 
 export interface NewRunOptions {
@@ -58,6 +111,24 @@ export function createRun({ seed, mode = 'casual', fromSeedLink = false }: NewRu
     coreHp: 1000,
     coreMaxHp: 1000,
     rng: RunRng.fromSeed(seed).snapshot(),
+    ...runDefaults(),
+  };
+}
+
+/** Fields added in save version 2. Also used to migrate version 1 saves. */
+function runDefaults() {
+  return {
+    status: 'playing' as RunStatus,
+    skills: [] as OwnedSkill[],
+    monsters: [] as MonsterInstance[],
+    nextUid: 1,
+    spawnQueue: [] as SpawnEvent[],
+    boss: null as BossInstance | null,
+    pendingDraft: null as string[] | null,
+    draftsOwed: 0,
+    respawnIn: 0,
+    invulnLeft: 0,
+    kills: 0,
   };
 }
 
@@ -67,9 +138,12 @@ export function serialize(state: GameState): string {
 
 /** Parses a save and migrates older versions. Throws on unreadable or future saves. */
 export function deserialize(json: string): GameState {
-  const data = JSON.parse(json) as Partial<GameState>;
+  let data = JSON.parse(json) as Partial<GameState>;
   if (typeof data.version !== 'number') throw new Error('Save has no version');
   if (data.version > SAVE_VERSION) throw new Error(`Save version ${data.version} is newer than this game`);
-  // Future migrations go here: if (data.version === 1) { ...; data.version = 2; }
+  if (data.version === 1) {
+    // v1 had only clock + player + core. Add the combat/draft fields with fresh defaults.
+    data = { ...runDefaults(), ...data, version: 2 };
+  }
   return data as GameState;
 }

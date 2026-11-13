@@ -18,6 +18,18 @@ export interface SkillDef {
   range: number;
   shape: string;
   junk?: boolean;
+  /** cone: full angle in degrees. */
+  arc?: number;
+  /** projectile: explosion radius in tiles around the target. */
+  splash?: number;
+  /** projectile: chance to hit (Throw Rock misses a lot). */
+  accuracy?: number;
+  /** line: seconds of slow applied to every monster hit. */
+  slowSeconds?: number;
+  /** chain: extra jumps, jump radius in tiles, damage lost per jump. */
+  jumps?: number;
+  jumpRange?: number;
+  falloff?: number;
 }
 
 /** Rarity order, lowest to highest. Used for the downgrade rule (balance §9.1). */

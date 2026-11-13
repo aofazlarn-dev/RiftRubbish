@@ -5,8 +5,8 @@ import { RunRng } from '../src/core/rng';
 import { BOSS_ENRAGE_SECONDS, bossCcDuration, bossStats, createBoss, damageBoss, tickBoss } from '../src/systems/boss';
 import { buildNightSpawns, waveForNight, waveTotalHp, type MonsterDef, type WavesData } from '../src/systems/waves';
 
-const monsters = monstersData.monsters as MonsterDef[];
-const waves = wavesData as WavesData;
+const monsters = monstersData.monsters as unknown as MonsterDef[];
+const waves = wavesData as unknown as WavesData;
 const combat = (seed: string) => RunRng.fromSeed(seed).get('combat');
 
 describe('wave data (balance §5.1)', () => {

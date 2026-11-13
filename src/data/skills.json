@@ -1,5 +1,5 @@
 {
-  "_comment": "MVP skill chips for the vertical slice. Numbers from docs/content/skills_fusion.md §1 (Lv1 values). Rarity weights and level multipliers live in src/systems/skills.ts.",
+  "_comment": "MVP skill chips for the vertical slice. Numbers from docs/content/skills_fusion.md §1 (Lv1 values). range/splash/jumpRange in tiles. Rarity weights and level multipliers live in src/systems/skills.ts.",
   "skills": [
     {
       "id": "W01",
@@ -10,7 +10,8 @@
       "damage": 6,
       "cooldown": 1.2,
       "range": 2.5,
-      "shape": "cone"
+      "shape": "cone",
+      "arc": 100
     },
     {
       "id": "E01",
@@ -21,7 +22,8 @@
       "damage": 6,
       "cooldown": 1.8,
       "range": 8,
-      "shape": "projectile"
+      "shape": "projectile",
+      "splash": 1.2
     },
     {
       "id": "E02",
@@ -32,7 +34,8 @@
       "damage": 12,
       "cooldown": 2.0,
       "range": 8,
-      "shape": "line"
+      "shape": "line",
+      "slowSeconds": 2
     },
     {
       "id": "E03",
@@ -43,7 +46,10 @@
       "damage": 12,
       "cooldown": 2.2,
       "range": 6,
-      "shape": "chain"
+      "shape": "chain",
+      "jumps": 4,
+      "jumpRange": 3,
+      "falloff": 0.15
     },
     {
       "id": "J03",
@@ -55,6 +61,7 @@
       "cooldown": 1.3,
       "range": 6,
       "shape": "projectile",
+      "accuracy": 0.55,
       "junk": true
     },
     {
