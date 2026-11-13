@@ -1,9 +1,11 @@
-# RiftRubbish
+# Rift & Rubbish: System Error
 
 > เกิดใหม่พร้อมสกิลขยะ เอามาผสมให้เทพ แล้วรอดให้ครบ 7 คืน
 > *Reborn with garbage skills. Fuse them into something godlike. Survive 7 nights.*
 
 เกม survivor-like แนว isekai แบบ 2D top-down เล่นบนเบราว์เซอร์ (PC + มือถือ) — Phaser 3 + TypeScript + Vite
+
+**เล่นได้ที่:** https://aofazlarn-dev.github.io/riftrubbish/ (deploy อัตโนมัติจาก `main`)
 
 ## เริ่มใช้งาน
 ```bash

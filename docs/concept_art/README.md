@@ -13,4 +13,4 @@
 | 07_alt_title_bloodmoon_overtime.jpg | ชื่อทางเลือก "Blood Moon Overtime" | รอตัดสินใจชื่อ |
 | 08_alt_logo_variations.jpg | โลโก้ทางเลือก: Blood Moon Overtime / Rift Shift: 7 Nights / Crimson System | รอตัดสินใจชื่อ |
 
-**ยังเปิดอยู่:** โลโก้เขียน "RIFT & RUBBISH" แต่ชื่อ repo/เอกสารใช้ "RiftRubbish" — ผู้สร้างต้องล็อกรูปแบบชื่อสุดท้าย
+**ชื่อเกมล็อกแล้ว (13 พ.ย. 21:55):** Rift & Rubbish: System Error — โลโก้ภาพ 01 ใช้ต่อได้ เติมซับไตเติล "System Error" · ภาพ 07–08 (ชื่อทางเลือก) ไม่ใช้แล้ว เก็บไว้เป็นไอเดีย
