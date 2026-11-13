@@ -33,22 +33,24 @@
 ## Claims (งานที่กำลังทำ — ห้ามแตะไฟล์ในรายการของอีกฝ่าย)
 | ใคร | งาน | ไฟล์/โฟลเดอร์ | เริ่ม |
 | --- | --- | --- | --- |
-| — | — | — | — |
+| Claude | ระบบสกิลจาก JSON + Draft 1 จาก 3 (Next up #2) | `src/data/`, `src/systems/skills*`, `src/systems/draft*`, `tests/skills*`, `tests/draft*` | 2026-11-13 22:27 |
+| Claude | GDD §4/§14 ×0.6 + เปลี่ยนชื่อ "ขายวิญญาณ" → "ทำโอทีกะดึก" (Next up #7) | `docs/GDD.md` | 2026-11-13 22:27 |
+| Claude | Headless sim: เวลาถึง Lv3 + DPS ที่ต้องมีต่อคืน (Next up #5) | `sim/`, `tests/sim*`, `tsconfig.json` (เพิ่ม `sim` ใน include) | 2026-11-13 22:30 |
 
 ## Next up (งานที่ยังไม่มีคนรับ — หยิบแล้วย้ายไป Claims)
 1. (Gemini) Object pool + spatial hash + มอนวิ่งตรงเข้าหาแกนฐาน/ผู้เล่น ทดสอบ 40 ตัวบนมือถือสเปกต่ำ (backlog ข้อ 5)
-2. (Claude) ระบบสกิลจาก JSON: schema ชิ้นส่วน projectile/aoe/aura + trigger/status (D23) + 6 สกิลแรก + Draft 1 จาก 3 เว้นใบที่ 4 (backlog ข้อ 6)
 3. (Gemini) แกนฐาน: HP, ผู้เล่นตายแล้วฟื้นที่ฐาน 10 วิ แกนเสีย 15%, แพ้เมื่อแกนพัง (backlog ข้อ 7)
 4. (ร่วม) Wave 7 คืน (ตัวเลขชั่วคราวจาก balance.md) + บอส placeholder enrage 90 วิ + หน้าชนะ/แพ้ (backlog ข้อ 8)
-5. (Claude) Headless sim: เวลาที่สกิล 2 ตัวถึง Lv3 และ DPS vs HP ต่อคืน (backlog ข้อ 9)
 6. (Gemini) **งานภาพ P1→P3 ตาม `docs/art_requests.md`** — P1 ภายใน M1
-7. (Claude) GDD §4/§14 ×0.6 และเปลี่ยนชื่อ "ขายวิญญาณ" → "ทำโอทีกะดึก" ใน `docs/GDD.md` — เป็นส่วนที่ค้างจาก claim เดิมของ Claude (งาน skills/balance เสร็จแล้ว ส่วน GDD ยังไม่ได้แก้)
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
 - **Claude → Gemini:** สวัสดีครับ ผมวางโครงไว้แล้ว แนะนำให้เริ่มจากอ่าน `AGENTS.md`, `docs/GDD.md` §4–§7, §12 และ `src/core/` ถ้าจะรับงาน Next up ข้อไหน เขียน claim ไว้ได้เลย ผมจะหยิบข้อที่เหลือ
 - **Claude → Gemini (13 พ.ย. 21:50):** ผมเจอ concept art 8 ภาพใน `E:\AI\LastSurvivor\concept_art` (06:53–07:05) คิดว่าเป็นงานของคุณ ภาพตรงกับสเปกดีมาก ผมนำเข้า `docs/concept_art/` แล้ว รบกวน (1) ยืนยันใน Log ว่าเป็นงานของคุณและใช้เครื่องมืออะไรสร้าง (2) งานต่อไปทุกชิ้น ช่วยเขียน Claims ก่อนเริ่ม และลง Log เมื่อเสร็จในไฟล์นี้ (ไฟล์ใน repo คือตัวจริง สำเนาใน `E:\AI\LastSurvivor` อาจเก่า) (3) ถ้าทำงานในโฟลเดอร์ E: แนะนำ `git clone https://github.com/aofazlarn-dev/riftrubbish` ลงไปที่นั่น เราจะได้ใช้ HANDOFF ไฟล์เดียวกัน
 - **Claude → Gemini (13 พ.ย. 22:05):** ผู้สร้างล็อกชื่อเกมและอนุมัติแผนด้านบนแล้ว เสนอให้คุณรับสาย "มอน/ฉาก" เริ่มจาก Next up ข้อ 1 (pool + spatial hash) — เขียน Claims ก่อนเริ่มนะครับ ถ้าอยากสลับงานบอกใน Messages ได้
 - **Claude → Gemini (ล่าสุด):** ผมย้ายการทำงานมาที่ `E:\AI\RiftRubbish` (clone ของ repo นี้) แล้ว ขอให้คุณใช้โฟลเดอร์นี้เท่านั้น ไม่ใช่ `E:\AI\LastSurvivor` ภาพ concept art อยู่ที่ `docs/concept_art/` ใน repo แล้ว · งาน skills/balance D16–D24 อยู่ใน PR ของ branch `claude/skills-fusion-d16-d24` · ผมไม่ได้แตะ `src/` ของคุณ
+- **Claude → Gemini (เป้าหมายของ /goal):** ผมเคลม Next up #2 (ระบบสกิล JSON + Draft) และ #7 (GDD) แล้ว · ขอให้คุณเคลม Next up #1 (pool + spatial hash) และ #3 (แกนฐาน) ก่อนเริ่ม และลงผลใน Log ทุกครั้ง · งานภาพ P1 ใน `docs/art_requests.md` ใช้ทำ M1 · ถ้าอยากให้ผมช่วยเรื่องข้อมูล wave (#4) หรือตรวจ DPS ให้ เขียนลง Messages ได้เลย · ผมจะตรวจผลของคุณจาก HANDOFF และ PR ที่คุณเปิด
+- **Claude → Gemini (13 พ.ย. 22:30) — งานที่ขอให้ช่วย:** (1) Next up #1 pool + spatial hash + มอนไล่ 40 ตัว (2) Next up #3 แกนฐาน HP/ฟื้น 10 วิ/แกน −15%/แพ้ (3) ภาพ P1 ใน `docs/art_requests.md` · ของที่ผมทำไว้ให้ใช้ (อยู่ใน branch `claude/skills-json-draft`, `claude/headless-sim-lv3` — ยังไม่ push รอผู้สร้างอนุมัติ): `src/data/skills.json` (6 สกิล), `validateSkills`/`damageAtLevel`/`levelForXp` ใน `src/systems/skills.ts`, `drawDraft(rng, pool, owned)` ใน `src/systems/draft.ts`, HP รายคืน + `requiredDps()` ใน `sim/balanceSim.ts` · ถ้าต้องเพิ่ม field ใน `src/core/state.ts` (เช่น รายการมอน, สกิลที่ถือ) บอกใน Messages ก่อน เราจะทำ PR เล็กแยกตามแผน · เสร็จแต่ละข้อช่วยลง Log + ชื่อ branch/PR ผมจะเข้าไปตรวจ
+- **Claude → ผู้สร้าง (13 พ.ย. 22:30):** sim พบว่า `balance.md` §2.3 เขียนว่า Active + การ์ดอัพ 1 ใบถึง Lv3 ที่ "t≈300 (กลางวัน 3)" แต่คำนวณตามกติกาเดียวกันได้ **257.5 วิ (ปลายคืน 2)** — เป็นการคิดเลขพลาดในเอกสาร ไม่ใช่กติกาเปลี่ยน ผลคือใบผสมอาจโผล่เร็วกว่าที่ตั้งใจ (คืน 2 แทนคืน 3) ขอให้ตัดสินว่าจะแก้ตัวเลขในเอกสารหรือปรับกติกา ผมยังไม่ได้แก้
 - **Claude → Gemini (13 พ.ย. 22:15):** ผู้สร้างมอบหมายให้คุณดูแล**งานภาพทั้งหมด** (sprite, tile, ไอคอน, VFX, UI) — รายการ ขนาด และที่วางไฟล์อยู่ใน `docs/art_requests.md` เริ่มจาก P1 ก่อน (ฮีโร่, สไลม์, ค้างคาว, แกนฐาน, พื้น) เพราะสาย pool/มอนของคุณใช้ทันที ถ้าสเปกขนาดหรือสไตล์ไม่เหมาะ แก้ในไฟล์นั้นแล้วบอกใน Messages ได้เลย
 
 ## Log
@@ -61,4 +63,6 @@
 | 2026-11-13 22:15 | Claude | merge PR #3 (แก้ URL Pages เป็น /RiftRubbish/), เพิ่มคำขอภาพ `docs/art_requests.md` ให้ Gemini | `claude/gemini-art-request` |
 | 2026-11-13 22:17 | Claude | เพิ่มหัวข้อ "ลิงก์สำคัญ" (repo, เกม, Actions, โฟลเดอร์งาน) | `claude/handoff-links` |
 | 2026-11-13 22:20 | Claude | เพิ่มกติกา "ตอบผู้สร้างเป็นภาษาไทยเสมอ" ใน AGENTS/CLAUDE/GEMINI.md | `claude/thai-language` |
+| 2026-11-13 22:30 | Claude | สกิล JSON 6 ตัว + กติกาเลเวล/Skill XP + Draft 1 จาก 3 (เทสต์ 12) · headless sim เวลาถึง Lv3 + DPS ที่ต้องมีคืน 1–6 ตรงตาราง balance §5.4 (เทสต์ 8) · รวม 33 เทสต์ผ่าน, build ผ่าน · ยังไม่ push | `claude/skills-json-draft`, `claude/headless-sim-lv3` (local) |
+| 2026-11-13 22:27 | Claude | เคลม Next up #2 (สกิล JSON + Draft) และ #7 (GDD) ลง Claims · ตอบ Gemini เรื่องงานที่ยังไม่มีคนรับ | `claude/claim-skills-draft` |
 | 2026-11-13 22:22 | Claude | Next up #1 เสร็จ: แก้ `docs/content/skills_fusion.md` + `balance.md` ตาม D15–D24 (diff เฉพาะส่วนนั้น) · npm ci / test 13 ผ่าน / build ผ่าน · ปล่อย claim เดิม · งานค้าง: GDD §4/§14 (ข้อ 7 ใน Next up) · npm audit รายงาน 3 รายการ (2 critical, 1 moderate) ยังไม่ได้แก้ — ต้องขออนุมัติผู้สร้างก่อนเปลี่ยน dependency | `claude/skills-fusion-d16-d24` |
