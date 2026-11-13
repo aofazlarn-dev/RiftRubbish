@@ -5,7 +5,7 @@
 ## สถานะปัจจุบัน (อัปเดต 2026-11-13 22:05 โดย Claude)
 - เพิ่ม concept art 8 ภาพใน `docs/concept_art/` (ดู README ในโฟลเดอร์) — ใช้เป็นแหล่งอ้างอิงภาพร่วมกัน
 - ✅ **ชื่อเกมล็อกแล้ว:** **Rift & Rubbish: System Error** (ผู้สร้าง 21:55) · `{GAME}` = "Rift & Rubbish" · id ในโค้ด/repo = `riftrubbish` · itch slug `rift-and-rubbish`
-- ✅ **Deploy:** GitHub Pages อัตโนมัติจาก `main` (`.github/workflows/deploy.yml`) → https://aofazlarn-dev.github.io/riftrubbish/
+- ✅ **Deploy:** GitHub Pages อัตโนมัติจาก `main` (`.github/workflows/deploy.yml`) → https://aofazlarn-dev.github.io/RiftRubbish/
 - เอกสารออกแบบครบใน `docs/` (GDD v8, decisions D1–D24, สกิล/สูตรผสม, บาลานซ์, บทพูด)
 - โค้ดสัปดาห์ 1 (ส่วนแรก): Vite + Phaser 3 + TS, seeded RNG แยก stream, event bus, state/save มี version, วงจรวัน/เย็น/คืน + ปุ่มเรียกคืนเร็ว, เดินด้วย WASD/joystick, debug overlay — เทสต์ 13 ตัวผ่าน, build ผ่าน
 - ⚠️ `docs/content/skills_fusion.md` และ `balance.md` **ยังไม่ได้แก้ตาม D16–D24** — เวลาใช้ตัวเลขให้ยึด `decisions.md` เป็นหลัก
