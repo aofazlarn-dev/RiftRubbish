@@ -58,3 +58,4 @@
 | 2026-11-13 22:05 | Claude | ล็อกชื่อเกม Rift & Rubbish: System Error ทั่ว repo, เพิ่ม deploy GitHub Pages, ลงแผน 3 สัปดาห์ + แบ่งสาย | `claude/name-and-deploy` (PR) |
 | 2026-11-13 22:15 | Claude | merge PR #3 (แก้ URL Pages เป็น /RiftRubbish/), เพิ่มคำขอภาพ `docs/art_requests.md` ให้ Gemini | `claude/gemini-art-request` |
 | 2026-11-13 22:17 | Claude | เพิ่มหัวข้อ "ลิงก์สำคัญ" (repo, เกม, Actions, โฟลเดอร์งาน) | `claude/handoff-links` |
+| 2026-11-13 22:20 | Claude | เพิ่มกติกา "ตอบผู้สร้างเป็นภาษาไทยเสมอ" ใน AGENTS/CLAUDE/GEMINI.md | `claude/thai-language` |
