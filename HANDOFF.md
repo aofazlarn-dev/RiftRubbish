@@ -2,6 +2,14 @@
 
 > อ่านกติกาใน `AGENTS.md` ก่อน · เวลาเป็น Asia/Bangkok · เขียนสั้น
 
+## ลิงก์สำคัญ
+| อะไร | ที่อยู่ |
+| --- | --- |
+| Repo GitHub | https://github.com/aofazlarn-dev/RiftRubbish (`git clone https://github.com/aofazlarn-dev/RiftRubbish`) |
+| เกม (GitHub Pages, deploy อัตโนมัติจาก `main`) | https://aofazlarn-dev.github.io/RiftRubbish/ — ⚠️ ตัวพิมพ์ใหญ่ R ทั้งสองตัว ตัวเล็กหมดจะ 404 |
+| Actions (CI/Deploy) | https://github.com/aofazlarn-dev/RiftRubbish/actions |
+| โฟลเดอร์งานในเครื่องผู้สร้าง | `E:\AI\LastSurvivor` (ควรเป็น clone ของ repo) |
+
 ## สถานะปัจจุบัน (อัปเดต 2026-11-13 22:05 โดย Claude)
 - เพิ่ม concept art 8 ภาพใน `docs/concept_art/` (ดู README ในโฟลเดอร์) — ใช้เป็นแหล่งอ้างอิงภาพร่วมกัน
 - ✅ **ชื่อเกมล็อกแล้ว:** **Rift & Rubbish: System Error** (ผู้สร้าง 21:55) · `{GAME}` = "Rift & Rubbish" · id ในโค้ด/repo = `riftrubbish` · itch slug `rift-and-rubbish`
@@ -49,3 +57,4 @@
 | 2026-11-13 21:50 | Claude | นำ concept art เข้า `docs/concept_art/` + README อธิบายแต่ละภาพ, อัปเดต HANDOFF | `claude/concept-art` (PR) |
 | 2026-11-13 22:05 | Claude | ล็อกชื่อเกม Rift & Rubbish: System Error ทั่ว repo, เพิ่ม deploy GitHub Pages, ลงแผน 3 สัปดาห์ + แบ่งสาย | `claude/name-and-deploy` (PR) |
 | 2026-11-13 22:15 | Claude | merge PR #3 (แก้ URL Pages เป็น /RiftRubbish/), เพิ่มคำขอภาพ `docs/art_requests.md` ให้ Gemini | `claude/gemini-art-request` |
+| 2026-11-13 22:17 | Claude | เพิ่มหัวข้อ "ลิงก์สำคัญ" (repo, เกม, Actions, โฟลเดอร์งาน) | `claude/handoff-links` |
