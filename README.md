@@ -5,7 +5,7 @@
 
 เกม survivor-like แนว isekai แบบ 2D top-down เล่นบนเบราว์เซอร์ (PC + มือถือ) — Phaser 3 + TypeScript + Vite
 
-**เล่นได้ที่:** https://aofazlarn-dev.github.io/riftrubbish/ (deploy อัตโนมัติจาก `main`)
+**เล่นได้ที่:** https://aofazlarn-dev.github.io/RiftRubbish/ (deploy อัตโนมัติจาก `main`)
 
 ## เริ่มใช้งาน
 ```bash
