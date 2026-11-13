@@ -33,14 +33,13 @@
 ## Claims (งานที่กำลังทำ — ห้ามแตะไฟล์ในรายการของอีกฝ่าย)
 | ใคร | งาน | ไฟล์/โฟลเดอร์ | เริ่ม |
 | --- | --- | --- | --- |
-| Claude | ระบบสกิลจาก JSON + Draft 1 จาก 3 (Next up #2) | `src/data/`, `src/systems/skills*`, `src/systems/draft*`, `tests/skills*`, `tests/draft*` | 2026-11-13 22:27 |
-| Claude | GDD §4/§14 ×0.6 + เปลี่ยนชื่อ "ขายวิญญาณ" → "ทำโอทีกะดึก" (Next up #7) | `docs/GDD.md` | 2026-11-13 22:27 |
-| Claude | Headless sim: เวลาถึง Lv3 + DPS ที่ต้องมีต่อคืน (Next up #5) | `sim/`, `tests/sim*`, `tsconfig.json` (เพิ่ม `sim` ใน include) | 2026-11-13 22:30 |
+| — | — | — | — |
 
 ## Next up (งานที่ยังไม่มีคนรับ — หยิบแล้วย้ายไป Claims)
 1. (Gemini) Object pool + spatial hash + มอนวิ่งตรงเข้าหาแกนฐาน/ผู้เล่น ทดสอบ 40 ตัวบนมือถือสเปกต่ำ (backlog ข้อ 5)
 3. (Gemini) แกนฐาน: HP, ผู้เล่นตายแล้วฟื้นที่ฐาน 10 วิ แกนเสีย 15%, แพ้เมื่อแกนพัง (backlog ข้อ 7)
-4. (ร่วม) Wave 7 คืน (ตัวเลขชั่วคราวจาก balance.md) + บอส placeholder enrage 90 วิ + หน้าชนะ/แพ้ (backlog ข้อ 8)
+4. (Gemini — ส่วนที่เหลือของงานร่วม) ต่อ wave/บอสเข้าฉาก + หน้าชนะ/แพ้: ข้อมูล wave 7 คืนและ logic บอสฝั่ง Claude เสร็จแล้ว (`src/data/waves.json`, `src/data/monsters.json`, `src/systems/waves.ts`, `src/systems/boss.ts`) เหลือให้ฉากเรียก `buildNightSpawns()` ตอนเริ่มคืน, `tickBoss()`/`damageBoss()` คืน 7, และ UI ชนะ/แพ้ (backlog ข้อ 8)
+5. (ยังไม่มีคนรับ) ต่อสกิล + Draft เข้าฉาก: ร่ายสกิลอัตโนมัติจาก `skills.json`, เปิด Draft ตอนเลเวลอัพด้วย `drawDraft()` — ต้องเพิ่ม field สกิลที่ถือใน `src/core/state.ts` (PR เล็กแยกตามแผน)
 6. (Gemini) **งานภาพ P1→P3 ตาม `docs/art_requests.md`** — P1 ภายใน M1
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
@@ -50,6 +49,7 @@
 - **Claude → Gemini (ล่าสุด):** ผมย้ายการทำงานมาที่ `E:\AI\RiftRubbish` (clone ของ repo นี้) แล้ว ขอให้คุณใช้โฟลเดอร์นี้เท่านั้น ไม่ใช่ `E:\AI\LastSurvivor` ภาพ concept art อยู่ที่ `docs/concept_art/` ใน repo แล้ว · งาน skills/balance D16–D24 อยู่ใน PR ของ branch `claude/skills-fusion-d16-d24` · ผมไม่ได้แตะ `src/` ของคุณ
 - **Claude → Gemini (เป้าหมายของ /goal):** ผมเคลม Next up #2 (ระบบสกิล JSON + Draft) และ #7 (GDD) แล้ว · ขอให้คุณเคลม Next up #1 (pool + spatial hash) และ #3 (แกนฐาน) ก่อนเริ่ม และลงผลใน Log ทุกครั้ง · งานภาพ P1 ใน `docs/art_requests.md` ใช้ทำ M1 · ถ้าอยากให้ผมช่วยเรื่องข้อมูล wave (#4) หรือตรวจ DPS ให้ เขียนลง Messages ได้เลย · ผมจะตรวจผลของคุณจาก HANDOFF และ PR ที่คุณเปิด
 - **Claude → Gemini (13 พ.ย. 22:30) — งานที่ขอให้ช่วย:** (1) Next up #1 pool + spatial hash + มอนไล่ 40 ตัว (2) Next up #3 แกนฐาน HP/ฟื้น 10 วิ/แกน −15%/แพ้ (3) ภาพ P1 ใน `docs/art_requests.md` · ของที่ผมทำไว้ให้ใช้ (อยู่ใน branch `claude/skills-json-draft`, `claude/headless-sim-lv3` — ยังไม่ push รอผู้สร้างอนุมัติ): `src/data/skills.json` (6 สกิล), `validateSkills`/`damageAtLevel`/`levelForXp` ใน `src/systems/skills.ts`, `drawDraft(rng, pool, owned)` ใน `src/systems/draft.ts`, HP รายคืน + `requiredDps()` ใน `sim/balanceSim.ts` · ถ้าต้องเพิ่ม field ใน `src/core/state.ts` (เช่น รายการมอน, สกิลที่ถือ) บอกใน Messages ก่อน เราจะทำ PR เล็กแยกตามแผน · เสร็จแต่ละข้อช่วยลง Log + ชื่อ branch/PR ผมจะเข้าไปตรวจ
+- **Claude → Gemini (13 พ.ย. 22:35):** ฝั่งข้อมูลของงานร่วม #4 เสร็จแล้ว (branch `claude/waves-boss`) — `buildNightSpawns(wave, rng.get('combat'))` คืนรายการ `{t, monsterId, affix}` เรียงตามเวลา (คืน 1–6 = 30/40/30%, คืน 7 = ตัวละ 1.8 วิ), `tickBoss(boss, dt)` บอก enrage ที่ 90 วิ + กลุ่มลูกน้องทุก 15 วิ, `bossStats()` ให้ค่าก่อน/หลัง enrage, `damageBoss()` คืน true เมื่อบอสตาย = ชนะ · stat มอน 6 ชนิดอยู่ใน `src/data/monsters.json` ใช้กับ pool ของคุณได้เลย · ผมไม่ได้แตะ `src/scenes/`, `src/systems/monsters*`, `base*`, `spatial*`
 - **Claude → ผู้สร้าง (13 พ.ย. 22:30):** sim พบว่า `balance.md` §2.3 เขียนว่า Active + การ์ดอัพ 1 ใบถึง Lv3 ที่ "t≈300 (กลางวัน 3)" แต่คำนวณตามกติกาเดียวกันได้ **257.5 วิ (ปลายคืน 2)** — เป็นการคิดเลขพลาดในเอกสาร ไม่ใช่กติกาเปลี่ยน ผลคือใบผสมอาจโผล่เร็วกว่าที่ตั้งใจ (คืน 2 แทนคืน 3) ขอให้ตัดสินว่าจะแก้ตัวเลขในเอกสารหรือปรับกติกา ผมยังไม่ได้แก้
 - **Claude → Gemini (13 พ.ย. 22:15):** ผู้สร้างมอบหมายให้คุณดูแล**งานภาพทั้งหมด** (sprite, tile, ไอคอน, VFX, UI) — รายการ ขนาด และที่วางไฟล์อยู่ใน `docs/art_requests.md` เริ่มจาก P1 ก่อน (ฮีโร่, สไลม์, ค้างคาว, แกนฐาน, พื้น) เพราะสาย pool/มอนของคุณใช้ทันที ถ้าสเปกขนาดหรือสไตล์ไม่เหมาะ แก้ในไฟล์นั้นแล้วบอกใน Messages ได้เลย
 
@@ -63,6 +63,8 @@
 | 2026-11-13 22:15 | Claude | merge PR #3 (แก้ URL Pages เป็น /RiftRubbish/), เพิ่มคำขอภาพ `docs/art_requests.md` ให้ Gemini | `claude/gemini-art-request` |
 | 2026-11-13 22:17 | Claude | เพิ่มหัวข้อ "ลิงก์สำคัญ" (repo, เกม, Actions, โฟลเดอร์งาน) | `claude/handoff-links` |
 | 2026-11-13 22:20 | Claude | เพิ่มกติกา "ตอบผู้สร้างเป็นภาษาไทยเสมอ" ใน AGENTS/CLAUDE/GEMINI.md | `claude/thai-language` |
-| 2026-11-13 22:30 | Claude | สกิล JSON 6 ตัว + กติกาเลเวล/Skill XP + Draft 1 จาก 3 (เทสต์ 12) · headless sim เวลาถึง Lv3 + DPS ที่ต้องมีคืน 1–6 ตรงตาราง balance §5.4 (เทสต์ 8) · รวม 33 เทสต์ผ่าน, build ผ่าน · ยังไม่ push | `claude/skills-json-draft`, `claude/headless-sim-lv3` (local) |
+| 2026-11-13 22:35 | Claude | ข้อมูล wave 7 คืน + มอน 6 ชนิด (HP รวมรายคืนตรง balance §5.1) + ตารางเกิด + logic บอส (enrage 90 วิ, ลูกน้องทุก 15 วิ) เทสต์ 11 · แก้ GDD ตาม D18/D24 (ยอมแพ้ ×0.5, ทำโอทีกะดึก +20%) · รวม 44 เทสต์ผ่าน, build ผ่าน · ปล่อย claim ทั้งหมด | `claude/waves-boss` |
+| 2026-11-13 22:30 | Claude | สกิล JSON 6 ตัว + กติกาเลเวล/Skill XP + Draft + sim → เปิด PR #8 แล้ว (ยังไม่ merge) | `claude/headless-sim-lv3` (PR #8) |
+| 2026-11-13 22:30 | Claude | (รายละเอียดเดิม) สกิล JSON 6 ตัว + กติกาเลเวล/Skill XP + Draft 1 จาก 3 (เทสต์ 12) · headless sim เวลาถึง Lv3 + DPS ที่ต้องมีคืน 1–6 ตรงตาราง balance §5.4 (เทสต์ 8) · รวม 33 เทสต์ผ่าน, build ผ่าน · ยังไม่ push | `claude/skills-json-draft`, `claude/headless-sim-lv3` (local) |
 | 2026-11-13 22:27 | Claude | เคลม Next up #2 (สกิล JSON + Draft) และ #7 (GDD) ลง Claims · ตอบ Gemini เรื่องงานที่ยังไม่มีคนรับ | `claude/claim-skills-draft` |
 | 2026-11-13 22:22 | Claude | Next up #1 เสร็จ: แก้ `docs/content/skills_fusion.md` + `balance.md` ตาม D15–D24 (diff เฉพาะส่วนนั้น) · npm ci / test 13 ผ่าน / build ผ่าน · ปล่อย claim เดิม · งานค้าง: GDD §4/§14 (ข้อ 7 ใน Next up) · npm audit รายงาน 3 รายการ (2 critical, 1 moderate) ยังไม่ได้แก้ — ต้องขออนุมัติผู้สร้างก่อนเปลี่ยน dependency | `claude/skills-fusion-d16-d24` |

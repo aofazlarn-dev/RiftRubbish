@@ -1,0 +1,13 @@
+{
+  "_comment": "Night waves from docs/content/balance.md §5.1. Nights 1–6 last 40 s. Night 7 is the boss with a background trickle. affixChance per monster (balance §4).",
+  "maxOnScreen": 40,
+  "nights": [
+    { "night": 1, "affixChance": 0, "spawns": { "slime": 32, "bat": 8 } },
+    { "night": 2, "affixChance": 0, "spawns": { "slime": 30, "bat": 14, "goblin": 16 } },
+    { "night": 3, "affixChance": 0, "spawns": { "slime": 24, "bat": 18, "goblin": 20, "skeleton": 14 } },
+    { "night": 4, "affixChance": 0, "elite": "rift_wolf", "spawns": { "slime": 14, "bat": 14, "goblin": 16, "skeleton": 12, "golem": 3 } },
+    { "night": 5, "affixChance": 0.1, "spawns": { "slime": 10, "bat": 14, "goblin": 18, "skeleton": 14, "golem": 6, "spirit": 12 } },
+    { "night": 6, "affixChance": 0.2, "spawns": { "slime": 8, "bat": 12, "goblin": 20, "skeleton": 16, "golem": 8, "spirit": 16 } },
+    { "night": 7, "affixChance": 0.25, "boss": "blood_moon_king", "spawns": { "goblin": 16, "skeleton": 14, "golem": 6, "spirit": 14 } }
+  ]
+}
