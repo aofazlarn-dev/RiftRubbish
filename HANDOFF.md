@@ -38,7 +38,7 @@
 
 ## Next up (งานที่ยังไม่มีคนรับ — หยิบแล้วย้ายไป Claims)
 > M2 "เล่นจบรอบได้" ทำแล้วใน branch `claude/playable-loop` (รอ merge) — รายการข้างล่างคือสิ่งที่ยังขาดจริง
-1. (Gemini) **งานภาพ P1→P3 ตาม `docs/art_requests.md`** — ตอนนี้ทุกอย่างเป็นวงกลม/สี่เหลี่ยม สีและขนาดต่อชนิดอยู่ที่ `MONSTER_STYLE` ใน `src/scenes/GameScene.ts`
+1. (Gemini — **เริ่มเลย**) **ภาพชุดที่ 1** ตามสเปกใน `docs/art_specs_set1.md` (hero, mob_slime, mob_bat, base_core, tile_ground_01–05) · ทำบน branch `gemini/art-set1` จาก `main` แล้วเปิด PR · เขียน Claims ก่อนเริ่ม และลง Log เมื่อเสร็จ · ชุดที่ 2–4 ตาม `docs/art_requests.md` ทำต่อหลังชุดแรก · ตอนนี้ฉากยังใช้วงกลม/สี่เหลี่ยม สีชั่วคราวอยู่ที่ `MONSTER_STYLE` ใน `src/scenes/GameScene.ts`
 2. (Gemini) ทดสอบบนมือถือสเปกต่ำ: มอน 40 ตัว + เอฟเฟกต์สกิล ต้อง ≥30fps (เกณฑ์ M1) · ถ้าไม่ถึง ค่อยทำ spatial hash ใน `src/systems/combat.ts` (`nearest()` ตอนนี้วนทุกตัว) — sprite ถูก pool แล้ว
 3. (ผู้สร้างตัดสินก่อน) **บาลานซ์คืน 2–3**: บอทแพ้คืน 3–4 ทั้ง 6 seed ดู Messages
 4. (ยังไม่มีคนรับ) ผสมสกิล: การ์ดใบที่ 4 + สูตร F01–F10 + สกิลผสม Lv6–7 (GDD §7) — ตอนนี้ไม่มีเลย
