@@ -8,9 +8,20 @@
 
 import type { RngStream } from '../core/rng';
 
+export type MonsterAi = 'near' | 'player' | 'core' | 'ranged';
+
+export interface DayPatrol {
+  day: number;
+  groups: number;
+  /** Day 1 only: slimes placed close to the player so the first level-up comes within 30 s. */
+  guaranteedNearPlayer?: number;
+  spawns: Record<string, number>;
+}
+
 export interface MonsterDef {
   id: string;
   name: { th: string; en: string };
+  ai: MonsterAi;
   hp: number;
   damage: number;
   coreDamage: number;
@@ -32,6 +43,7 @@ export interface NightWave {
 export interface WavesData {
   maxOnScreen: number;
   nights: NightWave[];
+  days: DayPatrol[];
 }
 
 export interface SpawnEvent {

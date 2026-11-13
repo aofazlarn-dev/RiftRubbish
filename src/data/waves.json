@@ -1,5 +1,5 @@
 {
-  "_comment": "Night waves from docs/content/balance.md §5.1. Nights 1–6 last 40 s. Night 7 is the boss with a background trickle. affixChance per monster (balance §4).",
+  "_comment": "Night waves from docs/content/balance.md §5.1 and day patrols from §5.2. Nights 1–6 last 40 s. Night 7 is the boss with a background trickle. affixChance per monster (balance §4).",
   "maxOnScreen": 40,
   "nights": [
     { "night": 1, "affixChance": 0, "spawns": { "slime": 32, "bat": 8 } },
@@ -9,5 +9,14 @@
     { "night": 5, "affixChance": 0.1, "spawns": { "slime": 10, "bat": 14, "goblin": 18, "skeleton": 14, "golem": 6, "spirit": 12 } },
     { "night": 6, "affixChance": 0.2, "spawns": { "slime": 8, "bat": 12, "goblin": 20, "skeleton": 16, "golem": 8, "spirit": 16 } },
     { "night": 7, "affixChance": 0.25, "boss": "blood_moon_king", "spawns": { "goblin": 16, "skeleton": 14, "golem": 6, "spirit": 14 } }
+  ],
+  "days": [
+    { "day": 1, "groups": 3, "guaranteedNearPlayer": 6, "spawns": { "slime": 15 } },
+    { "day": 2, "groups": 4, "spawns": { "slime": 10, "bat": 6 } },
+    { "day": 3, "groups": 4, "spawns": { "slime": 6, "bat": 6, "goblin": 6 } },
+    { "day": 4, "groups": 4, "spawns": { "bat": 6, "goblin": 8, "skeleton": 4 } },
+    { "day": 5, "groups": 4, "spawns": { "goblin": 8, "skeleton": 6, "golem": 2 } },
+    { "day": 6, "groups": 5, "spawns": { "goblin": 8, "skeleton": 6, "golem": 3, "spirit": 4 } },
+    { "day": 7, "groups": 5, "spawns": { "goblin": 6, "skeleton": 6, "golem": 2, "spirit": 4 } }
   ]
 }

@@ -1,6 +1,6 @@
 /**
- * Vertical-slice arena (backlog week 1–3). Draws GameState; game rules live in src/systems.
- * Placeholder shapes only — art comes later.
+ * Vertical-slice arena. Draws GameState and forwards input; every rule lives in src/systems
+ * (stepRun). Placeholder shapes only — art comes from docs/art_requests.md later.
  */
 
 import Phaser from 'phaser';
@@ -8,41 +8,104 @@ import { EventBus } from '../core/events';
 import { RunRng } from '../core/rng';
 import { autoSaveOnHide, clearRun, loadRun, saveRun } from '../core/save';
 import { createRun, type GameState } from '../core/state';
+import { CORE_X, CORE_Y, MAP_TILES, TILE, WORLD } from '../core/world';
+import { loadRunData } from '../data';
 import { VirtualJoystick } from '../input/joystick';
-import { advanceClock, phaseRemaining, recallEarly } from '../systems/clock';
-import { movePlayer, type Vec2 } from '../systems/movement';
+import { isPlayerDown } from '../systems/base';
+import { phaseRemaining, recallEarly } from '../systems/clock';
+import type { CombatFx } from '../systems/combat';
+import type { Vec2 } from '../systems/movement';
+import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
+import { startRun, stepRun, type RunData } from '../systems/run';
+import { damageAtLevel, levelForXp, type Rarity, type SkillDef } from '../systems/skills';
 import { DebugOverlay } from '../ui/DebugOverlay';
 
-export const TILE = 32;
-export const MAP_TILES = 64; // GDD §4: 64×64
-const WORLD = TILE * MAP_TILES;
-
 const PHASE_TINT = { day: 0x000000, evening: 0x3a1a00, night: 0x05001a } as const;
-const PHASE_ALPHA = { day: 0, evening: 0.25, night: 0.55 } as const;
+const PHASE_ALPHA = { day: 0, evening: 0.25, night: 0.5 } as const;
 const PHASE_LABEL = { day: 'กลางวัน', evening: 'เย็น', night: 'กลางคืน' } as const;
+
+/** Placeholder look per monster: colour and radius. */
+const MONSTER_STYLE: Record<string, { color: number; radius: number }> = {
+  slime: { color: 0x7bd389, radius: 9 },
+  bat: { color: 0x9d8df1, radius: 7 },
+  goblin: { color: 0xe07a5f, radius: 10 },
+  skeleton: { color: 0xe9ecef, radius: 9 },
+  golem: { color: 0x8d6e63, radius: 16 },
+  spirit: { color: 0x90e0ef, radius: 10 },
+  rift_wolf: { color: 0xff006e, radius: 20 },
+};
+const FX_COLOR: Record<string, number> = { W01: 0xff7b00, E01: 0xff4d00, E02: 0x8ecae6, E03: 0xffe066, J03: 0xb0a090 };
+const FX_SECONDS = 0.18;
+
+// Player-facing words: no dev terms such as Active/Passive (D24).
+const KIND_LABEL: Record<SkillDef['kind'], string> = { active: 'สกิลโจมตี', passive: 'สกิลติดตัว' };
+const RARITY_LABEL: Record<Rarity, string> = {
+  common: 'ธรรมดา',
+  rare: 'หายาก',
+  epic: 'มหากาพย์',
+  legendary: 'ตำนาน',
+  mythic: 'เทพนิยาย',
+};
+const RARITY_COLOR: Record<Rarity, number> = {
+  common: 0x6c757d,
+  rare: 0x3a86ff,
+  epic: 0x9d4edd,
+  legendary: 0xffb703,
+  mythic: 0xff006e,
+};
+
+interface LiveFx extends CombatFx {
+  ttl: number;
+}
 
 export class GameScene extends Phaser.Scene {
   state!: GameState;
   bus = new EventBus();
   rng!: RunRng;
+  private data_!: RunData;
 
   private playerSprite!: Phaser.GameObjects.Arc;
+  private bossSprite!: Phaser.GameObjects.Rectangle;
+  private monsterSprites = new Map<number, Phaser.GameObjects.Arc>();
+  private spritePool: Phaser.GameObjects.Arc[] = [];
+  private fxGraphics!: Phaser.GameObjects.Graphics;
+  private barGraphics!: Phaser.GameObjects.Graphics;
+  private liveFx: LiveFx[] = [];
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private joystick!: VirtualJoystick;
   private hud!: Phaser.GameObjects.Text;
   private phaseShade!: Phaser.GameObjects.Rectangle;
   private debug!: DebugOverlay;
   private stopAutoSave?: () => void;
+  private overlay?: Phaser.GameObjects.Container;
+  /** What the overlay currently shows, so it is rebuilt only when that changes. */
+  private overlayKey = '';
 
   constructor() {
     super('game');
   }
 
   create(): void {
-    this.state = this.startOrResume();
+    this.data_ = loadRunData();
+    this.monsterSprites.clear();
+    this.spritePool = [];
+    this.liveFx = [];
+    this.overlay = undefined;
+    this.overlayKey = '';
+    this.bus.clear();
+
+    const resumed = this.resume();
+    this.state = resumed ?? this.newState();
     this.rng = RunRng.restore(this.state.seed, this.state.rng);
+    if (!resumed) startRun(this.state, this.rng, this.data_, this.bus);
+
+    // Dev builds only: lets a debugger reach the live state (e.g. to test the end screens).
+    if (import.meta.env.DEV) (window as unknown as { __scene?: GameScene }).__scene = this;
 
     this.drawWorld();
+    this.barGraphics = this.add.graphics().setDepth(20);
+    this.fxGraphics = this.add.graphics().setDepth(15);
+    this.bossSprite = this.add.rectangle(0, 0, 56, 56, 0xc1121f).setStrokeStyle(3, 0xffd6a5).setDepth(9).setVisible(false);
     this.playerSprite = this.add.circle(this.state.player.x, this.state.player.y, 12, 0xffd166).setDepth(10);
     this.cameras.main.setBounds(0, 0, WORLD, WORLD).startFollow(this.playerSprite, true, 0.15, 0.15);
 
@@ -57,12 +120,17 @@ export class GameScene extends Phaser.Scene {
       up: kb.addKey('UP'), down: kb.addKey('DOWN'), left: kb.addKey('LEFT'), right: kb.addKey('RIGHT'),
       w: kb.addKey('W'), a: kb.addKey('A'), s: kb.addKey('S'), d: kb.addKey('D'),
     };
-    kb.on('keydown-R', () => recallEarly(this.state, this.bus));
+    kb.on('keydown-R', () => {
+      if (this.state.status === 'playing' && !this.state.pendingDraft) recallEarly(this.state, this.bus);
+    });
     kb.on('keydown-N', () => this.newRun());
+    for (const [key, index] of [['ONE', 0], ['TWO', 1], ['THREE', 2]] as const) {
+      kb.on(`keydown-${key}`, () => this.choose(index));
+    }
     this.joystick = new VirtualJoystick(this);
 
     this.hud = this.add
-      .text(12, 12, '', { fontFamily: 'sans-serif', fontSize: '18px', color: '#ffffff' })
+      .text(12, 12, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff', lineSpacing: 3 })
       .setScrollFactor(0)
       .setDepth(900);
     this.debug = new DebugOverlay(this);
@@ -70,30 +138,31 @@ export class GameScene extends Phaser.Scene {
     this.bus.on('phase:change', ({ day, phase }) => {
       this.cameras.main.flash(250, 255, 255, 255, false);
       console.info(`[phase] day ${day} → ${phase}`);
-      saveRun(this.state); // snapshot at each phase boundary as well
+      saveRun(this.syncAndGetState()); // snapshot at each phase boundary as well
     });
+    this.bus.on('player:down', () => this.cameras.main.shake(300, 0.01));
+    this.bus.on('run:end', () => clearRun()); // a finished run cannot be resumed
 
-    this.stopAutoSave = autoSaveOnHide(() => this.syncAndGetState(), () => this.scene.pause());
+    this.stopAutoSave = autoSaveOnHide(
+      () => this.syncAndGetState(),
+      () => this.scene.pause(),
+    );
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.stopAutoSave?.());
     this.game.events.on(Phaser.Core.Events.VISIBLE, () => this.scene.resume());
   }
 
   update(_time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 0.1); // clamp long frames (tab switch, GC pause)
-    movePlayer(this.state.player, this.readInput(), dt, { width: WORLD, height: WORLD });
-    advanceClock(this.state, dt, this.bus);
+    const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
+    for (const f of fx) this.liveFx.push({ ...f, ttl: FX_SECONDS });
 
-    this.playerSprite.setPosition(this.state.player.x, this.state.player.y);
+    this.drawActors();
+    this.drawFx(dt);
+    this.drawBars();
     this.phaseShade.setFillStyle(PHASE_TINT[this.state.phase], PHASE_ALPHA[this.state.phase]);
     this.phaseShade.setSize(this.scale.width, this.scale.height);
-
-    const left = phaseRemaining(this.state);
-    const time = Number.isFinite(left) ? `${Math.ceil(left)} วิ` : 'จันทร์เลือด';
-    this.hud.setText(
-      `วันที่ ${this.state.day} · ${PHASE_LABEL[this.state.phase]} · ${time}\n` +
-        `HP ${this.state.player.hp}/${this.state.player.maxHp} · แกนฐาน ${this.state.coreHp}/${this.state.coreMaxHp}\n` +
-        (this.state.phase === 'day' ? '[R] เรียกคืนเร็ว  ' : '') + '[N] รอบใหม่',
-    );
+    this.drawHud();
+    this.syncOverlay();
     this.debug.update(this.state, this.children.length);
   }
 
@@ -105,21 +174,224 @@ export class GameScene extends Phaser.Scene {
     return this.joystick.vector;
   }
 
+  // ---- drawing -------------------------------------------------------------------------
+
+  private drawActors(): void {
+    const s = this.state;
+    this.playerSprite.setPosition(s.player.x, s.player.y);
+    this.playerSprite.setAlpha(isPlayerDown(s) ? 0.25 : s.invulnLeft > 0 ? 0.6 : 1);
+
+    // Monster sprites are pooled: reuse circles instead of creating and destroying them.
+    const alive = new Set<number>();
+    for (const m of s.monsters) {
+      alive.add(m.uid);
+      let sprite = this.monsterSprites.get(m.uid);
+      if (!sprite) {
+        const style = MONSTER_STYLE[m.defId] ?? { color: 0xffffff, radius: 9 };
+        sprite = this.spritePool.pop() ?? this.add.circle(0, 0, 9, 0xffffff).setDepth(8);
+        sprite.setRadius(style.radius * (m.affix ? 1.2 : 1));
+        sprite.setFillStyle(style.color);
+        sprite.setStrokeStyle(m.affix ? 3 : 0, 0xc77dff);
+        sprite.setVisible(true);
+        this.monsterSprites.set(m.uid, sprite);
+      }
+      sprite.setPosition(m.x, m.y);
+      sprite.setAlpha(m.slowLeft > 0 ? 0.6 : 1);
+    }
+    for (const [uid, sprite] of this.monsterSprites) {
+      if (alive.has(uid)) continue;
+      sprite.setVisible(false);
+      this.spritePool.push(sprite);
+      this.monsterSprites.delete(uid);
+    }
+
+    const boss = s.boss;
+    const bossAlive = !!boss && boss.rules.hp > 0;
+    this.bossSprite.setVisible(bossAlive);
+    if (boss && bossAlive) {
+      this.bossSprite.setPosition(boss.x, boss.y);
+      this.bossSprite.setFillStyle(boss.rules.enraged ? 0xff0000 : 0xc1121f);
+    }
+  }
+
+  private drawFx(dt: number): void {
+    const g = this.fxGraphics.clear();
+    this.liveFx = this.liveFx.filter((f) => (f.ttl -= dt) > 0);
+    for (const f of this.liveFx) {
+      const alpha = f.ttl / FX_SECONDS;
+      const color = f.missed ? 0x777777 : (FX_COLOR[f.skillId] ?? 0xffffff);
+      if (f.shape === 'cone' && f.radius) {
+        const facing = Math.atan2(f.y2 - f.y1, f.x2 - f.x1);
+        g.fillStyle(color, 0.35 * alpha);
+        g.slice(f.x1, f.y1, f.radius, facing - 0.87, facing + 0.87, false).fillPath();
+        continue;
+      }
+      g.lineStyle(f.shape === 'line' ? 5 : 3, color, alpha);
+      g.lineBetween(f.x1, f.y1, f.x2, f.y2);
+      if (f.radius) g.fillStyle(color, 0.3 * alpha).fillCircle(f.x2, f.y2, f.radius);
+    }
+  }
+
+  private drawBars(): void {
+    const s = this.state;
+    const g = this.barGraphics.clear();
+    const bar = (x: number, y: number, w: number, ratio: number, color: number) => {
+      g.fillStyle(0x000000, 0.6).fillRect(x - w / 2, y, w, 6);
+      g.fillStyle(color, 1).fillRect(x - w / 2, y, w * Phaser.Math.Clamp(ratio, 0, 1), 6);
+    };
+    bar(CORE_X, CORE_Y - 40, 90, s.coreHp / s.coreMaxHp, 0xc77dff);
+    bar(s.player.x, s.player.y - 24, 36, s.player.hp / s.player.maxHp, 0x06d6a0);
+    if (s.boss && s.boss.rules.hp > 0) bar(s.boss.x, s.boss.y - 44, 120, s.boss.rules.hp / s.boss.rules.maxHp, 0xff4d6d);
+  }
+
+  private drawHud(): void {
+    const s = this.state;
+    const left = phaseRemaining(s);
+    const time = Number.isFinite(left) ? `${Math.ceil(left)} วิ` : 'จันทร์เลือด';
+    const skills = s.skills
+      .map((o) => `${this.skillName(o.id)} Lv${levelForXp(o.xp)}`)
+      .join(' · ');
+    const down = isPlayerDown(s) ? `\nล้มลง! ฟื้นที่ฐานใน ${Math.ceil(s.respawnIn)} วิ` : '';
+    this.hud.setText(
+      `วันที่ ${s.day}/7 · ${PHASE_LABEL[s.phase]} · ${time}\n` +
+        `เลือด ${Math.ceil(s.player.hp)}/${s.player.maxHp} · แกนฐาน ${Math.ceil(s.coreHp)}/${s.coreMaxHp}\n` +
+        `เลเวล ${s.player.level} (${Math.floor(s.player.xp)}/${xpToNext(s.player.level)}) · ปราบ ${s.kills} · มอน ${s.monsters.length}\n` +
+        (skills ? `${skills}\n` : '') +
+        (s.phase === 'day' ? '[R] เรียกคืนเร็ว  ' : '') +
+        '[N] รอบใหม่' +
+        down,
+    );
+  }
+
+  private skillName(id: string): string {
+    return this.data_.skills.find((d) => d.id === id)?.name.th ?? id;
+  }
+
+  // ---- Draft and end-of-run overlays -----------------------------------------------------
+
+  private syncOverlay(): void {
+    const s = this.state;
+    const key =
+      s.status !== 'playing' ? `end:${s.status}` : s.pendingDraft ? `draft:${s.pendingDraft.join(',')}` : '';
+    const size = `${this.scale.width}x${this.scale.height}`;
+    if (`${key}|${size}` === this.overlayKey) return;
+    this.overlayKey = `${key}|${size}`;
+    this.overlay?.destroy();
+    this.overlay = undefined;
+    if (s.status !== 'playing') this.overlay = this.buildEndOverlay();
+    else if (s.pendingDraft) this.overlay = this.buildDraftOverlay(s.pendingDraft);
+    // Children do not inherit the container's scroll factor for input hit tests, so set it on each.
+    this.overlay?.each((child: Phaser.GameObjects.GameObject) => {
+      (child as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
+    });
+  }
+
+  private overlayBase(): { box: Phaser.GameObjects.Container; w: number; h: number } {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const box = this.add.container(0, 0).setScrollFactor(0).setDepth(1500);
+    // The dark sheet also swallows taps so the joystick does not start under the overlay.
+    box.add(this.add.rectangle(0, 0, w, h, 0x000000, 0.72).setOrigin(0).setInteractive());
+    return { box, w, h };
+  }
+
+  private buildDraftOverlay(cards: string[]): Phaser.GameObjects.Container {
+    const { box, w, h } = this.overlayBase();
+    const cardW = Math.min(420, w - 32);
+    const cardH = 92;
+    const gap = 14;
+    const top = Math.max(70, h / 2 - (cards.length * (cardH + gap)) / 2);
+    const title = this.state.skills.length === 0 ? 'เลือกสกิลแรกของคุณ' : `เลเวล ${this.state.player.level}! เลือก 1 ใบ`;
+    box.add(this.add.text(w / 2, top - 44, title, { fontFamily: 'sans-serif', fontSize: '24px', color: '#ffffff' }).setOrigin(0.5));
+
+    cards.forEach((card, i) => {
+      const [type, id] = card.split(':');
+      const def = this.data_.skills.find((d) => d.id === id);
+      if (!def) return;
+      const y = top + i * (cardH + gap);
+      const frame = this.add
+        .rectangle(w / 2, y, cardW, cardH, 0x1b1b2f, 1)
+        .setOrigin(0.5, 0)
+        .setStrokeStyle(3, RARITY_COLOR[def.rarity])
+        .setInteractive({ useHandCursor: true });
+      frame.on('pointerover', () => frame.setFillStyle(0x2b2b4a));
+      frame.on('pointerout', () => frame.setFillStyle(0x1b1b2f));
+      frame.on('pointerup', () => this.choose(i));
+      const owned = this.state.skills.find((o) => o.id === id);
+      const head =
+        type === 'skill'
+          ? `${i + 1}. ${def.name.th}  ·  ${RARITY_LABEL[def.rarity]}`
+          : `${i + 1}. ฝึก ${def.name.th} (ตอนนี้ Lv${levelForXp(owned?.xp ?? 0)})`;
+      const body =
+        type === 'skill'
+          ? def.kind === 'active'
+            ? `${KIND_LABEL.active} · พลัง ${damageAtLevel(def, 1)} · ทุก ${def.cooldown} วิ · ระยะ ${def.range} ช่อง`
+            : `${KIND_LABEL.passive} · ถึกขึ้น: รับดาเมจน้อยลงและเลือดสูงสุดเพิ่ม`
+          : `ได้ค่าฝึกสกิล +${upgradeXp(levelForXp(owned?.xp ?? 0))} ทันที`;
+      box.add([
+        frame,
+        this.add.text(w / 2 - cardW / 2 + 16, y + 14, head, { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffffff' }),
+        this.add.text(w / 2 - cardW / 2 + 16, y + 50, body, {
+          fontFamily: 'sans-serif',
+          fontSize: '15px',
+          color: '#cfd2ff',
+          wordWrap: { width: cardW - 32 },
+        }),
+      ]);
+    });
+    return box;
+  }
+
+  private buildEndOverlay(): Phaser.GameObjects.Container {
+    const { box, w, h } = this.overlayBase();
+    const s = this.state;
+    const won = s.status === 'won';
+    const title = won ? 'ชนะ! ราชันจันทร์เลือดล้มแล้ว' : 'แกนฐานพัง — จบรอบ';
+    // On a loss the line teases the System or the monsters, not the player (D24).
+    const line = won
+      ? 'ระบบ: "ไม่อยู่ในแผนเลยนะเนี่ย... ยินดีด้วย"'
+      : 'ระบบ: "แกนฐานรุ่นนี้ประกันหมดเมื่อวาน ระบบขออภัย"';
+    const stats = `รอดถึงวันที่ ${s.day} · เลเวล ${s.player.level} · ปราบมอน ${s.kills} ตัว`;
+    box.add([
+      this.add.text(w / 2, h / 2 - 110, title, { fontFamily: 'sans-serif', fontSize: '30px', color: won ? '#ffd166' : '#ff6b6b', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 - 36, line, { fontFamily: 'sans-serif', fontSize: '17px', color: '#ffffff', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 + 6, stats, { fontFamily: 'sans-serif', fontSize: '17px', color: '#cfd2ff', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+    ]);
+    const button = this.add
+      .rectangle(w / 2, h / 2 + 70, 220, 54, 0x3a86ff)
+      .setStrokeStyle(2, 0xffffff)
+      .setInteractive({ useHandCursor: true });
+    button.on('pointerup', () => this.newRun());
+    box.add([button, this.add.text(w / 2, h / 2 + 70, 'เริ่มรอบใหม่ [N]', { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffffff' }).setOrigin(0.5)]);
+    return box;
+  }
+
+  private choose(index: number): void {
+    if (this.state.status === 'playing' && this.state.pendingDraft) pickDraft(this.state, index, this.bus);
+  }
+
+  // ---- run lifecycle ---------------------------------------------------------------------
+
   /** Copies live RNG stream states into the plain state before saving. */
   private syncAndGetState(): GameState {
     this.state.rng = this.rng.snapshot();
     return this.state;
   }
 
-  private startOrResume(): GameState {
+  /** A saved run that is still in progress, unless a ?seed= link asks for a different one. */
+  private resume(): GameState | null {
     const linkSeed = new URLSearchParams(window.location.search).get('seed');
     const saved = loadRun();
-    if (saved && (!linkSeed || saved.seed === linkSeed)) return saved;
+    if (saved && saved.status === 'playing' && (!linkSeed || saved.seed === linkSeed)) return saved;
+    return null;
+  }
 
+  private newState(): GameState {
+    const linkSeed = new URLSearchParams(window.location.search).get('seed');
     const seed = linkSeed ?? `run-${Date.now().toString(36)}`;
     const run = createRun({ seed, fromSeedLink: linkSeed !== null });
-    run.player.x = WORLD / 2 + TILE * 2;
-    run.player.y = WORLD / 2;
+    run.player.x = CORE_X + TILE * 2;
+    run.player.y = CORE_Y;
     return run;
   }
 
@@ -144,7 +416,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(map.pick([0x4f772d, 0x7f7f7f, 0x3a86ff]), 0.9).fillCircle(x, y, 8);
     }
     // Base core in the centre (GDD §5).
-    this.add.rectangle(WORLD / 2, WORLD / 2, 40, 40, 0x9d4edd).setStrokeStyle(3, 0xe0aaff);
-    this.add.text(WORLD / 2, WORLD / 2 + 34, 'แกนฐาน', { fontSize: '14px', color: '#e0aaff' }).setOrigin(0.5);
+    this.add.rectangle(CORE_X, CORE_Y, 40, 40, 0x9d4edd).setStrokeStyle(3, 0xe0aaff);
+    this.add.text(CORE_X, CORE_Y + 34, 'แกนฐาน', { fontSize: '14px', color: '#e0aaff' }).setOrigin(0.5);
   }
 }

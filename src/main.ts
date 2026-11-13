@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
 import { GameScene } from './scenes/GameScene';
 
+// `?renderer=canvas` forces the Canvas renderer for devices or browsers where WebGL fails.
+const forceCanvas = new URLSearchParams(window.location.search).get('renderer') === 'canvas';
+
 new Phaser.Game({
-  type: Phaser.AUTO,
+  type: forceCanvas ? Phaser.CANVAS : Phaser.AUTO,
   parent: 'game',
   backgroundColor: '#120d1a',
   scale: {
