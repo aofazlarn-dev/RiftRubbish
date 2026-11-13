@@ -367,7 +367,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private choose(index: number): void {
-    if (this.state.status === 'playing' && this.state.pendingDraft) pickDraft(this.state, index, this.bus);
+    if (this.state.status === 'playing' && this.state.pendingDraft) pickDraft(this.state, index, this.data_.skills, this.bus);
   }
 
   // ---- run lifecycle ---------------------------------------------------------------------

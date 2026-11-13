@@ -55,7 +55,7 @@ export function runBot(seed: string, options: BotOptions = {}): BotResult {
 
   while (state.status === 'playing' && seconds < maxSeconds) {
     if (state.pendingDraft) {
-      pickDraft(state, Math.min(options.pick ?? 0, state.pendingDraft.length - 1));
+      pickDraft(state, Math.min(options.pick ?? 0, state.pendingDraft.length - 1), data.skills);
       continue;
     }
     // Circle close to the core: monsters heading for it come into range, and goblins

@@ -25,6 +25,8 @@ export interface PlayerState {
   speed: number; // px per second (balance.md: 140)
   level: number;
   xp: number;
+  /** Share of incoming damage removed by passives (0–1), recomputed by applyPassives. */
+  damageReduction?: number;
 }
 
 export interface OwnedSkill {

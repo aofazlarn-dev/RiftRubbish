@@ -266,6 +266,6 @@ export function tickSkills(
     if (rng.chance(MEAT_DROP_CHANCE)) state.player.hp = Math.min(state.player.maxHp, state.player.hp + MEAT_HEAL);
   }
   state.monsters = state.monsters.filter((m) => m.hp > 0);
-  applyPassives(state); // Stoneskin may have levelled up
+  applyPassives(state, skillDefs); // passive defence may have levelled up
   return result;
 }
