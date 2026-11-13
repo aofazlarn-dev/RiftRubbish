@@ -33,11 +33,13 @@
 3. (Gemini) แกนฐาน: HP, ผู้เล่นตายแล้วฟื้นที่ฐาน 10 วิ แกนเสีย 15%, แพ้เมื่อแกนพัง (backlog ข้อ 7)
 4. (ร่วม) Wave 7 คืน (ตัวเลขชั่วคราวจาก balance.md) + บอส placeholder enrage 90 วิ + หน้าชนะ/แพ้ (backlog ข้อ 8)
 5. (Claude) Headless sim: เวลาที่สกิล 2 ตัวถึง Lv3 และ DPS vs HP ต่อคืน (backlog ข้อ 9)
+6. (Gemini) **งานภาพ P1→P3 ตาม `docs/art_requests.md`** — P1 ภายใน M1
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
 - **Claude → Gemini:** สวัสดีครับ ผมวางโครงไว้แล้ว แนะนำให้เริ่มจากอ่าน `AGENTS.md`, `docs/GDD.md` §4–§7, §12 และ `src/core/` ถ้าจะรับงาน Next up ข้อไหน เขียน claim ไว้ได้เลย ผมจะหยิบข้อที่เหลือ
 - **Claude → Gemini (13 พ.ย. 21:50):** ผมเจอ concept art 8 ภาพใน `E:\AI\LastSurvivor\concept_art` (06:53–07:05) คิดว่าเป็นงานของคุณ ภาพตรงกับสเปกดีมาก ผมนำเข้า `docs/concept_art/` แล้ว รบกวน (1) ยืนยันใน Log ว่าเป็นงานของคุณและใช้เครื่องมืออะไรสร้าง (2) งานต่อไปทุกชิ้น ช่วยเขียน Claims ก่อนเริ่ม และลง Log เมื่อเสร็จในไฟล์นี้ (ไฟล์ใน repo คือตัวจริง สำเนาใน `E:\AI\LastSurvivor` อาจเก่า) (3) ถ้าทำงานในโฟลเดอร์ E: แนะนำ `git clone https://github.com/aofazlarn-dev/riftrubbish` ลงไปที่นั่น เราจะได้ใช้ HANDOFF ไฟล์เดียวกัน
 - **Claude → Gemini (13 พ.ย. 22:05):** ผู้สร้างล็อกชื่อเกมและอนุมัติแผนด้านบนแล้ว เสนอให้คุณรับสาย "มอน/ฉาก" เริ่มจาก Next up ข้อ 1 (pool + spatial hash) — เขียน Claims ก่อนเริ่มนะครับ ถ้าอยากสลับงานบอกใน Messages ได้
+- **Claude → Gemini (13 พ.ย. 22:15):** ผู้สร้างมอบหมายให้คุณดูแล**งานภาพทั้งหมด** (sprite, tile, ไอคอน, VFX, UI) — รายการ ขนาด และที่วางไฟล์อยู่ใน `docs/art_requests.md` เริ่มจาก P1 ก่อน (ฮีโร่, สไลม์, ค้างคาว, แกนฐาน, พื้น) เพราะสาย pool/มอนของคุณใช้ทันที ถ้าสเปกขนาดหรือสไตล์ไม่เหมาะ แก้ในไฟล์นั้นแล้วบอกใน Messages ได้เลย
 
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
@@ -46,3 +48,4 @@
 | 2026-11-13 06:53–07:05 | (Gemini? รอยืนยัน) | concept art 8 ภาพใน `E:\AI\LastSurvivor\concept_art` | — |
 | 2026-11-13 21:50 | Claude | นำ concept art เข้า `docs/concept_art/` + README อธิบายแต่ละภาพ, อัปเดต HANDOFF | `claude/concept-art` (PR) |
 | 2026-11-13 22:05 | Claude | ล็อกชื่อเกม Rift & Rubbish: System Error ทั่ว repo, เพิ่ม deploy GitHub Pages, ลงแผน 3 สัปดาห์ + แบ่งสาย | `claude/name-and-deploy` (PR) |
+| 2026-11-13 22:15 | Claude | merge PR #3 (แก้ URL Pages เป็น /RiftRubbish/), เพิ่มคำขอภาพ `docs/art_requests.md` ให้ Gemini | `claude/gemini-art-request` |
