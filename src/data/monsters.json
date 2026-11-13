@@ -1,0 +1,11 @@
+{
+  "_comment": "Normal monsters from docs/content/balance.md §3.2 (elements per D20). speed in px/s. coreDamage is per coreInterval seconds; 0 = never attacks the core.",
+  "monsters": [
+    { "id": "slime", "name": { "th": "สไลม์ขยะ", "en": "Trash Slime" }, "hp": 12, "damage": 5, "coreDamage": 3, "coreInterval": 1, "speed": 60, "xp": 1, "weak": ["fire"], "resist": {} },
+    { "id": "bat", "name": { "th": "ค้างคาวรอยแยก", "en": "Rift Bat" }, "hp": 8, "damage": 4, "coreDamage": 0, "coreInterval": 1, "speed": 120, "xp": 1, "weak": ["lightning"], "resist": {} },
+    { "id": "goblin", "name": { "th": "ก็อบลินขโมยหม้อ", "en": "Pot-Thief Goblin" }, "hp": 30, "damage": 8, "coreDamage": 8, "coreInterval": 1, "speed": 80, "xp": 3, "weak": [], "resist": {} },
+    { "id": "skeleton", "name": { "th": "โครงกระดูกนักธนู", "en": "Skeleton Archer" }, "hp": 25, "damage": 7, "coreDamage": 5, "coreInterval": 2, "speed": 55, "xp": 3, "weak": ["shadow"], "resist": { "ice": 0.5 } },
+    { "id": "golem", "name": { "th": "โกเลมโคลน", "en": "Mud Golem" }, "hp": 140, "damage": 15, "coreDamage": 20, "coreInterval": 1.5, "speed": 45, "xp": 8, "weak": ["ice"], "resist": { "earth": 0.75, "lightning": 0.5 } },
+    { "id": "spirit", "name": { "th": "วิญญาณหมอก", "en": "Fog Spirit" }, "hp": 45, "damage": 6, "coreDamage": 6, "coreInterval": 1, "speed": 90, "xp": 5, "weak": [], "resist": { "fire": 0.5 } }
+  ]
+}
