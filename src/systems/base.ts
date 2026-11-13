@@ -8,7 +8,7 @@
 import type { EventBus } from '../core/events';
 import type { GameState } from '../core/state';
 import { CORE_X, CORE_Y, TILE } from '../core/world';
-import { levelForXp } from './skills';
+import { ownedLevel, type SkillDef } from './skills';
 
 export const RESPAWN_SECONDS = 10;
 export const DEATH_CORE_PENALTY = 0.15;
@@ -16,20 +16,25 @@ export const DAWN_REPAIR = 0.1;
 export const HIT_INVULN_SECONDS = 0.5;
 export const BASE_MAX_HP = 100;
 
-/** Stoneskin (W03) by skill level: damage reduction and bonus Max HP (skills_fusion §1.1). */
-const STONESKIN_REDUCTION = [0, 0.08, 0.1, 0.12, 0.15, 0.18];
-const STONESKIN_HP = [0, 10, 15, 20, 25, 30];
-
-function stoneskinLevel(state: GameState): number {
-  const owned = state.skills.find((s) => s.id === 'W03');
-  return owned ? levelForXp(owned.xp) : 0;
-}
-
-/** Recomputes Max HP from passives. Extra Max HP is also added to current HP. */
-export function applyPassives(state: GameState): void {
-  const maxHp = BASE_MAX_HP + STONESKIN_HP[stoneskinLevel(state)];
+/**
+ * Recomputes Max HP and damage reduction from every owned passive that has a `defense`
+ * table (Stoneskin, Glacier Bulwark). Bonus HP adds up; reductions stack multiplicatively.
+ * Extra Max HP is also added to current HP.
+ */
+export function applyPassives(state: GameState, skillDefs: readonly SkillDef[]): void {
+  let bonusHp = 0;
+  let keep = 1;
+  for (const owned of state.skills) {
+    const def = skillDefs.find((d) => d.id === owned.id);
+    if (!def?.defense) continue;
+    const level = ownedLevel(def, owned.xp);
+    bonusHp += def.defense.maxHp[level] ?? 0;
+    keep *= 1 - (def.defense.reduction[level] ?? 0);
+  }
+  const maxHp = BASE_MAX_HP + bonusHp;
   const gained = maxHp - state.player.maxHp;
   state.player.maxHp = maxHp;
+  state.player.damageReduction = 1 - keep;
   if (gained > 0) state.player.hp = Math.min(maxHp, state.player.hp + gained);
   else state.player.hp = Math.min(maxHp, state.player.hp);
 }
@@ -41,7 +46,7 @@ export function isPlayerDown(state: GameState): boolean {
 /** Applies a hit to the player. Returns the damage actually taken (0 if blocked by i-frames). */
 export function damagePlayer(state: GameState, amount: number, bus?: EventBus): number {
   if (state.status !== 'playing' || isPlayerDown(state) || state.invulnLeft > 0 || amount <= 0) return 0;
-  const taken = amount * (1 - STONESKIN_REDUCTION[stoneskinLevel(state)]);
+  const taken = amount * (1 - (state.player.damageReduction ?? 0));
   state.player.hp = Math.max(0, state.player.hp - taken);
   state.invulnLeft = HIT_INVULN_SECONDS;
   if (state.player.hp === 0) {

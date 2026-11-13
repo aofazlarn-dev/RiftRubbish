@@ -73,7 +73,58 @@
       "damage": 0,
       "cooldown": 0,
       "range": 0,
-      "shape": "self"
+      "shape": "self",
+      "defense": { "reduction": [0, 0.08, 0.1, 0.12, 0.15, 0.18], "maxHp": [0, 10, 15, 20, 25, 30] }
+    },
+    {
+      "id": "R05a",
+      "name": { "th": "ลูกไฟไอน้ำ", "en": "Steam Burst" },
+      "kind": "active", "rarity": "epic", "tags": ["fire", "ice"],
+      "damage": 22, "cooldown": 2.4, "range": 8, "shape": "projectile", "splash": 2,
+      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3
+    },
+    {
+      "id": "R05b",
+      "name": { "th": "หอกแกนลาวา", "en": "Magma-Core Lance" },
+      "kind": "active", "rarity": "epic", "tags": ["ice", "fire"],
+      "damage": 28, "cooldown": 2.2, "range": 10, "shape": "line", "bothWays": true, "slowSeconds": 1,
+      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3
+    },
+    {
+      "id": "R07a",
+      "name": { "th": "รอยแยกลาวา", "en": "Lava Rift" },
+      "kind": "active", "rarity": "epic", "tags": ["earth", "fire"],
+      "damage": 18, "cooldown": 2.0, "range": 2.5, "shape": "cone", "arc": 360,
+      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3
+    },
+    {
+      "id": "R07b",
+      "name": { "th": "เกราะธารน้ำแข็ง", "en": "Glacier Bulwark" },
+      "kind": "passive", "rarity": "epic", "tags": ["earth", "ice"],
+      "damage": 0, "cooldown": 0, "range": 0, "shape": "self",
+      "defense": { "reduction": [0, 0, 0, 0.15, 0.18, 0.22, 0.24, 0.25], "maxHp": [0, 0, 0, 30, 40, 50, 60, 70] },
+      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3
+    },
+    {
+      "id": "R10a",
+      "name": { "th": "หินล่อฟ้า", "en": "Lightning-Rod Pebble" },
+      "kind": "active", "rarity": "legendary", "tags": ["earth", "lightning"],
+      "damage": 10, "cooldown": 0.5, "range": 6, "shape": "projectile", "splash": 1.5,
+      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3,
+      "_approx": "Spec: up to 3 rods, each strikes 10 in r1.5 every 1 s. Slice: one r1.5 strike of 10 every 0.5 s (about 2 rods active)."
+    },
+    {
+      "id": "R10b",
+      "name": { "th": "อสนีกรวด", "en": "Thunder Gravel" },
+      "kind": "active", "rarity": "legendary", "tags": ["lightning", "earth"],
+      "damage": 20, "cooldown": 2.2, "range": 6, "shape": "chain", "jumps": 5, "jumpRange": 3, "falloff": 0,
+      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3
     }
+  ],
+  "_fusionComment": "Recipes from skills_fusion.md §3.1 that use only the 6 MVP skills. The result follows the higher-level source: resultA if `a` is higher (tie = the one taken first). Fused numbers are the Lv3 values; extra effects (steam cloud, heat shock, rift lines, scale burst, gravel) are not in the slice.",
+  "fusions": [
+    { "id": "F05", "a": "E01", "b": "E02", "resultA": "R05a", "resultB": "R05b" },
+    { "id": "F07", "a": "W01", "b": "W03", "resultA": "R07a", "resultB": "R07b" },
+    { "id": "F10", "a": "J03", "b": "E03", "resultA": "R10a", "resultB": "R10b" }
   ]
 }

@@ -30,6 +30,23 @@ export interface SkillDef {
   jumps?: number;
   jumpRange?: number;
   falloff?: number;
+  /** line: also fires in the opposite direction. */
+  bothWays?: boolean;
+  /** Fusion results: never offered by the Draft, level up to 7, and `damage` is the value at `baseLevel`. */
+  fusedOnly?: boolean;
+  maxLevel?: number;
+  baseLevel?: number;
+  /** Passive defence by skill level (index = level): share of damage removed and bonus Max HP. */
+  defense?: { reduction: number[]; maxHp: number[] };
+}
+
+/** One recipe: two source skills, and which result you get depending on which source is the higher level (GDD §7). */
+export interface FusionRecipe {
+  id: string;
+  a: string;
+  b: string;
+  resultA: string;
+  resultB: string;
 }
 
 /** Rarity order, lowest to highest. Used for the downgrade rule (balance §9.1). */
@@ -45,25 +62,41 @@ export const DRAFT_RARITY_WEIGHTS: Record<Rarity, number> = {
 };
 
 /** Damage multiplier by skill level, relative to Lv1 (balance §2.1). Index = level. */
-export const LEVEL_MULTIPLIER: readonly number[] = [0, 1.0, 1.25, 1.55, 1.9, 2.4];
+export const LEVEL_MULTIPLIER: readonly number[] = [0, 1.0, 1.25, 1.55, 1.9, 2.4, 2.9, 3.4];
 
-/** Normal skills cap at Lv5 (balance §2.1, D2). */
+/** Normal skills cap at Lv5, fused skills at Lv7 (balance §2.1, D2). */
 export const MAX_NORMAL_LEVEL = 5;
+export const MAX_FUSED_LEVEL = 7;
+/** Both sources must be at least this level to fuse (GDD §7). */
+export const FUSION_MIN_LEVEL = 3;
 
-/** Cumulative Skill XP needed to reach each level (balance §2.1). Index = level. */
-export const SKILL_XP_THRESHOLDS: readonly number[] = [0, 0, 50, 180, 420, 800];
+/** Cumulative Skill XP needed to reach each level (balance §2.1; Lv6–7 per D21). Index = level. */
+export const SKILL_XP_THRESHOLDS: readonly number[] = [0, 0, 50, 180, 420, 800, 1050, 1400];
 
-export function levelForXp(xp: number): number {
+export function levelForXp(xp: number, maxLevel = MAX_NORMAL_LEVEL): number {
   let level = 1;
-  for (let lv = 2; lv <= MAX_NORMAL_LEVEL; lv++) {
+  for (let lv = 2; lv <= maxLevel; lv++) {
     if (xp >= SKILL_XP_THRESHOLDS[lv]) level = lv;
   }
   return level;
 }
 
-/** Damage for a skill at a given level. Level multipliers apply to every damage kind (D23). */
+export function maxLevelOf(skill: SkillDef): number {
+  return skill.maxLevel ?? MAX_NORMAL_LEVEL;
+}
+
+/** Level of an owned skill, honouring the Lv7 cap of fused skills. */
+export function ownedLevel(skill: SkillDef, xp: number): number {
+  return levelForXp(xp, maxLevelOf(skill));
+}
+
+/**
+ * Damage for a skill at a given level. Level multipliers apply to every damage kind (D23).
+ * Fused skills list their damage at Lv3, so they scale relative to `baseLevel`.
+ */
 export function damageAtLevel(skill: SkillDef, level: number): number {
-  const mult = LEVEL_MULTIPLIER[Math.min(Math.max(level, 1), MAX_NORMAL_LEVEL)];
+  const lv = Math.min(Math.max(level, 1), maxLevelOf(skill));
+  const mult = LEVEL_MULTIPLIER[lv] / LEVEL_MULTIPLIER[skill.baseLevel ?? 1];
   return Math.round(skill.damage * mult * 10) / 10;
 }
 

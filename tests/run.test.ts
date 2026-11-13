@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { runBot } from '../sim/bot';
 import { loadRunData } from '../src/data';
 import { EventBus } from '../src/core/events';
@@ -21,7 +21,7 @@ function newState(seed = 't'): GameState {
   return s;
 }
 
-describe('base and survival (GDD §5)', () => {
+describe('base and survival (GDD ยง5)', () => {
   it('player death costs 15% core, respawns at full HP after 10 s', () => {
     const s = newState();
     const downs: number[] = [];
@@ -71,13 +71,13 @@ describe('base and survival (GDD §5)', () => {
     const s = newState();
     s.draftsOwed = 1;
     s.pendingDraft = ['skill:W03'];
-    pickDraft(s, 0);
+    pickDraft(s, 0, data.skills);
     expect(s.player.maxHp).toBe(110);
     expect(damagePlayer(s, 100)).toBeCloseTo(92);
   });
 });
 
-describe('monsters (balance §3.3, §5.1)', () => {
+describe('monsters (balance ยง3.3, ยง5.1)', () => {
   it('a goblin walks to the core and damages it; a bat never does', () => {
     const s = newState();
     s.player.x = 100; // far away
@@ -121,8 +121,8 @@ describe('monsters (balance §3.3, §5.1)', () => {
   });
 });
 
-describe('combat (balance §3.1)', () => {
-  it('element multipliers: weak ×1.5, resist 50% ×0.5, 75% ×0.25, best tag wins', () => {
+describe('combat (balance ยง3.1)', () => {
+  it('element multipliers: weak ร—1.5, resist 50% ร—0.5, 75% ร—0.25, best tag wins', () => {
     const golem = findDef(data.monsters, 'golem');
     expect(elementMultiplier(golem, ['ice'])).toBe(1.5);
     expect(elementMultiplier(golem, ['lightning'])).toBe(0.5);
@@ -134,7 +134,7 @@ describe('combat (balance §3.1)', () => {
   it('Fireball kills a slime in range, grants player XP and Skill XP equal to its cooldown', () => {
     const s = newState();
     s.skills.push({ id: 'E01', xp: 0, cooldownLeft: 0 });
-    spawnMonster(s, findDef(data.monsters, 'slime'), s.player.x + 100, s.player.y); // 12 HP, weak to fire: 6×1.5 = 9
+    spawnMonster(s, findDef(data.monsters, 'slime'), s.player.x + 100, s.player.y); // 12 HP, weak to fire: 6ร—1.5 = 9
     const rng = RunRng.fromSeed('c').get('combat');
     const first = tickSkills(s, 0.1, data.skills, data.monsters, rng);
     expect(first.fx).toHaveLength(1);
@@ -182,7 +182,7 @@ describe('combat (balance §3.1)', () => {
   });
 });
 
-describe('progression and Draft (balance §1.2, §9)', () => {
+describe('progression and Draft (balance ยง1.2, ยง9)', () => {
   it('XP curve: 5 to Lv2, 7 to Lv3, 210 flat from Lv20', () => {
     expect(xpToNext(1)).toBe(5);
     expect(xpToNext(2)).toBe(7);
@@ -215,7 +215,7 @@ describe('progression and Draft (balance §1.2, §9)', () => {
     startRun(s, rng, data);
     stepRun(s, rng, { x: 0, y: 0 }, 1, data);
     expect(s.phaseElapsed).toBe(0);
-    expect(pickDraft(s, 0)).toBe(true);
+    expect(pickDraft(s, 0, data.skills)).toBe(true);
     expect(s.skills).toHaveLength(1);
     stepRun(s, rng, { x: 0, y: 0 }, 1, data);
     expect(s.phaseElapsed).toBe(1);
@@ -235,7 +235,7 @@ describe('progression and Draft (balance §1.2, §9)', () => {
     const s = newState();
     s.skills.push({ id: 'E01', xp: 10, cooldownLeft: 0 });
     s.pendingDraft = ['up:E01'];
-    pickDraft(s, 0);
+    pickDraft(s, 0, data.skills);
     expect(s.skills[0].xp).toBe(50);
   });
 });
@@ -245,7 +245,7 @@ describe('run loop', () => {
     const s = newState();
     const rng = RunRng.fromSeed('loop');
     startRun(s, rng, data);
-    pickDraft(s, 0);
+    pickDraft(s, 0, data.skills);
     s.phase = 'evening';
     s.phaseElapsed = 19.95;
     stepRun(s, rng, { x: 0, y: 0 }, 0.1, data);
@@ -271,7 +271,7 @@ describe('run loop', () => {
     s.phaseElapsed = 19.95;
     stepRun(s, rng, { x: 0, y: 0 }, 0.1, data);
     expect(s.boss).not.toBeNull();
-    // Spawns at 18 tiles, then walks toward the core for this 0.1 s step (70 px/s → 7 px).
+    // Spawns at 18 tiles, then walks toward the core for this 0.1 s step (70 px/s โ’ 7 px).
     expect(Math.hypot(s.boss!.x - CORE_X, s.boss!.y - CORE_Y)).toBeCloseTo(18 * TILE - 7, 0);
   });
 
@@ -288,7 +288,7 @@ describe('run loop', () => {
     const s = newState();
     const rng = RunRng.fromSeed('save');
     startRun(s, rng, data);
-    pickDraft(s, 0);
+    pickDraft(s, 0, data.skills);
     for (let i = 0; i < 200; i++) stepRun(s, rng, { x: 1, y: 0 }, 0.1, data);
     expect(deserialize(serialize(s))).toEqual(s);
   });
@@ -307,3 +307,4 @@ describe('headless bot run', () => {
     expect(runBot('bot-2', { maxSeconds: 400 })).toEqual(runBot('bot-2', { maxSeconds: 400 }));
   });
 });
+
