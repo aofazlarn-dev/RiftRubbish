@@ -1,4 +1,4 @@
-# RiftRubbish — สเปกฉบับสุดท้าย v8 (ผ่านการตรวจรับ — ใช้แทนทุกเวอร์ชันก่อน)
+# Rift & Rubbish: System Error — สเปกฉบับสุดท้าย v8 (ผ่านการตรวจรับ — ใช้แทนทุกเวอร์ชันก่อน)
 
 ## 1. ภาพรวม
 - Survivor-like + survival เบาๆ แนว isekai, 2D top-down บน browser (PC + มือถือ), single-player. ผู้สร้างทำคนเดียวช่วงเวลาว่าง (Phaser 3 + TypeScript)
@@ -73,5 +73,5 @@ Phaser 3 + TS + Vite, Cloudflare Pages; สกิลประกอบจาก�
 ## 14. แผนสร้าง
 - สัปดาห์ 1–3: vertical slice (arena + Draft + 7 คืน + save + sim) → build private บน itch ให้คนอื่นลองเล่น
 - MVP เปิดตัว (Casual + Daily + 10 สูตร + การ์ดแชร์ + telemetry): ทำช่วงว่างจริง ~16–20 สัปดาห์; Hardcore Lite = อัปเดต 1 (~2 สัปดาห์หลังเปิดตัว)
-- ชื่อเกม: **RiftRubbish** (ตัดสินใจ 13 พ.ย. 2026)
+- ชื่อเกม: **Rift & Rubbish: System Error** (ล็อกโดยผู้สร้าง 13 พ.ย. 2026 21:55) · ชื่อสั้น/`{GAME}` = "Rift & Rubbish" · id ในโค้ด/repo = `riftrubbish` · itch slug `rift-and-rubbish`
 - เฝ้าดูใน playtest: ยอมแพ้ (×0.6) > แพ้ (×0.5) อาจทำให้กดยอมแพ้เร็ว
