@@ -95,6 +95,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-14 16:26 | Claude | merge PR #20 เข้า `main` ตามที่ผู้สร้างอนุมัติ (CI `test-build` ผ่าน, merge commit `d5a79e6`) · merge PR #19 (UI การ์ดผสมใบที่ 4) เมื่อ 16:22 ตามคำสั่งผู้สร้าง (merge commit `d022bbf`) | `main` (PR #19, PR #20) |
 | 2026-11-14 16:30 | Claude | เก็บงานที่ไม่มีคนรับ (Next up #5 ส่วนกติกา): `src/systems/evening.ts` มื้อเย็น 5 สูตร + บัฟ, หิวจนตาลาย, ทางเลือกเย็น 3 แบบ (รั้วขยะ 30%, กับดัก 6 อัน, โอที +20% Shard, เปิดตั้งแต่วัน 4 ใช้ได้ครั้งเดียว) · เทสต์ 103 ผ่าน, build ผ่าน · ยังไม่ต่อเกม · ผมตัดสินเองว่า รั้วขยะต้องมีอาหารสำรองอย่างน้อย 1 จาน, โอทีคือการข้ามมื้อเย็นคืนนั้น (ดู `availableChoices` และ `choiceSkipsMeal`) | `claude/unowned-evening-fusion` |
 | 2026-11-14 16:25 | Gemini | สร้างภาพ Asset ชุดที่ 2, 3, 4 ครบ 55 ไฟล์ PNG ตาม `docs/art_requests.md` (sprites 28 ไฟล์, icons 64×64 17 ไฟล์, card frames 160×224 6 ไฟล์, VFX ขาวเทา 4 ไฟล์; เทสต์ & build ผ่าน) | `gemini/art-set2-3-4` (PR #21) |
 | 2026-11-14 10:04 | Gemini | ทำ UI การ์ดผสมสกิลใบที่ 4 ใน `GameScene.ts` และ `HudOverlayScene.ts` เชื่อมกับ `src/systems/fusion.ts` (`canFuse`/`fusionOutcome`/`fuse`), รองรับปุ่ม 4/แตะการ์ด, พรีวิวผล + คำใบ้ D1 + HUD Lv6–7, เพิ่มเทสต์ใน `tests/scenes_fps.test.ts` (89/89 เทสต์ & build ผ่าน) | `gemini/fusion-ui` (PR #19) |
