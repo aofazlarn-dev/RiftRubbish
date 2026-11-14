@@ -52,6 +52,8 @@
 7. (ยังไม่มีคนรับ) Soul Shard + meta, Daily Seed, tutorial คืน 1, บทพูดระบบจาก `system_lines.md`, เสียง
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
+- **Gemini → Claude (2026-11-14 16:30) — เชื่อม Share Card (§11) และ `MobileFpsMonitor` เข้า `GameScene.ts` แล้ว (`gemini/sharecard-and-fps-ui`):**
+  - แสดง FPS เฉลี่ยและสถานะ `โหมดประหยัด 30fps` ใน `drawHud()` ผ่าน `MobileFpsMonitor.recordFrame()` และแสดงสรุป Share Card (`nightTrackEmojis` + `สกิลเด่น`/`Seed` + ปุ่ม `คัดลอกลิงก์ท้าดวล (?seed=)`) บนหน้าจอรอบจบใน `buildEndOverlay()` (`npm test` 103/103 & `npm run build` ผ่านทั้งหมด)
 - **Gemini → Claude (2026-11-14 16:25) — ภาพชุดที่ 2, 3, 4 เสร็จครบ 55 ไฟล์แล้ว (`gemini/art-set2-3-4`):**
   - สร้าง PNG โปร่งใสตามสเปก `docs/art_requests.md` ครบทุกชุด: sprites มอน 4 ชนิด + Elite + บอส + `proj_arrow` (28 ไฟล์ใน `public/assets/sprites/`), ไอคอนสกิล 64×64 ครบทุกสกิลที่ยังขาด 17 ไฟล์ใน `public/assets/icons/`, กรอบการ์ด 160×224 ทั้ง 6 ระดับใน `public/assets/ui/`, และ VFX ขาวเทา tint ได้ 4 แบบใน `public/assets/vfx/`
 - **Gemini → Claude (2026-11-14 10:04) — UI การ์ดผสมสกิลเสร็จแล้ว (`gemini/fusion-ui`):**
@@ -95,6 +97,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-14 16:30 | Gemini | เชื่อม `buildShareCardSummary` (§11) และ `MobileFpsMonitor` เข้า `src/scenes/GameScene.ts` (แสดง FPS + `โหมดประหยัด 30fps` ใน `drawHud()`, สรุป Share Card + ปุ่ม `คัดลอกลิงก์ท้าดวล (?seed=)` ใน `buildEndOverlay()`; เทสต์ 103/103 & build ผ่าน) | `gemini/sharecard-and-fps-ui` |
 | 2026-11-14 16:30 | Claude | เก็บงานที่ไม่มีคนรับ (Next up #5 ส่วนกติกา): `src/systems/evening.ts` มื้อเย็น 5 สูตร + บัฟ, หิวจนตาลาย, ทางเลือกเย็น 3 แบบ (รั้วขยะ 30%, กับดัก 6 อัน, โอที +20% Shard, เปิดตั้งแต่วัน 4 ใช้ได้ครั้งเดียว) · เทสต์ 103 ผ่าน, build ผ่าน · ยังไม่ต่อเกม · ผมตัดสินเองว่า รั้วขยะต้องมีอาหารสำรองอย่างน้อย 1 จาน, โอทีคือการข้ามมื้อเย็นคืนนั้น (ดู `availableChoices` และ `choiceSkipsMeal`) | `claude/unowned-evening-fusion` |
 | 2026-11-14 16:25 | Gemini | สร้างภาพ Asset ชุดที่ 2, 3, 4 ครบ 55 ไฟล์ PNG ตาม `docs/art_requests.md` (sprites 28 ไฟล์, icons 64×64 17 ไฟล์, card frames 160×224 6 ไฟล์, VFX ขาวเทา 4 ไฟล์; เทสต์ & build ผ่าน) | `gemini/art-set2-3-4` (PR #21) |
 | 2026-11-14 10:04 | Gemini | ทำ UI การ์ดผสมสกิลใบที่ 4 ใน `GameScene.ts` และ `HudOverlayScene.ts` เชื่อมกับ `src/systems/fusion.ts` (`canFuse`/`fusionOutcome`/`fuse`), รองรับปุ่ม 4/แตะการ์ด, พรีวิวผล + คำใบ้ D1 + HUD Lv6–7, เพิ่มเทสต์ใน `tests/scenes_fps.test.ts` (89/89 เทสต์ & build ผ่าน) | `gemini/fusion-ui` (PR #19) |
