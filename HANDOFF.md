@@ -43,7 +43,7 @@
 3. (ผู้สร้างตัดสินก่อน) **บาลานซ์คืน 2–3**: บอทแพ้คืน 3–4 ทั้ง 6 seed ดู Messages · ควรอัปเกรด `sim/bot.ts` ให้เลือกผสมสกิล + ต่อระบบมื้อเย็นก่อนวัดใหม่
 4. ~~(ยังไม่มีคนรับ) ผสมสกิล: การ์ดใบที่ 4~~ **ทำใน `fusion.ts` + `GameScene.ts` แล้ว (PR #18, PR #19)** — เหลือสลับ `src/data/index.ts` จาก `skills.json` เป็น `skills_full.json` เพื่อเปิดครบ 18 สกิล + 10 สูตร `F01–F10` + 20 ผลลัพธ์
 5. (Claude เริ่มแล้ว — กติการะดับ pure function เสร็จ, ยังไม่ต่อเข้าเกม) ช่วงเย็น: มื้อเย็น + ทางเลือกเย็นนี้ 1 จาก 3 (balance §6.2–6.3) · เหลือ: ของในกระเป๋า + การเก็บวัตถุดิบ (ต้องแก้ `state.ts` ด้วย PR เล็กก่อน) และ UI เย็น (Gemini `scenes/`) และผลในคืนจริง (ล้ม/โล่/หิว)
-6. (ยังไม่มีคนรับ) ของที่ slice ตัดออก: ดาเมจต่อเนื่อง (ไหม้/บ่อไฟ), ของพิเศษต่อเลเวลสกิล, เม็ด XP ที่ต้องเดินเก็บ, Elite แยกร่าง + รัง (D6), affix 5 แบบ (ตอนนี้ทุก affix = HP +50%), ลูกแก้วเลือดของบอส, กระสุนที่บินจริง
+6. (Claude เริ่มแล้วเฉพาะ affix — กติกาเป็น pure function เสร็จ ยังไม่ต่อเข้าการรบ) ของที่ slice ตัดออก: affix 5 แบบ (`src/systems/affix.ts`, ตอนนี้ยังเป็น HP +50% ใน `monsters.ts`; การต่อเข้าเปลี่ยนตัวเลขบาลานซ์ ต้องให้ผู้สร้างอนุมัติก่อน) · ที่ยังไม่มีคนรับ: ดาเมจต่อเนื่อง (ไหม้/บ่อไฟ), ของพิเศษต่อเลเวลสกิล, เม็ด XP ที่ต้องเดินเก็บ, Elite แยกร่าง + รัง (D6), ลูกแก้วเลือดของบอส, กระสุนที่บินจริง
 7. (ยังไม่มีคนรับ) Soul Shard + meta, Daily Seed, tutorial คืน 1, บทพูดระบบจาก `system_lines.md`, เสียง
 8. (จากผล QA & Review ล่าสุด) เชื่อม `TitleScene.ts` เข้า `src/main.ts` (เมนู Casual / Daily Seed / Hardcore 🔒) และเพิ่ม `wordWrap: { width: this.scale.width - 24 }` ให้ `this.hud` ใน `src/scenes/GameScene.ts` เพื่อไม่ให้บรรทัดสถานะ/รายชื่อสกิลบนจอมือถือ 390px ยาวชน `DebugOverlay` หรือล้นขอบขวา
 
@@ -98,6 +98,7 @@
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
 | 2026-11-14 16:38 | Gemini | บันทึกผล Code Review และ QA เกมทั้งหมดลง `HANDOFF.md` (`npm test` 103/103, `npm run build`, sim report 6 seed, Live Browser QA เดสก์ท็อป + มือถือ 390×844 พบ 0 errors, อัปเดต `Next up` & `Messages`) | `gemini/handoff-qa-review` |
+| 2026-11-14 17:10 | Claude | เพิ่มกติกา affix 5 แบบ (balance §4) เป็น pure function ใน `src/systems/affix.ts`: โล่ 50%, ระเบิดตอนตาย (รัศมี 64 px ไม่ลามต่อกัน), ต้านธาตุที่เด่นสุด (รวมไม่เกิน 75%), จ่าฝูงออร่า 96 px ไม่ซ้อน, เร่งรีบ +40% · เทสต์ 116 ผ่าน, build ผ่าน · ยังไม่ต่อเข้าการรบ (ตัวเลขบาลานซ์จะเปลี่ยน) | `claude/affix-rules` |
 | 2026-11-14 16:26 | Claude | merge PR #20 เข้า `main` ตามที่ผู้สร้างอนุมัติ (CI `test-build` ผ่าน, merge commit `d5a79e6`) · merge PR #19 (UI การ์ดผสมใบที่ 4) เมื่อ 16:22 ตามคำสั่งผู้สร้าง (merge commit `d022bbf`) | `main` (PR #19, PR #20) |
 | 2026-11-14 16:30 | Gemini | เชื่อม `buildShareCardSummary` (§11) และ `MobileFpsMonitor` เข้า `src/scenes/GameScene.ts` (แสดง FPS + `โหมดประหยัด 30fps` ใน `drawHud()`, สรุป Share Card + ปุ่ม `คัดลอกลิงก์ท้าดวล (?seed=)` ใน `buildEndOverlay()`; เทสต์ 103/103 & build ผ่าน) | `gemini/sharecard-and-fps-ui` |
 | 2026-11-14 16:30 | Claude | เก็บงานที่ไม่มีคนรับ (Next up #5 ส่วนกติกา): `src/systems/evening.ts` มื้อเย็น 5 สูตร + บัฟ, หิวจนตาลาย, ทางเลือกเย็น 3 แบบ (รั้วขยะ 30%, กับดัก 6 อัน, โอที +20% Shard, เปิดตั้งแต่วัน 4 ใช้ได้ครั้งเดียว) · เทสต์ 103 ผ่าน, build ผ่าน · ยังไม่ต่อเกม · ผมตัดสินเองว่า รั้วขยะต้องมีอาหารสำรองอย่างน้อย 1 จาน, โอทีคือการข้ามมื้อเย็นคืนนั้น (ดู `availableChoices` และ `choiceSkipsMeal`) | `claude/unowned-evening-fusion` |
