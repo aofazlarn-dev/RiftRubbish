@@ -97,6 +97,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-14 17:40 | Claude | ผู้สร้างอนุมัติ 2 เรื่อง: (1) เกมโหลด `skills_full.json` (สูตร F01–F10 ใช้ได้จริง, ผลผสม `fusedOnly` ไม่โผล่ใน Draft) (2) ต่อ affix 5 แบบเข้าการรบ: เกราะขยะ = โล่ 50% (แทน HP +50%), เร่งรีบ +40%, จ่าฝูงออร่า 96 px +20%, ระเบิดตอนตายหลัง 1 วิ, ต้านธาตุที่เด่นสุด 50% (รวมไม่เกิน 75%) · state เพิ่ม field แบบ optional (save เก่ายังโหลดได้) · เทสต์ 126 ผ่าน, build ผ่าน | `claude/game-uses-full-skills` (PR #27) |
 | 2026-11-14 16:38 | Gemini | บันทึกผล Code Review และ QA เกมทั้งหมดลง `HANDOFF.md` (`npm test` 103/103, `npm run build`, sim report 6 seed, Live Browser QA เดสก์ท็อป + มือถือ 390×844 พบ 0 errors, อัปเดต `Next up` & `Messages`) | `gemini/handoff-qa-review` |
 | 2026-11-14 17:10 | Claude | เพิ่มกติกา affix 5 แบบ (balance §4) เป็น pure function ใน `src/systems/affix.ts`: โล่ 50%, ระเบิดตอนตาย (รัศมี 64 px ไม่ลามต่อกัน), ต้านธาตุที่เด่นสุด (รวมไม่เกิน 75%), จ่าฝูงออร่า 96 px ไม่ซ้อน, เร่งรีบ +40% · เทสต์ 116 ผ่าน, build ผ่าน · ยังไม่ต่อเข้าการรบ (ตัวเลขบาลานซ์จะเปลี่ยน) | `claude/affix-rules` |
 | 2026-11-14 16:26 | Claude | merge PR #20 เข้า `main` ตามที่ผู้สร้างอนุมัติ (CI `test-build` ผ่าน, merge commit `d5a79e6`) · merge PR #19 (UI การ์ดผสมใบที่ 4) เมื่อ 16:22 ตามคำสั่งผู้สร้าง (merge commit `d022bbf`) | `main` (PR #19, PR #20) |
