@@ -275,7 +275,7 @@ export function tickSkills(
     const aim = nearest(targets, px, py, def.range * TILE);
     if (!aim) continue;
     owned.cooldownLeft = def.cooldown;
-    const mealDamage = state.nightBuff?.damageMult ?? 1;
+    const mealDamage = (state.nightBuff?.damageMult ?? 1) * (state.metaDamage ?? 1);
     const hits = cast(def, damageAtLevel(def, levelForXp(owned.xp)) * mealDamage, aim, targets, px, py, rng, result.fx);
     if (hits > 0 && !owned.gift) owned.xp += def.cooldown; // gift skills never level up (G2)
   }

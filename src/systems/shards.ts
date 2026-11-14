@@ -13,6 +13,8 @@
 import type { EventBus } from '../core/events';
 import type { GameState } from '../core/state';
 import { finalShards } from './evening';
+import { creditShards, loadMeta } from '../core/metaSave';
+import { dailyEarnsShard } from './daily';
 
 export const SHARD_PER_NIGHT: readonly number[] = [5, 7, 9, 11, 13, 15, 20];
 export const WIN_MULT = 1.3;
@@ -48,14 +50,19 @@ export function attachShardLedger(bus: EventBus, state: GameState): () => void {
   const off = bus.on('run:end', ({ night, result }) => {
     const outcome = result === 'win' ? 'win' : result === 'surrender' ? 'surrender' : 'lose';
     const nightsSurvived = outcome === 'win' ? 7 : Math.max(0, night - 1);
+    // Daily: only the first Daily run of the day earns Shard (D19). Seed-link runs earn none.
+    const today = new Date().toISOString().slice(0, 10);
+    const dailyFirst = dailyEarnsShard(state.mode, today, loadMeta().lastDailyDate);
     // Mission Shards from completed missions are added after the outcome multiplier (approved draft).
     state.shardsEarned =
       runPayout({
         nightsSurvived,
         outcome,
         overtime: state.overtimeChosen ?? false,
-        seedLink: state.fromSeedLink,
-      }) + (state.fromSeedLink ? 0 : state.missionShards ?? 0);
+        seedLink: state.fromSeedLink || !dailyFirst,
+      }) + (state.fromSeedLink || !dailyFirst ? 0 : state.missionShards ?? 0);
+    // Bank the Shard (meta is kept across runs, approved draft).
+    if (state.shardsEarned > 0) creditShards(state.shardsEarned, state.mode === 'daily' ? today : undefined);
   });
   return off;
 }

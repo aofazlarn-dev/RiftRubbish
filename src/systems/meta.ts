@@ -42,3 +42,14 @@ export function metaBonus(owned: readonly string[], stat: MetaItem['stat']): num
 export function startingSkillsFor(state: GameState): string[] {
   return state.mode === 'daily' ? [...DAILY_LOADOUT] : [];
 }
+
+/** Applies owned meta to a fresh Casual run: damage multiplier, speed, and core HP. */
+export function applyMeta(state: GameState, owned: readonly string[]): void {
+  state.metaDamage = 1 + metaBonus(owned, 'damage');
+  state.player.speed *= 1 + metaBonus(owned, 'speed');
+  const hp = metaBonus(owned, 'coreHp');
+  if (hp > 0) {
+    state.coreMaxHp = Math.round(state.coreMaxHp * (1 + hp));
+    state.coreHp = state.coreMaxHp;
+  }
+}
