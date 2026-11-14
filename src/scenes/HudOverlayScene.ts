@@ -1,5 +1,6 @@
 import type { GameState } from '../core/state';
-import { damageAtLevel, FUSION_MIN_LEVEL, ownedLevel, type FusionRecipe, type SkillDef } from '../systems/skills';
+import { canFuse, fuse, fusionOutcome, type FusionOutcome } from '../systems/fusion';
+import { damageAtLevel, ownedLevel, type FusionRecipe, type SkillDef } from '../systems/skills';
 import { upgradeXp } from '../systems/progression';
 
 export interface DraftCardViewModel {
@@ -26,7 +27,7 @@ export interface ShareCardSummary {
 
 /**
  * Finds all available fusion cards (D1: 4th Draft card when player owns both skills at Lv >= 3).
- * Result follows higher-level source skill; tie breaks by which skill was acquired earlier in state.skills.
+ * Uses `canFuse()` and `fusionOutcome()` from `src/systems/fusion.ts` so tie-breaking follows acquisition order.
  */
 export function findAvailableFusions(
   state: GameState,
@@ -39,7 +40,7 @@ export function findAvailableFusions(
   skillToRaiseForAlternate: SkillDef;
 }[] {
   const byId = new Map(skills.map((s) => [s.id, s]));
-  const ownedOrder = new Map(state.skills.map((o, idx) => [o.id, { owned: o, idx }]));
+  const idxById = new Map(state.skills.map((o, idx) => [o.id, idx]));
   const out: {
     recipe: FusionRecipe;
     resultSkill: SkillDef;
@@ -48,26 +49,49 @@ export function findAvailableFusions(
   }[] = [];
 
   for (const r of recipes) {
-    const entryA = ownedOrder.get(r.a);
-    const entryB = ownedOrder.get(r.b);
+    if (!canFuse(state, skills, r)) continue;
     const defA = byId.get(r.a);
     const defB = byId.get(r.b);
-    if (!entryA || !entryB || !defA || !defB) continue;
+    const idxA = idxById.get(r.a);
+    const idxB = idxById.get(r.b);
+    if (!defA || !defB || idxA === undefined || idxB === undefined) continue;
 
-    const lvA = ownedLevel(defA, entryA.owned.xp);
-    const lvB = ownedLevel(defB, entryB.owned.xp);
-    if (lvA < FUSION_MIN_LEVEL || lvB < FUSION_MIN_LEVEL) continue;
-
-    const aWins = lvA > lvB || (lvA === lvB && entryA.idx < entryB.idx);
-    const resultId = aWins ? r.resultA : r.resultB;
-    const altId = aWins ? r.resultB : r.resultA;
-    const raiseDef = aWins ? defB : defA;
-
-    const resultSkill = byId.get(resultId);
+    const firstTaken = idxA <= idxB ? r.a : r.b;
+    const outcome = fusionOutcome(state, r, firstTaken);
+    const altId = outcome.resultId === r.resultA ? r.resultB : r.resultA;
+    const resultSkill = byId.get(outcome.resultId);
     const alternateSkill = byId.get(altId);
+    const skillToRaiseForAlternate = outcome.fromId === r.a ? defB : defA;
+
     if (resultSkill && alternateSkill) {
-      out.push({ recipe: r, resultSkill, alternateSkill, skillToRaiseForAlternate: raiseDef });
+      out.push({ recipe: r, resultSkill, alternateSkill, skillToRaiseForAlternate });
     }
+  }
+  return out;
+}
+
+/**
+ * Applies the selected 4th Fusion Draft card via `fuse()` from `src/systems/fusion.ts`
+ * and clears `state.pendingDraft` when successful.
+ */
+export function pickFusionCard(
+  state: GameState,
+  recipeId: string,
+  skills: readonly SkillDef[],
+  recipes: readonly FusionRecipe[],
+): FusionOutcome | null {
+  const recipe = recipes.find((r) => r.id === recipeId);
+  if (!recipe) return null;
+
+  const idxA = state.skills.findIndex((s) => s.id === recipe.a);
+  const idxB = state.skills.findIndex((s) => s.id === recipe.b);
+  if (idxA < 0 || idxB < 0) return null;
+
+  const firstTaken = idxA <= idxB ? recipe.a : recipe.b;
+  const secondTaken = firstTaken === recipe.a ? recipe.b : recipe.a;
+  const out = fuse(state, skills, recipes, firstTaken, secondTaken);
+  if (out) {
+    state.pendingDraft = null;
   }
   return out;
 }
