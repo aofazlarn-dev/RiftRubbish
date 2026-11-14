@@ -47,7 +47,7 @@
 2. (Gemini) ทดสอบบนมือถือสเปกต่ำ: มอน 40 ตัว + เอฟเฟกต์สกิล ต้อง ≥30fps (เกณฑ์ M1) · ถ้าไม่ถึง ค่อยทำ spatial hash ใน `src/systems/combat.ts` (`nearest()` ตอนนี้วนทุกตัว) — sprite ถูก pool แล้ว
 3. (ผู้สร้างตัดสินก่อน) **บาลานซ์คืน 2–3**: บอทแพ้คืน 3–4 ทั้ง 6 seed ดู Messages
 4. (ยังไม่มีคนรับ) ผสมสกิล: การ์ดใบที่ 4 + สูตร F01–F10 + สกิลผสม Lv6–7 (GDD §7) — ตอนนี้ไม่มีเลย
-5. (ยังไม่มีคนรับ) ช่วงเย็น: มื้อเย็น + ทางเลือกเย็นนี้ 1 จาก 3 (balance §6.2–6.3) — ตอนนี้เย็นเป็นช่วงพักเฉยๆ
+5. (Claude เริ่มแล้ว — กติการะดับ pure function เสร็จ, ยังไม่ต่อเข้าเกม) ช่วงเย็น: มื้อเย็น + ทางเลือกเย็นนี้ 1 จาก 3 (balance §6.2–6.3) · เหลือ: ของในกระเป๋า + การเก็บวัตถุดิบ (ต้องแก้ `state.ts` ด้วย PR เล็กก่อน) และ UI เย็น (Gemini `scenes/`) และผลในคืนจริง (ล้ม/โล่/หิว)
 6. (ยังไม่มีคนรับ) ของที่ slice ตัดออก: ดาเมจต่อเนื่อง (ไหม้/บ่อไฟ), ของพิเศษต่อเลเวลสกิล, เม็ด XP ที่ต้องเดินเก็บ, Elite แยกร่าง + รัง (D6), affix 5 แบบ (ตอนนี้ทุก affix = HP +50%), ลูกแก้วเลือดของบอส, กระสุนที่บินจริง
 7. (ยังไม่มีคนรับ) Soul Shard + meta, Daily Seed, tutorial คืน 1, บทพูดระบบจาก `system_lines.md`, เสียง
 
@@ -95,7 +95,8 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
-| 2026-11-14 16:25 | Gemini | สร้างภาพ Asset ชุดที่ 2, 3, 4 ครบ 55 ไฟล์ PNG ตาม `docs/art_requests.md` (sprites 28 ไฟล์, icons 64×64 17 ไฟล์, card frames 160×224 6 ไฟล์, VFX ขาวเทา 4 ไฟล์; เทสต์ 89/89 & build ผ่าน) | `gemini/art-set2-3-4` |
+| 2026-11-14 16:30 | Claude | เก็บงานที่ไม่มีคนรับ (Next up #5 ส่วนกติกา): `src/systems/evening.ts` มื้อเย็น 5 สูตร + บัฟ, หิวจนตาลาย, ทางเลือกเย็น 3 แบบ (รั้วขยะ 30%, กับดัก 6 อัน, โอที +20% Shard, เปิดตั้งแต่วัน 4 ใช้ได้ครั้งเดียว) · เทสต์ 103 ผ่าน, build ผ่าน · ยังไม่ต่อเกม · ผมตัดสินเองว่า รั้วขยะต้องมีอาหารสำรองอย่างน้อย 1 จาน, โอทีคือการข้ามมื้อเย็นคืนนั้น (ดู `availableChoices` และ `choiceSkipsMeal`) | `claude/unowned-evening-fusion` |
+| 2026-11-14 16:25 | Gemini | สร้างภาพ Asset ชุดที่ 2, 3, 4 ครบ 55 ไฟล์ PNG ตาม `docs/art_requests.md` (sprites 28 ไฟล์, icons 64×64 17 ไฟล์, card frames 160×224 6 ไฟล์, VFX ขาวเทา 4 ไฟล์; เทสต์ & build ผ่าน) | `gemini/art-set2-3-4` (PR #21) |
 | 2026-11-14 10:04 | Gemini | ทำ UI การ์ดผสมสกิลใบที่ 4 ใน `GameScene.ts` และ `HudOverlayScene.ts` เชื่อมกับ `src/systems/fusion.ts` (`canFuse`/`fusionOutcome`/`fuse`), รองรับปุ่ม 4/แตะการ์ด, พรีวิวผล + คำใบ้ D1 + HUD Lv6–7, เพิ่มเทสต์ใน `tests/scenes_fps.test.ts` (89/89 เทสต์ & build ผ่าน) | `gemini/fusion-ui` (PR #19) |
 | 2026-11-14 08:50 | Gemini | เปิด PR #17 ส่งภาพ Sprite & Tile ชุดที่ 1 ครบ 17 ไฟล์ PNG ตาม `docs/art_specs_set1.md` (`hero_*`, `mob_slime_*`, `mob_bat_*`, `base_core.png`, `tile_ground_01..05.png`) | `gemini/art-set1` (PR #17) |
 | 2026-11-14 08:45 | Gemini | เปิด PR #16 ส่งงานหน้าจอ/UI (`TitleScene`, `HudOverlayScene`, `MobileFpsMonitor`, `public/assets/*`, `tests/scenes_fps.test.ts` ผ่าน 75/75 เทสต์ & build ผ่าน) | `gemini/scenes-ui` (PR #16) |
