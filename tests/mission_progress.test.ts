@@ -74,3 +74,33 @@ describe('run end pays the day being played', () => {
     expect(s.missionShards).toBe(4);
   });
 });
+
+describe('mid-day ends and day 1 (missions count what the player did)', () => {
+  it('kills on day 1 count toward M_KILL30 (no night base yet)', () => {
+    const s = createRun({ seed: 'd1-kills', mode: 'casual' });
+    s.missionIds = ['M_KILL30'];
+    s.dayStats = freshDayStats();
+    s.kills = 30; // all of them killed during day 1
+    expect(settleRunEnd(s)).toBe(3);
+    expect(s.missionShards).toBe(3);
+  });
+
+  it('a surrender in the daytime counts only kills since the last night', () => {
+    const s = createRun({ seed: 'surrender-day', mode: 'casual' });
+    s.missionIds = ['M_KILL30', 'M_NOCORE'];
+    s.dayStats = freshDayStats();
+    s.nightKillBase = 100; // last night ended at 100 kills
+    s.kills = 120; // 20 kills since then, so not enough for M_KILL30
+    s.nightCoreStart = s.coreHp; // core untouched
+    expect(settleRunEnd(s)).toBe(5); // only M_NOCORE pays
+  });
+
+  it('a mid-day end with the core hit last night does not pay M_NOCORE', () => {
+    const s = createRun({ seed: 'core-hit', mode: 'casual' });
+    s.missionIds = ['M_NOCORE'];
+    s.dayStats = freshDayStats();
+    s.nightCoreStart = 1000;
+    s.coreHp = 800;
+    expect(settleRunEnd(s)).toBe(0);
+  });
+});
