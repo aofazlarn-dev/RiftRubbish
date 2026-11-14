@@ -16,11 +16,13 @@ import { VirtualJoystick } from '../input/joystick';
 import { isPlayerDown } from '../systems/base';
 import { phaseRemaining, recallEarly } from '../systems/clock';
 import type { CombatFx } from '../systems/combat';
+import type { EveningChoiceId, Inventory } from '../systems/evening';
 import type { Vec2 } from '../systems/movement';
 import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
 import { startRun, stepRun, type RunData } from '../systems/run';
 import { damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
 import { DebugOverlay } from '../ui/DebugOverlay';
+import { buildEveningOffer, resolveEveningSelection } from './eveningUiModel';
 import { buildShareCardSummary, findAvailableFusions, pickFusionCard } from './HudOverlayScene';
 import { MobileFpsMonitor, type FpsMonitorSnapshot } from './MobileFpsMonitor';
 
@@ -113,6 +115,11 @@ export class GameScene extends Phaser.Scene {
   /** What the overlay currently shows, so it is rebuilt only when that changes. */
   private overlayKey = '';
   private launchOpts?: { mode?: Mode; seed?: string; resumeSaved?: boolean };
+  private eveningPending = false;
+  private eveningMealId: string | null = null;
+  private eveningChoiceId: EveningChoiceId | null = null;
+  private overtimeUsed = false;
+  private preEveningInv: Inventory | null = null;
 
   constructor() {
     super('game');
@@ -315,6 +322,22 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.flash(250, 255, 255, 255, false);
       this.sfx.playPhase(phase);
       console.info(`[phase] day ${day} → ${phase}`);
+      if (phase === 'evening') {
+        if (this.preEveningInv) {
+          this.state.inventory = { ...this.preEveningInv };
+          this.preEveningInv = null;
+        }
+        const offer = buildEveningOffer(
+          this.state.inventory ?? {},
+          day,
+          this.state.coreMaxHp,
+          this.overtimeUsed,
+          null,
+        );
+        this.eveningMealId = offer.meals.find((m) => m.affordable)?.meal.id ?? null;
+        this.eveningChoiceId = 'trap';
+        this.eveningPending = true;
+      }
       saveRun(this.syncAndGetState()); // snapshot at each phase boundary as well
     });
     this.bus.on('player:down', () => {
@@ -334,9 +357,14 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 0.1); // clamp long frames (tab switch, GC pause)
-    const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
-    if (fx.some((f) => !f.missed)) this.sfx.playCast();
-    for (const f of fx) this.liveFx.push({ ...f, ttl: FX_SECONDS });
+    if (!this.eveningPending) {
+      if (this.state.phase === 'day') {
+        this.preEveningInv = { ...(this.state.inventory ?? {}) };
+      }
+      const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
+      if (fx.some((f) => !f.missed)) this.sfx.playCast();
+      for (const f of fx) this.liveFx.push({ ...f, ttl: FX_SECONDS });
+    }
     const fpsSnap = this.fpsMonitor.recordFrame(deltaMs, this.state.monsters.length);
 
     this.drawActors();
@@ -590,7 +618,9 @@ export class GameScene extends Phaser.Scene {
         ? `end:${s.status}`
         : s.pendingDraft
           ? `draft:${s.pendingDraft.join(',')}|fuse:${fusionIds}`
-          : '';
+          : this.eveningPending
+            ? `evening:${s.day}:${this.eveningMealId ?? 'none'}:${this.eveningChoiceId ?? 'none'}`
+            : '';
     const size = `${this.scale.width}x${this.scale.height}`;
     if (`${key}|${size}` === this.overlayKey) return;
     this.overlayKey = `${key}|${size}`;
@@ -598,6 +628,7 @@ export class GameScene extends Phaser.Scene {
     this.overlay = undefined;
     if (s.status !== 'playing') this.overlay = this.buildEndOverlay();
     else if (s.pendingDraft) this.overlay = this.buildDraftOverlay(s.pendingDraft);
+    else if (this.eveningPending) this.overlay = this.buildEveningOverlay();
     // Children do not inherit the container's scroll factor for input hit tests, so set it on each.
     this.overlay?.each((child: Phaser.GameObjects.GameObject) => {
       (child as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
@@ -721,6 +752,191 @@ export class GameScene extends Phaser.Scene {
       ]);
     }
     return box;
+  }
+
+  private buildEveningOverlay(): Phaser.GameObjects.Container {
+    const { box, w, h } = this.overlayBase();
+    const s = this.state;
+    const inv = s.inventory ?? {};
+    const offer = buildEveningOffer(inv, s.day, s.coreMaxHp, this.overtimeUsed, this.eveningMealId);
+    const cardW = Math.min(440, w - 20);
+    const leftX = w / 2 - cardW / 2;
+    const panelH = Math.min(h - 24, 590);
+    const topY = Math.max(12, (h - panelH) / 2);
+
+    const panel = this.add
+      .rectangle(w / 2, topY, cardW, panelH, 0x110b22, 0.96)
+      .setOrigin(0.5, 0)
+      .setStrokeStyle(2, 0xff9f1c);
+    box.add(panel);
+
+    let y = topY + 14;
+    box.add(
+      this.add
+        .text(w / 2, y, `เย็นวันที่ ${s.day} — เตรียมรับมือคืนนี้`, {
+          fontFamily: 'sans-serif',
+          fontSize: '20px',
+          fontStyle: 'bold',
+          color: '#ffd166',
+        })
+        .setOrigin(0.5, 0),
+    );
+    y += 28;
+    box.add(
+      this.add
+        .text(w / 2, y, `กระเป๋า: ${offer.inventorySummary}`, {
+          fontFamily: 'sans-serif',
+          fontSize: '12px',
+          color: '#a8dadc',
+          wordWrap: { width: cardW - 24 },
+        })
+        .setOrigin(0.5, 0),
+    );
+    y += 22;
+
+    box.add(
+      this.add.text(leftX + 14, y, '1. เลือกมื้อเย็น', {
+        fontFamily: 'sans-serif',
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+      }),
+    );
+    y += 20;
+
+    const overtimeSelected = this.eveningChoiceId === 'overtime';
+    for (const opt of offer.meals) {
+      const selected = !overtimeSelected && this.eveningMealId === opt.meal.id;
+      const rowH = 38;
+      const bg = this.add
+        .rectangle(w / 2, y, cardW - 24, rowH, selected ? 0x264653 : 0x1c1833, 1)
+        .setOrigin(0.5, 0)
+        .setStrokeStyle(selected ? 2 : 1, selected ? 0x2ec4b6 : opt.affordable ? 0x5c5470 : 0x332e47);
+      if (opt.affordable && !overtimeSelected) {
+        bg.setInteractive({ useHandCursor: true });
+        bg.on('pointerup', () => {
+          this.eveningMealId = opt.meal.id;
+          // If fence becomes unaffordable after picking a meal, fallback to trap.
+          const nextOffer = buildEveningOffer(inv, s.day, s.coreMaxHp, this.overtimeUsed, opt.meal.id);
+          if (this.eveningChoiceId === 'fence' && !nextOffer.choices.find((c) => c.id === 'fence')?.enabled) {
+            this.eveningChoiceId = 'trap';
+          }
+        });
+      }
+      const titleColor = overtimeSelected ? '#6c757d' : opt.affordable ? '#ffffff' : '#7a758c';
+      const subColor = overtimeSelected ? '#6c757d' : opt.affordable ? '#cfd2ff' : '#5e5970';
+      box.add([
+        bg,
+        this.add.text(leftX + 22, y + 4, `${opt.meal.name} (${opt.recipeText})`, {
+          fontFamily: 'sans-serif',
+          fontSize: '13px',
+          color: titleColor,
+        }),
+        this.add.text(leftX + 22, y + 20, opt.buffText, {
+          fontFamily: 'sans-serif',
+          fontSize: '11px',
+          color: subColor,
+        }),
+      ]);
+      y += rowH + 4;
+    }
+
+    // Skip meal option
+    const skipSelected = !overtimeSelected && this.eveningMealId === null;
+    const skipBg = this.add
+      .rectangle(w / 2, y, cardW - 24, 30, skipSelected ? 0x3d1e26 : 0x1c1833, 1)
+      .setOrigin(0.5, 0)
+      .setStrokeStyle(skipSelected ? 2 : 1, skipSelected ? 0xff6b6b : 0x5c5470);
+    if (!overtimeSelected) {
+      skipBg.setInteractive({ useHandCursor: true });
+      skipBg.on('pointerup', () => {
+        this.eveningMealId = null;
+      });
+    }
+    box.add([
+      skipBg,
+      this.add.text(leftX + 22, y + 7, `ไม่กินมื้อเย็น (${offer.hungryBuffText})`, {
+        fontFamily: 'sans-serif',
+        fontSize: '12px',
+        color: overtimeSelected ? '#6c757d' : '#ff9e9e',
+      }),
+    ]);
+    y += 38;
+
+    box.add(
+      this.add.text(leftX + 14, y, '2. ทางเลือกเย็นนี้ (1 จาก 3)', {
+        fontFamily: 'sans-serif',
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+      }),
+    );
+    y += 20;
+
+    for (const choice of offer.choices) {
+      const selected = this.eveningChoiceId === choice.id;
+      const rowH = 48;
+      const bg = this.add
+        .rectangle(w / 2, y, cardW - 24, rowH, selected ? 0x2b2d42 : 0x18132c, 1)
+        .setOrigin(0.5, 0)
+        .setStrokeStyle(selected ? 2 : 1, selected ? 0xffd166 : choice.enabled ? 0x5c5470 : 0x332e47);
+      if (choice.enabled) {
+        bg.setInteractive({ useHandCursor: true });
+        bg.on('pointerup', () => {
+          this.eveningChoiceId = choice.id;
+        });
+      }
+      const line1 = `${choice.titleTh} · ${choice.costTh}`;
+      const line2 = choice.enabled ? choice.effectTh : `ล็อก: ${choice.lockedReasonTh ?? ''}`;
+      box.add([
+        bg,
+        this.add.text(leftX + 22, y + 5, line1, {
+          fontFamily: 'sans-serif',
+          fontSize: '13px',
+          fontStyle: 'bold',
+          color: choice.enabled ? '#ffd166' : '#6c757d',
+          wordWrap: { width: cardW - 48 },
+        }),
+        this.add.text(leftX + 22, y + 24, line2, {
+          fontFamily: 'sans-serif',
+          fontSize: '11px',
+          color: choice.enabled ? '#e0e1dd' : '#7a758c',
+          wordWrap: { width: cardW - 48 },
+        }),
+      ]);
+      y += rowH + 5;
+    }
+
+    const confirmBtn = this.add
+      .rectangle(w / 2, topY + panelH - 52, cardW - 40, 40, 0x2ec4b6)
+      .setOrigin(0.5, 0)
+      .setStrokeStyle(2, 0xffffff)
+      .setInteractive({ useHandCursor: true });
+    confirmBtn.on('pointerup', () => this.confirmEvening());
+    box.add([
+      confirmBtn,
+      this.add
+        .text(w / 2, topY + panelH - 32, 'ยืนยันและเริ่มค่ำคืน', {
+          fontFamily: 'sans-serif',
+          fontSize: '16px',
+          fontStyle: 'bold',
+          color: '#0b132b',
+        })
+        .setOrigin(0.5),
+    ]);
+
+    return box;
+  }
+
+  private confirmEvening(): void {
+    const choiceId: EveningChoiceId = this.eveningChoiceId ?? 'trap';
+    const res = resolveEveningSelection(this.state.inventory ?? {}, this.eveningMealId, choiceId);
+    this.state.inventory = res.inventory;
+    this.state.nightBuff = res.buff;
+    if (res.usedOvertime) this.overtimeUsed = true;
+    this.eveningPending = false;
+    this.sfx.playLevelUp();
+    saveRun(this.syncAndGetState());
   }
 
   private buildEndOverlay(): Phaser.GameObjects.Container {
