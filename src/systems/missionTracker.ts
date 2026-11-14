@@ -37,3 +37,17 @@ export function settleDay(state: GameState): number {
   state.dayStats = freshDayStats();
   return earned;
 }
+
+/**
+ * Run end (win, lose, or surrender): score the day being played, including day 7 which has no dawn.
+ * Decision: a missions the player completed before the run ended still pays.
+ */
+export function settleRunEnd(state: GameState): number {
+  const base = state.dayStats ?? freshDayStats();
+  state.dayStats = {
+    ...base,
+    kills: state.kills - (state.nightKillBase ?? state.kills),
+    coreLost: state.coreHp < (state.nightCoreStart ?? state.coreHp),
+  };
+  return settleDay(state);
+}
