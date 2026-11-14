@@ -102,6 +102,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-14 18:10 | Claude | เก็บวัตถุดิบ 5–7 ชิ้นต่อวันตอนรุ่งเช้า, มื้อเย็นทำอัตโนมัติจากวัตถุดิบ (ไม่มีมื้อ = หิว), บัฟดาเมจ/ความเร็วตลอดคืน ล้างตอนเช้า · เทสต์ 132 ผ่าน, build ผ่าน · ยังไม่มี UI เลือกเมนู และยังไม่มีเนื้อสด/บัฟอื่น · บอทยังแพ้คืน 3–4 | `claude/evening-meal-in-run` (PR #29) |
 | 2026-11-14 16:55 | Gemini | เชื่อม Asset PNG ชุด 1–4 เข้า `GameScene.ts` (`preload`, `ensureAnimations`, `RenderTexture` floor, pooled `Sprite` มอน/ฮีโร่/บอส/แกนฐาน, ไอคอนสกิล + กรอบการ์ดบน Draft; Live Browser QA 0 errors & `npm test` + `npm run build` ผ่าน) | `gemini/wire-assets` (PR #28) |
 | 2026-11-14 17:40 | Claude | ผู้สร้างอนุมัติ 2 เรื่อง: (1) เกมโหลด `skills_full.json` (สูตร F01–F10 ใช้ได้จริง, ผลผสม `fusedOnly` ไม่โผล่ใน Draft) (2) ต่อ affix 5 แบบเข้าการรบ: เกราะขยะ = โล่ 50% (แทน HP +50%), เร่งรีบ +40%, จ่าฝูงออร่า 96 px +20%, ระเบิดตอนตายหลัง 1 วิ, ต้านธาตุที่เด่นสุด 50% (รวมไม่เกิน 75%) · state เพิ่ม field แบบ optional (save เก่ายังโหลดได้) · เทสต์ 126 ผ่าน, build ผ่าน | `claude/game-uses-full-skills` (PR #27) |
 | 2026-11-14 16:41 | Gemini | เชื่อม `TitleScene` เข้า `src/main.ts` (เมนู Casual / Daily Seed / Hardcore 🔒 / เล่นต่อ + รองรับ `?seed=`), ส่ง `{mode, seed}` เข้า `GameScene.init()`, และเพิ่ม `wordWrap` ให้ `this.hud` กันชน `DebugOverlay` บนมือถือ (`npm test` 103/103 & `npm run build` ผ่าน) | `gemini/title-and-hud-polish` |
