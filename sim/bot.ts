@@ -35,6 +35,22 @@ export interface BotOptions {
   radiusTiles?: number;
   /** Dodge monsters that get close (default true). */
   kite?: boolean;
+  /** 'damage' (default): take the strongest card. 'first': always the first card (the old policy). */
+  policy?: 'damage' | 'first';
+}
+
+/** Score of a Draft card for the bot: an Active counts its damage; an upgrade counts 2; a passive counts 1. */
+function cardScore(card: string, skills: { id: string; kind: string; damage?: number }[]): number {
+  if (card.startsWith('up:')) return 2;
+  const def = skills.find((s) => s.id === card.slice(6));
+  if (!def) return 0;
+  return def.kind === 'active' ? (def.damage ?? 0) : 1;
+}
+
+function bestCardIndex(cards: string[], skills: { id: string; kind: string; damage?: number }[]): number {
+  let best = 0;
+  for (let i = 1; i < cards.length; i++) if (cardScore(cards[i], skills) > cardScore(cards[best], skills)) best = i;
+  return best;
 }
 
 export function runBot(seed: string, options: BotOptions = {}): BotResult {
@@ -55,7 +71,8 @@ export function runBot(seed: string, options: BotOptions = {}): BotResult {
 
   while (state.status === 'playing' && seconds < maxSeconds) {
     if (state.pendingDraft) {
-      pickDraft(state, Math.min(options.pick ?? 0, state.pendingDraft.length - 1), data.skills);
+      const idx = options.policy === 'first' ? Math.min(options.pick ?? 0, state.pendingDraft.length - 1) : bestCardIndex(state.pendingDraft, data.skills);
+      pickDraft(state, idx, data.skills);
       continue;
     }
     // Circle close to the core: monsters heading for it come into range, and goblins
