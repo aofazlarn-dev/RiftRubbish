@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GameScene } from './scenes/GameScene';
+import { TitleScene } from './scenes/TitleScene';
 
 // `?renderer=canvas` forces the Canvas renderer for devices or browsers where WebGL fails.
 const forceCanvas = new URLSearchParams(window.location.search).get('renderer') === 'canvas';
@@ -15,5 +16,5 @@ new Phaser.Game({
   },
   fps: { target: 60, min: 30 },
   render: { antialias: true, powerPreference: 'high-performance' },
-  scene: [GameScene],
+  scene: [TitleScene, GameScene],
 });

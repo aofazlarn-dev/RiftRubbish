@@ -7,7 +7,7 @@ import Phaser from 'phaser';
 import { EventBus } from '../core/events';
 import { RunRng } from '../core/rng';
 import { autoSaveOnHide, clearRun, loadRun, saveRun } from '../core/save';
-import { createRun, type GameState } from '../core/state';
+import { createRun, type GameState, type Mode } from '../core/state';
 import { CORE_X, CORE_Y, MAP_TILES, TILE, WORLD } from '../core/world';
 import { loadRunData } from '../data';
 import skillsJson from '../data/skills.json';
@@ -86,9 +86,14 @@ export class GameScene extends Phaser.Scene {
   private overlay?: Phaser.GameObjects.Container;
   /** What the overlay currently shows, so it is rebuilt only when that changes. */
   private overlayKey = '';
+  private launchOpts?: { mode?: Mode; seed?: string; resumeSaved?: boolean };
 
   constructor() {
     super('game');
+  }
+
+  init(data?: { mode?: Mode; seed?: string; resumeSaved?: boolean }): void {
+    this.launchOpts = data;
   }
 
   create(): void {
@@ -136,10 +141,21 @@ export class GameScene extends Phaser.Scene {
     this.joystick = new VirtualJoystick(this);
 
     this.hud = this.add
-      .text(12, 12, '', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff', lineSpacing: 3 })
+      .text(12, 12, '', {
+        fontFamily: 'sans-serif',
+        fontSize: '16px',
+        color: '#ffffff',
+        lineSpacing: 3,
+        wordWrap: { width: this.hudWrapWidth() },
+      })
       .setScrollFactor(0)
       .setDepth(900);
     this.debug = new DebugOverlay(this);
+    const onResize = (size: Phaser.Structs.Size) => {
+      this.hud.setWordWrapWidth(this.hudWrapWidth(size.width));
+    };
+    this.scale.on('resize', onResize);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', onResize));
 
     this.bus.on('phase:change', ({ day, phase }) => {
       this.cameras.main.flash(250, 255, 255, 255, false);
@@ -476,18 +492,26 @@ export class GameScene extends Phaser.Scene {
     return this.state;
   }
 
-  /** A saved run that is still in progress, unless a ?seed= link asks for a different one. */
+  private hudWrapWidth(width = this.scale.width): number {
+    // Keep clear of the top-right DebugOverlay in dev builds and screen edges on narrow mobile viewports.
+    return Math.max(180, width - (import.meta.env.DEV ? 160 : 24));
+  }
+
+  /** A saved run that is still in progress, unless a ?seed= link or menu selection asks for a new one. */
   private resume(): GameState | null {
     const linkSeed = new URLSearchParams(window.location.search).get('seed');
     const saved = loadRun();
-    if (saved && saved.status === 'playing' && (!linkSeed || saved.seed === linkSeed)) return saved;
-    return null;
+    if (!saved || saved.status !== 'playing') return null;
+    if (linkSeed && saved.seed !== linkSeed) return null;
+    if (this.launchOpts?.seed && !this.launchOpts.resumeSaved && saved.seed !== this.launchOpts.seed) return null;
+    return saved;
   }
 
   private newState(): GameState {
     const linkSeed = new URLSearchParams(window.location.search).get('seed');
-    const seed = linkSeed ?? `run-${Date.now().toString(36)}`;
-    const run = createRun({ seed, fromSeedLink: linkSeed !== null });
+    const seed = linkSeed ?? this.launchOpts?.seed ?? `run-${Date.now().toString(36)}`;
+    const mode: Mode = this.launchOpts?.mode ?? 'casual';
+    const run = createRun({ seed, mode, fromSeedLink: linkSeed !== null });
     run.player.x = CORE_X + TILE * 2;
     run.player.y = CORE_Y;
     return run;
@@ -495,7 +519,7 @@ export class GameScene extends Phaser.Scene {
 
   private newRun(): void {
     clearRun();
-    this.scene.restart();
+    this.scene.restart({ mode: this.state.mode });
   }
 
   private drawWorld(): void {
