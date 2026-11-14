@@ -51,11 +51,12 @@ describe('evening meal (balance §6.2)', () => {
 });
 
 describe('run wiring', () => {
-  it('a new run starts with day 1 gathering in stock', () => {
+  it('a new run starts with an empty bag, day 1 nodes on the map and a filled well (R2)', () => {
     const s = createRun({ seed: 'wired' });
     startRun(s, RunRng.fromSeed('wired'), data);
     const total = Object.values(s.inventory ?? {}).reduce((a, n) => a + (n ?? 0), 0);
-    expect(total).toBeGreaterThanOrEqual(5);
-    expect(total).toBeLessThanOrEqual(7);
+    expect(total).toBe(0);
+    expect(s.resourceNodes).toHaveLength(6);
+    expect(s.well).toMatchObject({ water: 2, fish: 1 });
   });
 });

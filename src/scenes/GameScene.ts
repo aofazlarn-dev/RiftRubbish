@@ -49,6 +49,9 @@ const FUSION_RECIPES: readonly FusionRecipe[] = skillsFullJson.fusions as Fusion
 
 const PHASE_TINT = { day: 0x000000, evening: 0x3a1a00, night: 0x05001a } as const;
 const PHASE_ALPHA = { day: 0, evening: 0.25, night: 0.5 } as const;
+/** Player-facing names for picked-up ingredients (R2). */
+const ITEM_LABEL: Record<string, string> = { grain: '🌾 ธัญพืช', mushroom: '🍄 เห็ด', water: '💧 น้ำ', fish: '🐟 ปลา', meat: '🍖 เนื้อสด' };
+
 const PHASE_LABEL = { day: 'กลางวัน', evening: 'เย็น', night: 'กลางคืน' } as const;
 
 /** Sprite sheet texture key per monster `defId`. */
@@ -101,6 +104,8 @@ interface CombatPopup {
   ttl: number;
   maxTtl: number;
   vy: number;
+  /** Set for ingredient popups: where it started, to stack popups on the same spot. */
+  itemAt?: string;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -460,6 +465,7 @@ export class GameScene extends Phaser.Scene {
       this.sfx.playHurt();
     });
     this.bus.on('player:levelup', () => this.sfx.playLevelUp());
+    this.bus.on('item:pickup', ({ kind, count, x, y }) => this.spawnItemPopup(kind, count, x, y));
     this.bus.on('run:end', () => clearRun()); // a finished run cannot be resumed
 
     this.stopAutoSave = autoSaveOnHide(
@@ -661,6 +667,29 @@ export class GameScene extends Phaser.Scene {
     this.combatPopups.push({ text: txt, ttl: 0.55, maxTtl: 0.55, vy: 34 });
   }
 
+  /** "+1 ธัญพืช" over a picked-up ingredient (R2). Shares the combat popup pool. */
+  private spawnItemPopup(kind: string, count: number, x: number, y: number): void {
+    if (this.combatPopups.length >= 20) return;
+    const label = ITEM_LABEL[kind] ?? kind;
+    const txt =
+      this.popupPool.pop() ??
+      this.add
+        .text(0, 0, '', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '15px',
+          fontStyle: 'bold',
+          color: '#fde047',
+          stroke: '#090d16',
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5)
+        .setDepth(25);
+    // Stack popups that start on the same spot (the well gives water and fish together).
+    const stacked = this.combatPopups.filter((p) => p.itemAt === `${x},${y}` && p.ttl > p.maxTtl - 0.1).length;
+    txt.setText(`+${count} ${label}`).setColor('#86efac').setPosition(x, y - 18 - stacked * 18).setScale(1).setAlpha(1).setVisible(true);
+    this.combatPopups.push({ text: txt, ttl: 0.9, maxTtl: 0.9, vy: 28, itemAt: `${x},${y}` });
+  }
+
   private updatePopups(dt: number): void {
     const active: CombatPopup[] = [];
     for (const p of this.combatPopups) {
@@ -835,6 +864,32 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(2, 0xffea00, 1).strokeRect(c.x - 9, c.y - 7, 18, 14);
         g.fillStyle(0xfef08a, 1).fillRect(c.x - 2, c.y - 1, 4, 4);
       }
+    }
+    // Gatherable ingredients (R2): bright and pulsing so they read apart from the map props.
+    const pulse = 0.5 + 0.5 * Math.sin(this.animTime * 4);
+    for (const n of s.resourceNodes ?? []) {
+      if (n.taken) continue;
+      const glow = n.kind === 'grain' ? 0xfde047 : 0xc084fc;
+      g.fillStyle(glow, 0.18 + 0.18 * pulse).fillCircle(n.x, n.y, 18);
+      g.lineStyle(2, glow, 0.9).strokeCircle(n.x, n.y, 13 + pulse * 2);
+      if (n.kind === 'grain') {
+        g.lineStyle(2, 0xa16207, 1).lineBetween(n.x, n.y + 8, n.x, n.y - 6);
+        g.lineBetween(n.x - 4, n.y + 8, n.x - 5, n.y - 3).lineBetween(n.x + 4, n.y + 8, n.x + 5, n.y - 3);
+        g.fillStyle(0xfacc15, 1).fillEllipse(n.x, n.y - 7, 5, 9).fillEllipse(n.x - 5, n.y - 4, 4, 8).fillEllipse(n.x + 5, n.y - 4, 4, 8);
+      } else {
+        g.fillStyle(0xf5f5f4, 1).fillRect(n.x - 2, n.y - 1, 4, 8);
+        g.fillStyle(0xa855f7, 1).fillEllipse(n.x, n.y - 3, 16, 9);
+        g.fillStyle(0xf0abfc, 1).fillCircle(n.x - 4, n.y - 4, 1.5).fillCircle(n.x + 3, n.y - 5, 1.5);
+      }
+    }
+    if (s.well) {
+      const w = s.well;
+      const full = w.water + w.fish > 0;
+      g.fillStyle(0x090d16, 0.3).fillEllipse(w.x, w.y + 10, 34, 10);
+      g.fillStyle(0x57534e, 1).fillCircle(w.x, w.y, 15);
+      g.fillStyle(full ? 0x0ea5e9 : 0x1e293b, 1).fillCircle(w.x, w.y, 10);
+      g.lineStyle(2, 0xa8a29e, 1).strokeCircle(w.x, w.y, 15);
+      if (full && s.phase === 'day') g.lineStyle(2, 0x7dd3fc, 0.5 + 0.5 * pulse).strokeCircle(w.x, w.y, 20 + pulse * 3);
     }
     for (const t of s.traps ?? []) {
       if (t.uses <= 0) continue;

@@ -132,6 +132,10 @@ export interface GameState {
   monsters: MonsterInstance[];
   /** Optional so saves made before affixes existed still load. Use `?? []`. */
   bursts?: PendingBurst[];
+  /** Today's grain/mushroom nodes (R2). Cleared at dusk. Optional for older saves. */
+  resourceNodes?: import('../systems/gather').ResourceNode[];
+  /** The well near the spawn: refills at dawn with water and fish (R2). */
+  well?: import('../systems/gather').WellState;
   /** Gathered ingredients (balance §6.2). Optional so older saves still load. Use `?? {}`. */
   inventory?: Inventory;
   /** Evening choice (balance §6.3). `requestedChoice` is set by the UI; the game falls back to trap. */
