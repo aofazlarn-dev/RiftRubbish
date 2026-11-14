@@ -28,6 +28,7 @@ import { expireTutorialGifts, forceTutorialFusion, grantTutorialGift } from './t
 import { clearChests, spawnChests, tickChests } from './chests';
 import { attachSystemVoice } from './systemVoice';
 import { attachShardLedger } from './shards';
+import { startingSkillsFor } from './meta';
 import { grantXp, openDraftIfOwed } from './progression';
 import type { SkillDef } from './skills';
 import { buildNightSpawns, waveForNight, type MonsterDef, type WavesData } from './waves';
@@ -47,6 +48,10 @@ const BOSS_CORE_REACH = 60;
 
 /** Sets up day 1: patrols (with the guaranteed slimes) and the first skill Draft. */
 export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: EventBus): void {
+  // Daily gets the fixed loadout (approved draft, PR #44): W01 + J03 owned from the start.
+  for (const id of startingSkillsFor(state)) {
+    if (!state.skills.some((s) => s.id === id)) state.skills.push({ id, xp: 0, cooldownLeft: 0 });
+  }
   const patrol = data.waves.days.find((d) => d.day === 1);
   if (patrol) spawnDayPatrols(state, patrol, rng.get('combat'), data.monsters);
   state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
