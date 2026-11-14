@@ -79,6 +79,7 @@ export function pickFusionCard(
   recipeId: string,
   skills: readonly SkillDef[],
   recipes: readonly FusionRecipe[],
+  useCore = false,
 ): FusionOutcome | null {
   const recipe = recipes.find((r) => r.id === recipeId);
   if (!recipe) return null;
@@ -89,7 +90,7 @@ export function pickFusionCard(
 
   const firstTaken = idxA <= idxB ? recipe.a : recipe.b;
   const secondTaken = firstTaken === recipe.a ? recipe.b : recipe.a;
-  const out = fuse(state, skills, recipes, firstTaken, secondTaken);
+  const out = fuse(state, skills, recipes, firstTaken, secondTaken, useCore);
   if (out) {
     state.pendingDraft = null;
   }

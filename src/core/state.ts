@@ -39,6 +39,8 @@ export interface OwnedSkill {
   xp: number;
   /** Seconds until an Active can cast again. Unused for Passives. */
   cooldownLeft: number;
+  /** Rarity steps added by a Fusion Core when this skill was fused (R3, D17). */
+  rarityBoost?: number;
   /** Welcome gift (tutorial): outside the slots, never levels up, leaves at dawn of day 2. */
   gift?: boolean;
 }

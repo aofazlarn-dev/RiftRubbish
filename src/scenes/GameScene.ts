@@ -23,7 +23,8 @@ import { attachMissionTracker } from '../systems/missionTracker';
 import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
 import { recallToEvening, startRun, stepRun, submitEvening, type RunData } from '../systems/run';
 import { attachShardLedger } from '../systems/shards';
-import { damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
+import { boostedRarity, coreBoostMult, damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
+import { canBoostWithCore } from '../systems/fusion';
 import { attachSystemVoice } from '../systems/systemVoice';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import {
@@ -317,6 +318,7 @@ export class GameScene extends Phaser.Scene {
       if (this.state.status === 'playing' && !this.state.pendingDraft) recallToEvening(this.state, this.rng, this.data_, this.bus);
     });
     kb.on('keydown-N', () => this.newRun());
+    kb.on('keydown-C', () => this.chooseFusion(true)); // fuse with a Fusion Core (R3)
     kb.on('keydown-M', () => {
       this.sfx.toggleMute();
     });
@@ -1090,7 +1092,10 @@ export class GameScene extends Phaser.Scene {
     const showIntro = this.state.skills.length === 0 && this.state.day === 1;
     const cardW = Math.min(432, w - 36);
     const cardH = 88;
-    const fusionCardH = 100;
+    // Taller when the Core button shows, so head, preview, hint and button never overlap (R3).
+    const fusionCanBoost =
+      !!fusion && canBoostWithCore(this.state, this.data_.skills, fusion.recipe, fusion.resultSkill.id);
+    const fusionCardH = fusionCanBoost ? 150 : 122;
     const gap = 10;
     const winW = cardW + 24;
     const headerH = 28;
@@ -1248,15 +1253,24 @@ export class GameScene extends Phaser.Scene {
         fusion.resultSkill.kind === 'active'
           ? `${KIND_LABEL.active} · พลัง ${damageAtLevel(fusion.resultSkill, inheritedLv)} · ทุก ${fusion.resultSkill.cooldown} วิ · ระยะ ${fusion.resultSkill.range} ช่อง`
           : `${KIND_LABEL.passive} · ถึกขึ้น: รับดาเมจน้อยลงและเลือดสูงสุดเพิ่ม`;
-      const hintLine = `อีกผล: "${fusion.alternateSkill.name.th}" (ดัน ${fusion.skillToRaiseForAlternate.name.th} ให้สูงกว่าก่อนผสม)`;
+      const coreNote = fusion.recipe.requiresCore ? ' · ใช้ Fusion Core 1 ลูก' : '';
+      const hintLine = `อีกผล: "${fusion.alternateSkill.name.th}" (ดัน ${fusion.skillToRaiseForAlternate.name.th} ให้สูงกว่าก่อนผสม)${coreNote}`;
+      const canBoost = fusionCanBoost;
 
-      const previewText = this.add.text(cardLeft + 14, y + 38, previewLine, {
+      const headText = this.add.text(cardLeft + 14, y + 10, head, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        wordWrap: { width: cardW - 60 },
+      });
+      const previewText = this.add.text(cardLeft + 14, y + 14 + headText.height, previewLine, {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '13px',
         color: '#e2e8f0',
         wordWrap: { width: cardW - 28 },
       });
-      const hintText = this.add.text(cardLeft + 14, y + 38 + previewText.height + 4, hintLine, {
+      const hintText = this.add.text(cardLeft + 14, previewText.y + previewText.height + 4, hintLine, {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
         color: '#fde047',
@@ -1275,16 +1289,32 @@ export class GameScene extends Phaser.Scene {
             padding: { x: 5, y: 2 },
           })
           .setOrigin(1, 0),
-        this.add.text(cardLeft + 14, y + 10, head, {
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '16px',
-          fontStyle: 'bold',
-          color: '#ffffff',
-          wordWrap: { width: cardW - 60 },
-        }),
+        headText,
         previewText,
         hintText,
       ]);
+      if (canBoost) {
+        // Fusion Core "+1 rarity" (R3, D17): a separate button so a plain tap never spends the Core.
+        const boosted = boostedRarity(fusion.resultSkill.rarity, 1);
+        const mult = coreBoostMult(fusion.resultSkill.rarity, 1).toFixed(2);
+        const label = `💠 ใช้ Core → ${RARITY_LABEL[boosted]} (ดาเมจ ×${mult}) [C]`;
+        const btn = this.add
+          .text(cardLeft + cardW - 10, y + fusionCardH - 8, label, {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '12px',
+            fontStyle: 'bold',
+            color: '#0b132b',
+            backgroundColor: '#67e8f9',
+            padding: { x: 8, y: 4 },
+          })
+          .setOrigin(1, 1)
+          .setInteractive({ useHandCursor: true });
+        btn.on('pointerup', (_p: unknown, _x: number, _y: number, ev: { stopPropagation(): void }) => {
+          ev.stopPropagation();
+          this.chooseFusion(true);
+        });
+        box.add(btn);
+      }
     }
     return box;
   }
@@ -1718,13 +1748,19 @@ export class GameScene extends Phaser.Scene {
     if (index < this.state.pendingDraft.length) {
       pickDraft(this.state, index, this.data_.skills, this.bus);
     } else if (index === this.state.pendingDraft.length) {
-      const fusion = findAvailableFusions(this.state, this.data_.skills, FUSION_RECIPES)[0];
-      if (!fusion) return;
-      const out = pickFusionCard(this.state, fusion.recipe.id, this.data_.skills, FUSION_RECIPES);
-      if (out) {
-        this.sfx.playFuse();
-        this.bus.emit('draft:pick', { card: `fuse:${fusion.recipe.id}` });
-      }
+      this.chooseFusion(false);
+    }
+  }
+
+  /** The 4th card. `useCore` spends a Fusion Core for "+1 rarity" when it can (R3, D17). */
+  private chooseFusion(useCore: boolean): void {
+    if (this.state.status !== 'playing' || !this.state.pendingDraft) return;
+    const fusion = findAvailableFusions(this.state, this.data_.skills, FUSION_RECIPES)[0];
+    if (!fusion) return;
+    const out = pickFusionCard(this.state, fusion.recipe.id, this.data_.skills, FUSION_RECIPES, useCore);
+    if (out) {
+      this.sfx.playFuse();
+      this.bus.emit('draft:pick', { card: `fuse:${fusion.recipe.id}${useCore ? '+core' : ''}` });
     }
   }
 

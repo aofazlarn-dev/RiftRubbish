@@ -15,7 +15,7 @@ import { damageBoss } from './boss';
 import { applyDamageWithShield, combinedResist, resistChoiceFor, RESIST_CHOICE_RATIO } from './affix';
 import { eliteCoreOnDeath } from './chests';
 import { AFFIX_XP_MULTIPLIER, findDef, queueDeathEffects } from './monsters';
-import { damageAtLevel, levelForXp, type SkillDef } from './skills';
+import { coreBoostMult, damageAtLevel, levelForXp, type SkillDef } from './skills';
 import type { MonsterDef } from './waves';
 
 export const PASSIVE_SXP_PER_SECOND = 0.6;
@@ -276,7 +276,8 @@ export function tickSkills(
     if (!aim) continue;
     owned.cooldownLeft = def.cooldown;
     const mealDamage = (state.nightBuff?.damageMult ?? 1) * (state.metaDamage ?? 1);
-    const hits = cast(def, damageAtLevel(def, levelForXp(owned.xp)) * mealDamage, aim, targets, px, py, rng, result.fx);
+    const coreMult = coreBoostMult(def.rarity, owned.rarityBoost); // Fusion Core "+1 rarity" (R3, D17)
+    const hits = cast(def, damageAtLevel(def, levelForXp(owned.xp)) * mealDamage * coreMult, aim, targets, px, py, rng, result.fx);
     if (hits > 0 && !owned.gift) owned.xp += def.cooldown; // gift skills never level up (G2)
   }
 
