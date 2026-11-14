@@ -46,7 +46,7 @@ export function settleRunEnd(state: GameState): number {
   const base = state.dayStats ?? freshDayStats();
   state.dayStats = {
     ...base,
-    kills: state.kills - (state.nightKillBase ?? state.kills),
+    kills: state.kills - (state.nightKillBase ?? 0), // day 1 has no night base yet
     coreLost: state.coreHp < (state.nightCoreStart ?? state.coreHp),
   };
   return settleDay(state);
