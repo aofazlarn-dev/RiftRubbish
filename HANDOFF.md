@@ -48,6 +48,9 @@
 8. (จากผล QA & Review ล่าสุด) เชื่อม `TitleScene.ts` เข้า `src/main.ts` (เมนู Casual / Daily Seed / Hardcore 🔒) และเพิ่ม `wordWrap: { width: this.scale.width - 24 }` ให้ `this.hud` ใน `src/scenes/GameScene.ts` เพื่อไม่ให้บรรทัดสถานะ/รายชื่อสกิลบนจอมือถือ 390px ยาวชน `DebugOverlay` หรือล้นขอบขวา
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
+- **Gemini → Claude & ผู้สร้าง (2026-11-14 16:55) — เชื่อมภาพ Asset ชุด 1–4 เข้า `GameScene.ts` เสร็จแล้ว (`gemini/wire-assets`):**
+  - เพิ่ม `preload()` และ `ensureAnimations()` โหลด spritesheet ฮีโร่/มอนสเตอร์ 6 ชนิด/Elite/บอส (`boss_bloodmoon` + enrage), แกนฐาน 3 สภาพ (`base_core`), พื้น `tile_ground_01..05` (bake ลง `RenderTexture` 1 draw call เพื่อคง 60fps บนมือถือ), ไอคอนสกิล 17 ตัว และกรอบการ์ด 6 ระดับบน Draft Overlay
+  - ทดสอบเล่นจริงในเบราว์เซอร์ (`?renderer=canvas` เดสก์ท็อป + มือถือ 390×844): 0 console/page errors, 0 failed asset requests (42/42 ไฟล์โหลด 200 OK), และ HUD บนมือถือตัดบรรทัดไม่ซ้อน `DebugOverlay` แล้ว (`npm test` 103/103 & `npm run build` ผ่าน)
 - **Gemini → Claude & ผู้สร้าง (2026-11-14 16:41) — เชื่อม `TitleScene` และแก้ HUD มือถือแล้ว (`gemini/title-and-hud-polish`):**
   - ลงทะเบียน `[TitleScene, GameScene]` ใน `src/main.ts`, รองรับ `?seed=` ข้ามเข้าเกมตรง + ปุ่ม `เล่นรอบเดิมต่อ` ใน `TitleScene.ts`, รับ `{mode, seed}` ใน `GameScene.init()`, และเพิ่ม `wordWrap` ให้ `this.hud` กันซ้อน `DebugOverlay` บนจอมือถือ 390px
 - **Gemini → Claude & ผู้สร้าง (2026-11-14 16:38) — ผล Code Review & ทดสอบเกมทั้งหมด (`main` @ `946fe55`):**
@@ -99,6 +102,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-14 16:55 | Gemini | เชื่อม Asset PNG ชุด 1–4 เข้า `GameScene.ts` (`preload`, `ensureAnimations`, `RenderTexture` floor, pooled `Sprite` มอน/ฮีโร่/บอส/แกนฐาน, ไอคอนสกิล + กรอบการ์ดบน Draft; Live Browser QA 0 errors & `npm test` + `npm run build` ผ่าน) | `gemini/wire-assets` (PR #28) |
 | 2026-11-14 17:40 | Claude | ผู้สร้างอนุมัติ 2 เรื่อง: (1) เกมโหลด `skills_full.json` (สูตร F01–F10 ใช้ได้จริง, ผลผสม `fusedOnly` ไม่โผล่ใน Draft) (2) ต่อ affix 5 แบบเข้าการรบ: เกราะขยะ = โล่ 50% (แทน HP +50%), เร่งรีบ +40%, จ่าฝูงออร่า 96 px +20%, ระเบิดตอนตายหลัง 1 วิ, ต้านธาตุที่เด่นสุด 50% (รวมไม่เกิน 75%) · state เพิ่ม field แบบ optional (save เก่ายังโหลดได้) · เทสต์ 126 ผ่าน, build ผ่าน | `claude/game-uses-full-skills` (PR #27) |
 | 2026-11-14 16:41 | Gemini | เชื่อม `TitleScene` เข้า `src/main.ts` (เมนู Casual / Daily Seed / Hardcore 🔒 / เล่นต่อ + รองรับ `?seed=`), ส่ง `{mode, seed}` เข้า `GameScene.init()`, และเพิ่ม `wordWrap` ให้ `this.hud` กันชน `DebugOverlay` บนมือถือ (`npm test` 103/103 & `npm run build` ผ่าน) | `gemini/title-and-hud-polish` |
 | 2026-11-14 16:38 | Gemini | บันทึกผล Code Review และ QA เกมทั้งหมดลง `HANDOFF.md` (`npm test` 103/103, `npm run build`, sim report 6 seed, Live Browser QA เดสก์ท็อป + มือถือ 390×844 พบ 0 errors, อัปเดต `Next up` & `Messages`) | `gemini/handoff-qa-review` |
