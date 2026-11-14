@@ -9,21 +9,21 @@ import { FINAL_NIGHT, type GameState } from '../core/state';
 import { CORE_X, CORE_Y, dist, TILE, WORLD } from '../core/world';
 import { damageCore, damagePlayer, dawnRepair, isPlayerDown, tickSurvival } from './base';
 import { bossStats, createBoss, tickBoss } from './boss';
-import { advanceClock } from './clock';
+import { advanceClock, recallEarly } from './clock';
 import { tickSkills, type CombatFx } from './combat';
 import { clearMonstersAtDawn, findDef, ringPoint, spawnDayPatrols, spawnMonster, tickMonsters, tickSpawns } from './monsters';
 import { movePlayer, type Vec2 } from './movement';
 import {
-  eveningMeal,
+  autoMealId,
   fenceShieldHp,
   gatherDay,
-  HUNGRY_DEBUFF,
-  hasSpareMeal,
-  resolveEveningChoice,
+  resolveEvening,
   TRAP_PLAYER_STUN_SEC,
   TRAP_TRIGGER_PX,
   trapPositions,
+  type EveningChoiceId,
 } from './evening';
+import { overtimeAllowed } from './daily';
 import { expireTutorialGifts, forceTutorialFusion, grantTutorialGift } from './tutorial';
 import { clearChests, spawnChests, tickChests } from './chests';
 import { attachSystemVoice } from './systemVoice';
@@ -72,44 +72,56 @@ export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: Eve
 }
 
 /**
- * Evening start: applies the chosen evening option (balance §6.2–6.3). The UI sets
- * `requestedChoice`; without it the free trap is used.
+ * Resolves this evening once (balance §6.2–6.3, Gap round 2 R1). The only place that cooks,
+ * sets the night buff, the fence shield, the traps and overtime. Uses the player's request
+ * (`requestedMeal`, `requestedChoice`) when set; otherwise the game picks the best affordable
+ * meal and the free trap. Does nothing if this evening was already resolved.
  *  - meal: cooked from stock, or hungry if nothing can be cooked
  *  - fence: meal + a spare dish, core shield 30% of max HP until dawn
  *  - trap: 6 traps around the base, no cost
- *  - overtime: skip the meal (hungry), once per run from day 4
+ *  - overtime: skip the meal (hungry), once per run from day 4, never in Daily
  */
 export function beginEvening(state: GameState): void {
+  if (state.eveningResolved === true) return;
   const inv = state.inventory ?? {};
-  const planned = eveningMeal(inv);
-  const choice = resolveEveningChoice(state.requestedChoice, {
+  const mealId = state.requestedMeal === undefined ? autoMealId(inv) : state.requestedMeal;
+  const res = resolveEvening(inv, mealId, state.requestedChoice, {
     day: state.day,
-    spareMeals: hasSpareMeal(planned.inventory) ? 1 : 0,
     overtimeUsed: state.overtimeUsed ?? false,
+    overtimeAllowed: overtimeAllowed(state.mode),
   });
   state.requestedChoice = undefined;
+  state.requestedMeal = undefined;
+  state.eveningResolved = true;
 
-  if (choice === 'overtime') {
+  state.inventory = res.inventory;
+  state.nightBuff = res.buff;
+  // Mission M_EAT reads this at dawn: no meal tonight (overtime included).
+  if (res.hungry) state.dayStats = { ...(state.dayStats ?? freshDayStats()), hungry: true };
+  state.coreShield = res.choice === 'fence' ? fenceShieldHp(state.coreMaxHp) : 0;
+  state.traps = res.choice === 'trap' ? trapPositions(CORE_X, CORE_Y, TILE) : [];
+  if (res.choice === 'overtime') {
     state.overtimeUsed = true;
     state.overtimeChosen = true;
-    state.nightBuff = HUNGRY_DEBUFF;
-    state.dayStats = { ...(state.dayStats ?? freshDayStats()), hungry: true }; // overtime skips the meal
-    return;
   }
-  // No meal cooked and not overtime = hungry tonight; mission M_EAT reads this at dawn.
-  if (planned.mealId === null) state.dayStats = { ...(state.dayStats ?? freshDayStats()), hungry: true };
+}
 
-  // Cooks from stock; the buff lasts through tonight (balance §6.2).
-  let after = planned.inventory;
-  state.nightBuff = planned.buff;
-  if (choice === 'fence') {
-    // The spare dish costs one more cooked meal from stock (guaranteed by resolveEveningChoice).
-    after = eveningMeal(after).inventory;
-    state.coreShield = fenceShieldHp(state.coreMaxHp);
-  } else {
-    state.traps = trapPositions(CORE_X, CORE_Y, TILE);
-  }
-  state.inventory = after;
+/** The evening screen's confirm: records the player's pick and resolves the evening at once. */
+export function submitEvening(state: GameState, mealId: string | null, choice: EveningChoiceId): void {
+  if (state.phase !== 'evening') return;
+  state.requestedMeal = mealId;
+  state.requestedChoice = choice;
+  beginEvening(state);
+}
+
+/**
+ * "เรียกคืนเร็ว" (D22) for the scene: skips to evening and runs the same evening start as the
+ * clock does (chests end, mission stats, evening opens). Returns false outside the day.
+ */
+export function recallToEvening(state: GameState, rng: RunRng, data: RunData, bus?: EventBus): boolean {
+  if (!recallEarly(state, bus)) return false;
+  onPhaseStart(state, rng, data);
+  return true;
 }
 
 /** Trap contact for the player: a 1.5 s stun per trap, 3 uses each. Also counts the stun down. */
@@ -126,6 +138,8 @@ function tickPlayerTraps(state: GameState, dt: number): void {
 function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
   const combat = rng.get('combat');
   if (state.phase === 'night') {
+    // The evening was opened but not confirmed (sim, or skipped): the game picks for the player.
+    if (state.eveningResolved === false) beginEvening(state);
     state.nightCoreStart = state.coreHp; // mission M_NOCORE reads this at dawn
     state.nightKillBase = state.kills; // mission M_KILL30 counts kills from here
     if (state.day === 1) {
@@ -153,7 +167,9 @@ function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
     const opened = (state.chests ?? []).filter((c) => c.opened).length;
     state.dayStats = { ...(state.dayStats ?? freshDayStats()), chestsOpened: opened };
     clearChests(state); // daytime chests end at dusk
-    beginEvening(state);
+    // The evening opens; the player resolves it on the evening screen (submitEvening).
+    // If nothing resolves it (sim, or the player never confirms), night start does (below).
+    state.eveningResolved = false;
   } else if (state.phase === 'day') {
     // Dawn: read the night's stats before repairs, then score the day's missions (approved draft).
     const ds = state.dayStats ?? freshDayStats();
