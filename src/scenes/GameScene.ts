@@ -932,7 +932,7 @@ export class GameScene extends Phaser.Scene {
     const invStr = formatInventorySummary(s.inventory ?? {});
     const coreStr = (s.cores ?? 0) > 0 ? ` · Core ×${s.cores}` : '';
     const synStr = formatSynergySummary(
-      s.skills.map((o) => o.id),
+      s.skills.filter((o) => !o.gift).map((o) => o.id),
       this.data_.skills,
     );
     this.hudInvText.setWordWrapWidth(panelW - 22);

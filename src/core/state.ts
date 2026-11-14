@@ -153,6 +153,12 @@ export interface GameState {
   /** Overtime: once per run, from day 4. `overtimeChosen` is for the run-end Soul Shard bonus (not built yet). */
   overtimeUsed?: boolean;
   overtimeChosen?: boolean;
+  /** Synergy tiers from owned skills, refreshed by applyPassives (R4). Undefined = none yet. */
+  synergy?: import('../systems/synergy').SynergyTiersMap;
+  /** Shadow tier 6 already saved the player tonight (R4). Reset at night start. */
+  shadowSaved?: boolean;
+  /** Seconds until the next lightning-6 strike and earth-6 quake (R4). */
+  synergyTimers?: { bolt: number; quake: number };
   /** Buff from tonight's evening meal, or the hungry debuff. Cleared at dawn. Undefined = no effect. */
   nightBuff?: MealBuff;
   nextUid: number;
