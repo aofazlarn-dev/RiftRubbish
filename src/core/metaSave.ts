@@ -45,3 +45,25 @@ export function creditShards(amount: number, dailyDate?: string): MetaSave {
   saveMeta(m);
   return m;
 }
+
+/** Text for the player to save by hand: the bank, owned items, and the last Daily date. */
+export function exportMeta(m: MetaSave = loadMeta()): string {
+  return JSON.stringify({ format: 'riftrubbish-meta', version: 1, ...m });
+}
+
+/**
+ * Reads text from exportMeta(). Returns null if the text is not a valid save, so a bad paste
+ * never overwrites the player's bank or items.
+ */
+export function importMeta(text: string, knownItemIds: readonly string[]): MetaSave | null {
+  try {
+    const d = JSON.parse(text) as Partial<MetaSave> & { format?: string; version?: number };
+    if (d.format !== 'riftrubbish-meta' || d.version !== 1) return null;
+    if (typeof d.bank !== 'number' || !Number.isFinite(d.bank) || d.bank < 0) return null;
+    if (!Array.isArray(d.owned) || !d.owned.every((x) => typeof x === 'string' && knownItemIds.includes(x))) return null;
+    const lastDailyDate = typeof d.lastDailyDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.lastDailyDate) ? d.lastDailyDate : undefined;
+    return { bank: Math.floor(d.bank), owned: [...new Set(d.owned)], lastDailyDate };
+  } catch {
+    return null;
+  }
+}

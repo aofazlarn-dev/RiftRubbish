@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { loadMeta, saveMeta } from '../core/metaSave';
+import { exportMeta, importMeta, loadMeta, saveMeta } from '../core/metaSave';
 import { buyMeta, META_ITEMS } from '../systems/meta';
 
 /** Thai names for the approved meta items (PR #44). */
@@ -53,6 +53,21 @@ export class MetaShopScene extends Phaser.Scene {
       y += step;
     }
 
+    // Save by hand: copy the text to keep it, paste it back on another device (decision: localStorage + export/import).
+    this.createButton(width * 0.5, height * 0.74, '⬆ ส่งออกข้อมูล', 0x3a2a4d, true, () => {
+      window.prompt('คัดลอกข้อความนี้เก็บไว้', exportMeta());
+    });
+    this.createButton(width * 0.5, height * 0.82, '⬇ นำเข้าข้อมูล', 0x3a2a4d, true, () => {
+      const text = window.prompt('วางข้อความที่ส่งออกไว้', '');
+      if (!text) return;
+      const next = importMeta(text, META_ITEMS.map((m) => m.id));
+      if (!next) {
+        window.alert('ข้อความนี้ใช้ไม่ได้ ข้อมูลเดิมยังอยู่');
+        return;
+      }
+      saveMeta(next);
+      this.scene.restart();
+    });
     this.createButton(width * 0.5, height * 0.9, '← กลับ', 0xff2a55, true, () => this.scene.start('TitleScene'));
   }
 
