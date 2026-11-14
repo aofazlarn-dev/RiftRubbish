@@ -29,16 +29,21 @@ const PHASE_TINT = { day: 0x000000, evening: 0x3a1a00, night: 0x05001a } as cons
 const PHASE_ALPHA = { day: 0, evening: 0.25, night: 0.5 } as const;
 const PHASE_LABEL = { day: 'กลางวัน', evening: 'เย็น', night: 'กลางคืน' } as const;
 
-/** Placeholder look per monster: colour and radius. */
-const MONSTER_STYLE: Record<string, { color: number; radius: number }> = {
-  slime: { color: 0x7bd389, radius: 9 },
-  bat: { color: 0x9d8df1, radius: 7 },
-  goblin: { color: 0xe07a5f, radius: 10 },
-  skeleton: { color: 0xe9ecef, radius: 9 },
-  golem: { color: 0x8d6e63, radius: 16 },
-  spirit: { color: 0x90e0ef, radius: 10 },
-  rift_wolf: { color: 0xff006e, radius: 20 },
+/** Sprite sheet texture key per monster `defId`. */
+const MONSTER_SPRITE: Record<string, string> = {
+  slime: 'mob_slime_walk',
+  bat: 'mob_bat_walk',
+  goblin: 'mob_goblin_walk',
+  skeleton: 'mob_skeleton_archer_walk',
+  golem: 'mob_mud_golem_walk',
+  spirit: 'mob_fog_wraith_walk',
+  rift_wolf: 'elite_rift_wolf_walk',
 };
+const SKILL_ICON_IDS = [
+  'W01', 'W03', 'E01', 'E02', 'E03', 'J01', 'J02', 'J03', 'J04', 'S01', 'S02',
+  'R05a', 'R05b', 'R07a', 'R07b', 'R10a', 'R10b',
+] as const;
+const CARD_FRAME_KEYS = ['common', 'rare', 'epic', 'legendary', 'mythic', 'fusion'] as const;
 const FX_COLOR: Record<string, number> = { W01: 0xff7b00, E01: 0xff4d00, E02: 0x8ecae6, E03: 0xffe066, J03: 0xb0a090 };
 const FX_SECONDS = 0.18;
 
@@ -69,10 +74,11 @@ export class GameScene extends Phaser.Scene {
   rng!: RunRng;
   private data_!: RunData;
 
-  private playerSprite!: Phaser.GameObjects.Arc;
-  private bossSprite!: Phaser.GameObjects.Rectangle;
-  private monsterSprites = new Map<number, Phaser.GameObjects.Arc>();
-  private spritePool: Phaser.GameObjects.Arc[] = [];
+  private playerSprite!: Phaser.GameObjects.Sprite;
+  private bossSprite!: Phaser.GameObjects.Sprite;
+  private coreSprite!: Phaser.GameObjects.Sprite;
+  private monsterSprites = new Map<number, Phaser.GameObjects.Sprite>();
+  private spritePool: Phaser.GameObjects.Sprite[] = [];
   private fxGraphics!: Phaser.GameObjects.Graphics;
   private barGraphics!: Phaser.GameObjects.Graphics;
   private liveFx: LiveFx[] = [];
@@ -96,6 +102,67 @@ export class GameScene extends Phaser.Scene {
     this.launchOpts = data;
   }
 
+  preload(): void {
+    for (let i = 1; i <= 5; i++) {
+      this.load.image(`tile_ground_0${i}`, `assets/tiles/tile_ground_0${i}.png`);
+    }
+    this.load.spritesheet('base_core', 'assets/sprites/base_core.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('hero_idle', 'assets/sprites/hero_idle.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('hero_walk', 'assets/sprites/hero_walk.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('hero_hit', 'assets/sprites/hero_hit.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('hero_death', 'assets/sprites/hero_death.png', { frameWidth: 32, frameHeight: 32 });
+
+    for (const key of [
+      'mob_slime_walk',
+      'mob_bat_walk',
+      'mob_goblin_walk',
+      'mob_skeleton_archer_walk',
+      'mob_mud_golem_walk',
+      'mob_fog_wraith_walk',
+    ]) {
+      this.load.spritesheet(key, `assets/sprites/${key}.png`, { frameWidth: 32, frameHeight: 32 });
+    }
+    this.load.spritesheet('elite_rift_wolf_walk', 'assets/sprites/elite_rift_wolf_walk.png', {
+      frameWidth: 64,
+      frameHeight: 64,
+    });
+    this.load.spritesheet('boss_bloodmoon_walk', 'assets/sprites/boss_bloodmoon_walk.png', {
+      frameWidth: 128,
+      frameHeight: 128,
+    });
+    this.load.spritesheet('boss_bloodmoon_enrage_walk', 'assets/sprites/boss_bloodmoon_enrage_walk.png', {
+      frameWidth: 128,
+      frameHeight: 128,
+    });
+
+    for (const id of SKILL_ICON_IDS) {
+      this.load.image(`icon_${id}`, `assets/icons/${id}.png`);
+    }
+    for (const r of CARD_FRAME_KEYS) {
+      this.load.image(`card_frame_${r}`, `assets/ui/card_frame_${r}.png`);
+    }
+  }
+
+  private ensureAnimations(): void {
+    const makeAnim = (key: string, frames: number, frameRate: number, repeat: number) => {
+      if (this.anims.exists(key) || !this.textures.exists(key)) return;
+      this.anims.create({
+        key,
+        frames: this.anims.generateFrameNumbers(key, { start: 0, end: frames - 1 }),
+        frameRate,
+        repeat,
+      });
+    };
+    makeAnim('hero_idle', 2, 4, -1);
+    makeAnim('hero_walk', 4, 10, -1);
+    makeAnim('hero_death', 4, 8, 0);
+    for (const key of Object.values(MONSTER_SPRITE)) {
+      makeAnim(key, 4, key === 'mob_bat_walk' ? 10 : 8, -1);
+    }
+    makeAnim('boss_bloodmoon_walk', 4, 8, -1);
+    makeAnim('boss_bloodmoon_enrage_walk', 4, 10, -1);
+  }
+
   create(): void {
     this.data_ = loadRunData();
     this.monsterSprites.clear();
@@ -104,6 +171,7 @@ export class GameScene extends Phaser.Scene {
     this.overlay = undefined;
     this.overlayKey = '';
     this.bus.clear();
+    this.ensureAnimations();
 
     const resumed = this.resume();
     this.state = resumed ?? this.newState();
@@ -116,8 +184,8 @@ export class GameScene extends Phaser.Scene {
     this.drawWorld();
     this.barGraphics = this.add.graphics().setDepth(20);
     this.fxGraphics = this.add.graphics().setDepth(15);
-    this.bossSprite = this.add.rectangle(0, 0, 56, 56, 0xc1121f).setStrokeStyle(3, 0xffd6a5).setDepth(9).setVisible(false);
-    this.playerSprite = this.add.circle(this.state.player.x, this.state.player.y, 12, 0xffd166).setDepth(10);
+    this.bossSprite = this.add.sprite(0, 0, 'boss_bloodmoon_walk').setDepth(9).setVisible(false);
+    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'hero_idle').setScale(1.25).setDepth(10);
     this.cameras.main.setBounds(0, 0, WORLD, WORLD).startFollow(this.playerSprite, true, 0.15, 0.15);
 
     this.phaseShade = this.add
@@ -201,25 +269,47 @@ export class GameScene extends Phaser.Scene {
 
   private drawActors(): void {
     const s = this.state;
+    const move = this.readInput();
     this.playerSprite.setPosition(s.player.x, s.player.y);
-    this.playerSprite.setAlpha(isPlayerDown(s) ? 0.25 : s.invulnLeft > 0 ? 0.6 : 1);
+    if (move.x !== 0) this.playerSprite.setFlipX(move.x < 0);
 
-    // Monster sprites are pooled: reuse circles instead of creating and destroying them.
+    if (isPlayerDown(s)) {
+      this.playerSprite.setAlpha(0.55).clearTint();
+      if (this.playerSprite.anims.currentAnim?.key !== 'hero_death') this.playerSprite.play('hero_death', true);
+    } else if (s.invulnLeft > 0) {
+      this.playerSprite.setAlpha(0.8).setTexture('hero_hit', 0).setTint(0xff8080);
+    } else {
+      this.playerSprite.setAlpha(1).clearTint();
+      const moving = move.x !== 0 || move.y !== 0;
+      this.playerSprite.play(moving ? 'hero_walk' : 'hero_idle', true);
+    }
+
+    // Core visual reflects damage state (frame 0 healthy, 1 damaged, 2 broken).
+    if (this.coreSprite) {
+      const frame = s.coreHp <= 0 ? 2 : s.coreHp < s.coreMaxHp * 0.6 ? 1 : 0;
+      this.coreSprite.setFrame(frame);
+    }
+
+    // Monster sprites are pooled: reuse Sprite instances instead of creating and destroying them.
     const alive = new Set<number>();
     for (const m of s.monsters) {
       alive.add(m.uid);
       let sprite = this.monsterSprites.get(m.uid);
+      const texKey = MONSTER_SPRITE[m.defId] ?? 'mob_slime_walk';
       if (!sprite) {
-        const style = MONSTER_STYLE[m.defId] ?? { color: 0xffffff, radius: 9 };
-        sprite = this.spritePool.pop() ?? this.add.circle(0, 0, 9, 0xffffff).setDepth(8);
-        sprite.setRadius(style.radius * (m.affix ? 1.2 : 1));
-        sprite.setFillStyle(style.color);
-        sprite.setStrokeStyle(m.affix ? 3 : 0, 0xc77dff);
+        sprite = this.spritePool.pop() ?? this.add.sprite(0, 0, texKey).setDepth(8);
         sprite.setVisible(true);
         this.monsterSprites.set(m.uid, sprite);
       }
+      if (sprite.anims.currentAnim?.key !== texKey) sprite.play(texKey, true);
+      const targetX = m.defId === 'bat' || m.defId === 'spirit' || m.defId === 'rift_wolf' ? s.player.x : CORE_X;
+      sprite.setFlipX(m.x > targetX);
+      sprite.setScale(m.affix ? 1.25 : 1);
+      if (m.slowLeft > 0) sprite.setTint(0x80d8ff);
+      else if (m.affix) sprite.setTint(0xe0aaff);
+      else sprite.clearTint();
       sprite.setPosition(m.x, m.y);
-      sprite.setAlpha(m.slowLeft > 0 ? 0.6 : 1);
+      sprite.setAlpha(m.slowLeft > 0 ? 0.8 : 1);
     }
     for (const [uid, sprite] of this.monsterSprites) {
       if (alive.has(uid)) continue;
@@ -233,7 +323,9 @@ export class GameScene extends Phaser.Scene {
     this.bossSprite.setVisible(bossAlive);
     if (boss && bossAlive) {
       this.bossSprite.setPosition(boss.x, boss.y);
-      this.bossSprite.setFillStyle(boss.rules.enraged ? 0xff0000 : 0xc1121f);
+      const bossAnim = boss.rules.enraged ? 'boss_bloodmoon_enrage_walk' : 'boss_bloodmoon_walk';
+      if (this.bossSprite.anims.currentAnim?.key !== bossAnim) this.bossSprite.play(bossAnim, true);
+      this.bossSprite.setFlipX(boss.x > s.player.x);
     }
   }
 
@@ -368,16 +460,31 @@ export class GameScene extends Phaser.Scene {
             ? `${KIND_LABEL.active} · พลัง ${damageAtLevel(def, 1)} · ทุก ${def.cooldown} วิ · ระยะ ${def.range} ช่อง`
             : `${KIND_LABEL.passive} · ถึกขึ้น: รับดาเมจน้อยลงและเลือดสูงสุดเพิ่ม`
           : `ได้ค่าฝึกสกิล +${upgradeXp(levelForXp(owned?.xp ?? 0))} ทันที`;
-      box.add([
-        frame,
-        this.add.text(w / 2 - cardW / 2 + 16, y + 14, head, { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffffff' }),
-        this.add.text(w / 2 - cardW / 2 + 16, y + 50, body, {
+      const hasIcon = this.textures.exists(`icon_${id}`);
+      const textX = w / 2 - cardW / 2 + (hasIcon ? 82 : 16);
+      const wrapW = cardW - (hasIcon ? 98 : 32);
+      const cardItems: Phaser.GameObjects.GameObject[] = [frame];
+      if (this.textures.exists(`card_frame_${def.rarity}`)) {
+        cardItems.push(this.add.image(w / 2 - cardW / 2 + 44, y + cardH / 2, `card_frame_${def.rarity}`).setDisplaySize(54, 72));
+      }
+      if (hasIcon) {
+        cardItems.push(this.add.image(w / 2 - cardW / 2 + 44, y + cardH / 2, `icon_${id}`).setDisplaySize(44, 44));
+      }
+      cardItems.push(
+        this.add.text(textX, y + 14, head, {
           fontFamily: 'sans-serif',
-          fontSize: '15px',
-          color: '#cfd2ff',
-          wordWrap: { width: cardW - 32 },
+          fontSize: '19px',
+          color: '#ffffff',
+          wordWrap: { width: wrapW },
         }),
-      ]);
+        this.add.text(textX, y + 48, body, {
+          fontFamily: 'sans-serif',
+          fontSize: '14px',
+          color: '#cfd2ff',
+          wordWrap: { width: wrapW },
+        }),
+      );
+      box.add(cardItems);
     });
 
     if (fusion) {
@@ -523,22 +630,36 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawWorld(): void {
-    const g = this.add.graphics();
-    g.fillStyle(0x1d2b1f).fillRect(0, 0, WORLD, WORLD);
-    g.lineStyle(1, 0x2b3d2d, 0.6);
-    for (let i = 0; i <= MAP_TILES; i++) {
-      g.lineBetween(i * TILE, 0, i * TILE, WORLD);
-      g.lineBetween(0, i * TILE, WORLD, i * TILE);
-    }
-    // Scatter a few placeholder resource nodes from the map stream (deterministic per seed).
     const map = RunRng.fromSeed(this.state.seed).get('map');
+    if (this.textures.exists('tile_ground_01')) {
+      const rt = this.add.renderTexture(0, 0, WORLD, WORLD).setOrigin(0).setDepth(0);
+      rt.beginDraw();
+      for (let ty = 0; ty < MAP_TILES; ty++) {
+        for (let tx = 0; tx < MAP_TILES; tx++) {
+          const tileIdx = map.int(1, 5);
+          rt.batchDrawFrame(`tile_ground_0${tileIdx}`, undefined, tx * TILE, ty * TILE);
+        }
+      }
+      rt.endDraw();
+    } else {
+      const gBg = this.add.graphics().setDepth(0);
+      gBg.fillStyle(0x1d2b1f).fillRect(0, 0, WORLD, WORLD);
+      gBg.lineStyle(1, 0x2b3d2d, 0.6);
+      for (let i = 0; i <= MAP_TILES; i++) {
+        gBg.lineBetween(i * TILE, 0, i * TILE, WORLD);
+        gBg.lineBetween(0, i * TILE, WORLD, i * TILE);
+      }
+    }
+
+    // Scatter deterministic resource nodes from the map stream.
+    const g = this.add.graphics().setDepth(1);
     for (let i = 0; i < 80; i++) {
       const x = map.int(1, MAP_TILES - 2) * TILE + TILE / 2;
       const y = map.int(1, MAP_TILES - 2) * TILE + TILE / 2;
       g.fillStyle(map.pick([0x4f772d, 0x7f7f7f, 0x3a86ff]), 0.9).fillCircle(x, y, 8);
     }
     // Base core in the centre (GDD §5).
-    this.add.rectangle(CORE_X, CORE_Y, 40, 40, 0x9d4edd).setStrokeStyle(3, 0xe0aaff);
-    this.add.text(CORE_X, CORE_Y + 34, 'แกนฐาน', { fontSize: '14px', color: '#e0aaff' }).setOrigin(0.5);
+    this.coreSprite = this.add.sprite(CORE_X, CORE_Y, 'base_core', 0).setDepth(5);
+    this.add.text(CORE_X, CORE_Y + 42, 'แกนฐาน', { fontSize: '14px', color: '#e0aaff' }).setOrigin(0.5).setDepth(6);
   }
 }
