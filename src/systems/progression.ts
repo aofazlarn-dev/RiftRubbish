@@ -56,7 +56,19 @@ function buildCards(state: GameState, rng: RngStream, pool: readonly SkillDef[],
     return !first || (s.kind === 'active' && !s.junk);
   });
 
-  const cards = drawDraft(rng, eligible, owned, { count: DRAFT_CARDS }).map((s) => `skill:${s.id}`);
+  const drawn = drawDraft(rng, eligible, owned, { count: DRAFT_CARDS });
+  // Decision (balance §1.2): while the run owns fewer than two damage Actives, every Draft after the
+  // first holds at least one damage Active, so a passive-only start cannot stall the run.
+  const isAttack = (s: SkillDef) => s.kind === 'active' && !s.junk;
+  const attacksOwned = state.skills.filter((o) => {
+    const d = pool.find((p) => p.id === o.id);
+    return !o.gift && d !== undefined && isAttack(d);
+  }).length;
+  if (!first && attacksOwned < 2 && drawn.length > 0 && !drawn.some(isAttack)) {
+    const spare = eligible.filter((s) => isAttack(s) && !drawn.includes(s));
+    if (spare.length > 0) drawn[drawn.length - 1] = rng.pick(spare);
+  }
+  const cards = drawn.map((s) => `skill:${s.id}`);
 
   // Fill the remaining cards with upgrades for skills that can still level.
   const upgradable = state.skills.filter((s) => !s.gift && levelForXp(s.xp) < MAX_NORMAL_LEVEL).map((s) => s.id);
