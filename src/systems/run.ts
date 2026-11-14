@@ -25,6 +25,7 @@ import {
   trapPositions,
 } from './evening';
 import { expireTutorialGifts, forceTutorialFusion, grantTutorialGift } from './tutorial';
+import { clearChests, spawnChests, tickChests } from './chests';
 import { grantXp, openDraftIfOwed } from './progression';
 import type { SkillDef } from './skills';
 import { buildNightSpawns, waveForNight, type MonsterDef, type WavesData } from './waves';
@@ -47,6 +48,7 @@ export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: Eve
   const patrol = data.waves.days.find((d) => d.day === 1);
   if (patrol) spawnDayPatrols(state, patrol, rng.get('combat'), data.monsters);
   state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
+  spawnChests(state, rng.get('loot'));
   state.draftsOwed += 1;
   openDraftIfOwed(state, rng.get('draft'), data.skills, bus, true);
   bus?.emit('run:start', { seed: state.seed, mode: state.mode });
@@ -125,6 +127,7 @@ function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
       };
     }
   } else if (state.phase === 'evening') {
+    clearChests(state); // daytime chests end at dusk
     beginEvening(state);
   } else if (state.phase === 'day') {
     clearMonstersAtDawn(state);
@@ -134,6 +137,7 @@ function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
     state.traps = [];
     state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
     expireTutorialGifts(state); // the welcome gift leaves at dawn of day 2 (G2)
+    spawnChests(state, rng.get('loot'));
     const patrol = data.waves.days.find((d) => d.day === state.day);
     if (patrol) spawnDayPatrols(state, patrol, combat, data.monsters);
   }
@@ -199,6 +203,7 @@ export function stepRun(
 
   tickSurvival(state, dt);
   tickPlayerTraps(state, dt);
+  if (state.phase === 'day') tickChests(state, rng.get('loot'));
   if (!isPlayerDown(state) && (state.player.stunLeft ?? 0) <= 0) {
     movePlayer(state.player, input, dt * (state.nightBuff?.speedMult ?? 1), { width: WORLD, height: WORLD });
   }
