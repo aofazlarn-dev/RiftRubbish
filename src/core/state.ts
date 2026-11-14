@@ -29,6 +29,8 @@ export interface PlayerState {
   xp: number;
   /** Share of incoming damage removed by passives (0–1), recomputed by applyPassives. */
   damageReduction?: number;
+  /** Seconds left of a trap stun (1.5 s, balance §6.3). Movement is blocked while > 0. */
+  stunLeft?: number;
 }
 
 export interface OwnedSkill {
@@ -54,6 +56,8 @@ export interface MonsterInstance {
   coreTimer: number;
   /** Seconds of slow remaining. */
   slowLeft: number;
+  /** Seconds left of a trap stun (2 s, balance §6.3). Does not move or attack while > 0. */
+  stunLeft?: number;
   affix: boolean;
   /** Which affix (balance §4), if any. `affix` is true for every affixed monster. */
   affixId?: AffixId;
@@ -109,6 +113,15 @@ export interface GameState {
   bursts?: PendingBurst[];
   /** Gathered ingredients (balance §6.2). Optional so older saves still load. Use `?? {}`. */
   inventory?: Inventory;
+  /** Evening choice (balance §6.3). `requestedChoice` is set by the UI; the game falls back to trap. */
+  requestedChoice?: 'fence' | 'trap' | 'overtime';
+  /** Core shield left from the fence choice; lasts until dawn. */
+  coreShield?: number;
+  /** Traps around the base (6 at 4 tiles, 3 uses each). Cleared at dawn. */
+  traps?: { x: number; y: number; uses: number }[];
+  /** Overtime: once per run, from day 4. `overtimeChosen` is for the run-end Soul Shard bonus (not built yet). */
+  overtimeUsed?: boolean;
+  overtimeChosen?: boolean;
   /** Buff from tonight's evening meal, or the hungry debuff. Cleared at dawn. Undefined = no effect. */
   nightBuff?: MealBuff;
   nextUid: number;

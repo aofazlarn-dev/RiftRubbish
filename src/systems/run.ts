@@ -13,7 +13,17 @@ import { advanceClock } from './clock';
 import { tickSkills, type CombatFx } from './combat';
 import { clearMonstersAtDawn, findDef, ringPoint, spawnDayPatrols, spawnMonster, tickMonsters, tickSpawns } from './monsters';
 import { movePlayer, type Vec2 } from './movement';
-import { eveningMeal, gatherDay } from './evening';
+import {
+  eveningMeal,
+  fenceShieldHp,
+  gatherDay,
+  HUNGRY_DEBUFF,
+  hasSpareMeal,
+  resolveEveningChoice,
+  TRAP_PLAYER_STUN_SEC,
+  TRAP_TRIGGER_PX,
+  trapPositions,
+} from './evening';
 import { expireTutorialGifts, forceTutorialFusion, grantTutorialGift } from './tutorial';
 import { grantXp, openDraftIfOwed } from './progression';
 import type { SkillDef } from './skills';
@@ -42,6 +52,55 @@ export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: Eve
   bus?.emit('run:start', { seed: state.seed, mode: state.mode });
 }
 
+/**
+ * Evening start: applies the chosen evening option (balance §6.2–6.3). The UI sets
+ * `requestedChoice`; without it the free trap is used.
+ *  - meal: cooked from stock, or hungry if nothing can be cooked
+ *  - fence: meal + a spare dish, core shield 30% of max HP until dawn
+ *  - trap: 6 traps around the base, no cost
+ *  - overtime: skip the meal (hungry), once per run from day 4
+ */
+export function beginEvening(state: GameState): void {
+  const inv = state.inventory ?? {};
+  const planned = eveningMeal(inv);
+  const choice = resolveEveningChoice(state.requestedChoice, {
+    day: state.day,
+    spareMeals: hasSpareMeal(planned.inventory) ? 1 : 0,
+    overtimeUsed: state.overtimeUsed ?? false,
+  });
+  state.requestedChoice = undefined;
+
+  if (choice === 'overtime') {
+    state.overtimeUsed = true;
+    state.overtimeChosen = true;
+    state.nightBuff = HUNGRY_DEBUFF;
+    return;
+  }
+
+  // Cooks from stock; the buff lasts through tonight (balance §6.2).
+  let after = planned.inventory;
+  state.nightBuff = planned.buff;
+  if (choice === 'fence') {
+    // The spare dish costs one more cooked meal from stock (guaranteed by resolveEveningChoice).
+    after = eveningMeal(after).inventory;
+    state.coreShield = fenceShieldHp(state.coreMaxHp);
+  } else {
+    state.traps = trapPositions(CORE_X, CORE_Y, TILE);
+  }
+  state.inventory = after;
+}
+
+/** Trap contact for the player: a 1.5 s stun per trap, 3 uses each. Also counts the stun down. */
+function tickPlayerTraps(state: GameState, dt: number): void {
+  state.player.stunLeft = Math.max(0, (state.player.stunLeft ?? 0) - dt);
+  for (const t of state.traps ?? []) {
+    if (t.uses > 0 && dist(t.x, t.y, state.player.x, state.player.y) <= TRAP_TRIGGER_PX) {
+      t.uses -= 1;
+      state.player.stunLeft = Math.max(state.player.stunLeft ?? 0, TRAP_PLAYER_STUN_SEC);
+    }
+  }
+}
+
 function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
   const combat = rng.get('combat');
   if (state.phase === 'night') {
@@ -66,14 +125,13 @@ function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
       };
     }
   } else if (state.phase === 'evening') {
-    // Cooks from stock; the buff lasts through tonight (balance §6.2). No meal = hungry debuff.
-    const result = eveningMeal(state.inventory ?? {});
-    state.inventory = result.inventory;
-    state.nightBuff = result.buff;
+    beginEvening(state);
   } else if (state.phase === 'day') {
     clearMonstersAtDawn(state);
     dawnRepair(state);
     state.nightBuff = undefined;
+    state.coreShield = 0; // the fence lasts only through the night
+    state.traps = [];
     state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
     expireTutorialGifts(state); // the welcome gift leaves at dawn of day 2 (G2)
     const patrol = data.waves.days.find((d) => d.day === state.day);
@@ -140,7 +198,8 @@ export function stepRun(
   if (state.pendingDraft) return [];
 
   tickSurvival(state, dt);
-  if (!isPlayerDown(state)) {
+  tickPlayerTraps(state, dt);
+  if (!isPlayerDown(state) && (state.player.stunLeft ?? 0) <= 0) {
     movePlayer(state.player, input, dt * (state.nightBuff?.speedMult ?? 1), { width: WORLD, height: WORLD });
   }
 

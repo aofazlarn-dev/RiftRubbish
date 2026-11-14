@@ -24,6 +24,7 @@ import {
   type AffixId,
 } from './affix';
 import { damageCore, damagePlayer, isPlayerDown } from './base';
+import { TRAP_ENEMY_STUN_SEC, TRAP_TRIGGER_PX } from './evening';
 import type { SkillDef } from './skills';
 import type { DayPatrol, MonsterDef } from './waves';
 
@@ -263,6 +264,18 @@ export function tickMonsters(state: GameState, dt: number, defs: readonly Monste
     if (state.status !== 'playing') break;
     const def = findDef(defs, m.defId);
     tickShield(m, dt);
+    // Traps (balance §6.3): stepping on one stuns for 2 s and uses one of its 3 charges.
+    for (const t of state.traps ?? []) {
+      if (t.uses > 0 && dist(t.x, t.y, m.x, m.y) <= TRAP_TRIGGER_PX) {
+        t.uses -= 1;
+        m.stunLeft = Math.max(m.stunLeft ?? 0, TRAP_ENEMY_STUN_SEC);
+        break;
+      }
+    }
+    if ((m.stunLeft ?? 0) > 0) {
+      m.stunLeft = Math.max(0, (m.stunLeft ?? 0) - dt);
+      continue;
+    }
     const aura = inAura(state, m);
     const speed =
       def.speed *

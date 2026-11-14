@@ -62,7 +62,13 @@ export function damagePlayer(state: GameState, amount: number, bus?: EventBus): 
 /** Applies damage to the core. Losing the core ends the run. */
 export function damageCore(state: GameState, amount: number, bus?: EventBus): void {
   if (state.status !== 'playing' || amount <= 0) return;
-  state.coreHp = Math.max(0, state.coreHp - amount);
+  // The fence shield (balance §6.3) takes damage before the core itself.
+  const shield = state.coreShield ?? 0;
+  const onShield = Math.min(shield, amount);
+  if (onShield > 0) state.coreShield = shield - onShield;
+  const rest = amount - onShield;
+  if (rest <= 0) return;
+  state.coreHp = Math.max(0, state.coreHp - rest);
   if (state.coreHp === 0) {
     state.status = 'lost';
     bus?.emit('run:end', { night: state.day, result: 'lose' });
