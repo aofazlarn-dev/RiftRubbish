@@ -146,9 +146,9 @@ function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
     state.nightCoreStart = state.coreHp; // mission M_NOCORE reads this at dawn
     state.nightKillBase = state.kills; // mission M_KILL30 counts kills from here
     if (state.day === 1) {
-      // Welcome gift at the start of night 1: J02 + J03 are fused into R01a at once (G2, GDD §3).
+      // Welcome gift at the start of night 1 (G2, GDD §3): J02 + J03 outside the slots. The
+      // player fuses them on the forced fusion screen (R5); without a screen (sim) stepRun does.
       grantTutorialGift(state);
-      forceTutorialFusion(state);
     }
     const wave = waveForNight(data.waves, state.day);
     const queue = buildNightSpawns(wave, combat, FINAL_NIGHT);
@@ -254,6 +254,9 @@ export function stepRun(
   if (state.status !== 'playing') return [];
   openDraftIfOwed(state, rng.get('draft'), data.skills, bus);
   if (state.pendingDraft) return [];
+  // The game keeps running only once the forced fusion screen is closed; the sim has no
+  // screen, so the gift is fused on its first night tick (R5).
+  if (state.tutorial === 'gift' && state.phase === 'night') forceTutorialFusion(state);
 
   state.runTime = (state.runTime ?? 0) + dt;
   tickSurvival(state, dt);
