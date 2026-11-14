@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EventBus } from '../src/core/events';
 import { createRun } from '../src/core/state';
 import { completedMissions, freshDayStats, missionShards, type DayStats } from '../src/systems/missions';
-import { attachMissionTracker, chooseMissions, settleDay } from '../src/systems/missionTracker';
+import { attachMissionTracker, chooseMissions, settleDay, settleRunEnd } from '../src/systems/missionTracker';
 
 const day = (over: Partial<DayStats>): DayStats => ({ ...freshDayStats(), ...over });
 
@@ -55,5 +55,22 @@ describe('mission wiring', () => {
     expect(earned).toBe(4 + 4); // fuse 4 + survive 4 (one death allowed)
     expect(s.missionShards).toBe(8);
     expect(s.dayStats?.fuses).toBe(0);
+  });
+});
+
+describe('run end pays the day being played', () => {
+  it('a win on day 7 still pays the day missions', () => {
+    const bus = new EventBus();
+    const s = createRun({ seed: 'end-d7', mode: 'casual' });
+    s.missionIds = ['M_FUSE'];
+    s.dayStats = freshDayStats();
+    attachMissionTracker(bus, s);
+    bus.emit('skill:fused', { a: 'J02', b: 'J03', result: 'R01a' });
+    s.nightKillBase = 0;
+    s.kills = 0;
+    s.nightCoreStart = s.coreHp;
+    const shards = settleRunEnd(s);
+    expect(shards).toBe(4);
+    expect(s.missionShards).toBe(4);
   });
 });
