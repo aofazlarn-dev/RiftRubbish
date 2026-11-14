@@ -30,7 +30,8 @@ import { attachSystemVoice } from './systemVoice';
 import { attachShardLedger } from './shards';
 import { attachMissionTracker, chooseMissions, settleDay } from './missionTracker';
 import { freshDayStats } from './missions';
-import { startingSkillsFor } from './meta';
+import { applyMeta, startingSkillsFor } from './meta';
+import { loadMeta } from '../core/metaSave';
 import { grantXp, openDraftIfOwed } from './progression';
 import type { SkillDef } from './skills';
 import { buildNightSpawns, waveForNight, type MonsterDef, type WavesData } from './waves';
@@ -55,6 +56,7 @@ export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: Eve
     if (!state.skills.some((s) => s.id === id)) state.skills.push({ id, xp: 0, cooldownLeft: 0 });
   }
   const patrol = data.waves.days.find((d) => d.day === 1);
+  if (state.mode === 'casual') applyMeta(state, loadMeta().owned); // owned meta applies to Casual runs only (GDD §2)
   if (patrol) spawnDayPatrols(state, patrol, rng.get('combat'), data.monsters);
   state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
   spawnChests(state, rng.get('loot'));

@@ -10,7 +10,8 @@ import { dailyMissions, completedMissions, freshDayStats, missionShards } from '
 
 /** Chooses the day's missions when a Casual run starts. Daily gets none. */
 export function chooseMissions(state: GameState, isoDate: string): void {
-  state.missionIds = dailyMissions(state.seed, isoDate, state.mode).map((m) => m.id);
+  // Same missions for everyone on a date, so the title screen and the run agree.
+  state.missionIds = dailyMissions(isoDate, isoDate, state.mode).map((m) => m.id);
   state.dayStats = freshDayStats();
   state.missionShards = state.missionShards ?? 0;
 }

@@ -114,6 +114,8 @@ export interface GameState {
   chests?: { x: number; y: number; opened: boolean }[];
   /** The one chest Core per run has been rolled (D17). */
   chestCoreGiven?: boolean;
+  /** Damage multiplier from owned meta items (Casual only; 1 when none). */
+  metaDamage?: number;
   /** Seconds since the run started (for line cooldowns). */
   runTime?: number;
   /** Soul Shard earned by this run, set when the run ends (balance §7). Undefined until then. */
