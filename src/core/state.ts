@@ -5,6 +5,7 @@
 
 import type { Phase } from './events';
 import { RunRng, type RngState } from './rng';
+import type { AffixId } from '../systems/affix';
 import type { BossState } from '../systems/boss';
 import type { SpawnEvent } from '../systems/waves';
 
@@ -51,8 +52,24 @@ export interface MonsterInstance {
   /** Seconds of slow remaining. */
   slowLeft: number;
   affix: boolean;
+  /** Which affix (balance §4), if any. `affix` is true for every affixed monster. */
+  affixId?: AffixId;
+  /** Junk Shield pool, hit before HP. Only set for the junk_shield affix. */
+  shield?: number;
+  shieldMax?: number;
+  /** Seconds since the monster was last hit, for the shield regen (5 s, balance §4). */
+  shieldIdle?: number;
+  /** Resist-by-choice: the tag the player had most of when this monster spawned. */
+  resistTag?: string | null;
   /** Daytime patrol: idles until the player comes close, never attacks the core. */
   patrol: boolean;
+}
+
+/** A burst from a dead "exploding" affix monster, resolved when its timer runs out. */
+export interface PendingBurst {
+  x: number;
+  y: number;
+  timer: number;
 }
 
 export interface BossInstance {
@@ -79,6 +96,8 @@ export interface GameState {
   status: RunStatus;
   skills: OwnedSkill[];
   monsters: MonsterInstance[];
+  /** Optional so saves made before affixes existed still load. Use `?? []`. */
+  bursts?: PendingBurst[];
   nextUid: number;
   /** Tonight's remaining spawns, ordered by time. */
   spawnQueue: SpawnEvent[];

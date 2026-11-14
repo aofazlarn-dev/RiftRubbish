@@ -130,7 +130,9 @@ export function stepRun(
   advanceClock(state, dt, bus);
   if (`${state.day}:${state.phase}` !== before) onPhaseStart(state, rng, data);
 
-  if (state.phase === 'night') tickSpawns(state, rng.get('combat'), data.monsters, data.waves.maxOnScreen);
+  if (state.phase === 'night') {
+    tickSpawns(state, rng.get('combat'), data.monsters, data.waves.maxOnScreen, data.skills);
+  }
   tickMonsters(state, dt, data.monsters, bus);
   tickBossFight(state, dt, rng, data, bus);
 
