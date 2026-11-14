@@ -108,6 +108,12 @@ export interface GameState {
   skills: OwnedSkill[];
   /** Welcome gift state (Casual only): 'gift' → 'fused' → 'done'. Undefined = no gift. */
   tutorial?: 'gift' | 'fused' | 'done';
+  /** Fusion Cores held (D14, D17). Used by the fusion UI later. */
+  cores?: number;
+  /** Today's daytime chests (2 per day, D17). Cleared at dusk. */
+  chests?: { x: number; y: number; opened: boolean }[];
+  /** The one chest Core per run has been rolled (D17). */
+  chestCoreGiven?: boolean;
   monsters: MonsterInstance[];
   /** Optional so saves made before affixes existed still load. Use `?? []`. */
   bursts?: PendingBurst[];

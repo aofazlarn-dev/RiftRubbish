@@ -13,6 +13,7 @@ import { dist, TILE } from '../core/world';
 import { applyPassives, isPlayerDown } from './base';
 import { damageBoss } from './boss';
 import { applyDamageWithShield, combinedResist, resistChoiceFor, RESIST_CHOICE_RATIO } from './affix';
+import { eliteCoreOnDeath } from './chests';
 import { AFFIX_XP_MULTIPLIER, findDef, queueDeathEffects } from './monsters';
 import { damageAtLevel, levelForXp, type SkillDef } from './skills';
 import type { MonsterDef } from './waves';
@@ -284,6 +285,7 @@ export function tickSkills(
   for (let i = 0; i < killed; i++) {
     if (rng.chance(MEAT_DROP_CHANCE)) state.player.hp = Math.min(state.player.maxHp, state.player.hp + MEAT_HEAL);
   }
+  for (const m of state.monsters) if (m.hp <= 0) eliteCoreOnDeath(state, m.defId); // Elite drops a Core (D6)
   queueDeathEffects(state);
   state.monsters = state.monsters.filter((m) => m.hp > 0);
   applyPassives(state, skillDefs); // passive defence may have levelled up
