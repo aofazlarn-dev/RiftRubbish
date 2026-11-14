@@ -1,7 +1,7 @@
 /** Loads and checks the JSON content once. Scenes and the sim both use this. */
 
 import monstersJson from './monsters.json';
-import skillsJson from './skills.json';
+import skillsJson from './skills_full.json';
 import wavesJson from './waves.json';
 import type { RunData } from '../systems/run';
 import { validateSkills } from '../systems/skills';
