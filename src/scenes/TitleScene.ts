@@ -18,6 +18,10 @@ export class TitleScene extends Phaser.Scene {
     super('TitleScene');
   }
 
+  preload(): void {
+    this.load.image('title_bg', 'assets/ui/title_bg.jpg');
+  }
+
   create(): void {
     const linkSeed = new URLSearchParams(window.location.search).get('seed');
     if (linkSeed) {
@@ -29,36 +33,48 @@ export class TitleScene extends Phaser.Scene {
     const compact = width < 440;
     this.cameras.main.setBackgroundColor('#0d0614');
 
-    // Rift Purple & Blood Moon backdrop circles
-    this.add.circle(width * 0.5, height * 0.24, compact ? 86 : 110, 0xff2a55, 0.22).setStrokeStyle(3, 0xff2a55, 0.8);
-    this.add.circle(width * 0.5, height * 0.24, compact ? 116 : 145, 0x9b4dca, 0.12).setStrokeStyle(2, 0x9b4dca, 0.6);
+    // Full-screen Key Art backdrop with cover scaling & dark readability vignette
+    if (this.textures.exists('title_bg')) {
+      const bg = this.add.image(width * 0.5, height * 0.5, 'title_bg');
+      const scale = Math.max(width / bg.width, height / bg.height);
+      bg.setScale(scale).setAlpha(0.72);
+    }
+    this.add.rectangle(0, 0, width, height, 0x0d0614, 0.55).setOrigin(0);
+
+    // Rift Purple & Blood Moon emblem behind title
+    this.add.circle(width * 0.5, height * 0.22, compact ? 74 : 96, 0xff2a55, 0.24).setStrokeStyle(3, 0xff2a55, 0.85);
+    this.add.circle(width * 0.5, height * 0.22, compact ? 98 : 126, 0x9b4dca, 0.14).setStrokeStyle(2, 0x9b4dca, 0.65);
 
     this.add
       .text(width * 0.5, height * 0.1, '[ SYSTEM ERROR: REINCARNATION COMPLETE ]', {
         fontFamily: 'monospace',
         fontSize: compact ? '11px' : '14px',
         color: '#4df0ff',
+        backgroundColor: '#0d0614aa',
+        padding: { x: 8, y: 4 },
         align: 'center',
         wordWrap: { width: width - 24 },
       })
       .setOrigin(0.5);
 
     this.add
-      .text(width * 0.5, height * 0.21, 'RIFT & RUBBISH', {
+      .text(width * 0.5, height * 0.2, 'RIFT & RUBBISH', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: compact ? '34px' : '42px',
+        fontSize: compact ? '34px' : '46px',
         fontStyle: 'bold',
         color: '#fff0f5',
-        stroke: '#590d22',
-        strokeThickness: 6,
+        stroke: '#3b0718',
+        strokeThickness: 8,
       })
       .setOrigin(0.5);
 
     this.add
-      .text(width * 0.5, height * 0.3, 'รอยแยกมิติ สกิลขยะ กับระบบกวนประสาท', {
+      .text(width * 0.5, height * 0.29, 'รอยแยกมิติ สกิลขยะ กับระบบกวนประสาท', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: compact ? '15px' : '18px',
-        color: '#d8b4f8',
+        fontSize: compact ? '15px' : '19px',
+        color: '#f3d5ff',
+        stroke: '#160926',
+        strokeThickness: 4,
         align: 'center',
         wordWrap: { width: width - 32 },
       })
