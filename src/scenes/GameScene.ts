@@ -25,6 +25,12 @@ import { DebugOverlay } from '../ui/DebugOverlay';
 import { buildEveningOffer, resolveEveningSelection } from './eveningUiModel';
 import { buildShareCardSummary, findAvailableFusions, pickFusionCard } from './HudOverlayScene';
 import { MobileFpsMonitor, type FpsMonitorSnapshot } from './MobileFpsMonitor';
+import {
+  buildTutorialFusionCardView,
+  TUTORIAL_EXPIRE_LINE,
+  TUTORIAL_WELCOME_LINE,
+  TUTORIAL_WELCOME_TITLE,
+} from './tutorialUiModel';
 
 const FUSION_RECIPES: readonly FusionRecipe[] = skillsFullJson.fusions as FusionRecipe[];
 
@@ -120,6 +126,11 @@ export class GameScene extends Phaser.Scene {
   private eveningChoiceId: EveningChoiceId | null = null;
   private overtimeUsed = false;
   private preEveningInv: Inventory | null = null;
+  private tutorialPending = false;
+  private tutorialShown = false;
+  private tutorialExpireShown = false;
+  private systemToast!: Phaser.GameObjects.Text;
+  private systemToastLeft = 0;
 
   constructor() {
     super('game');
@@ -209,6 +220,10 @@ export class GameScene extends Phaser.Scene {
 
     const resumed = this.resume();
     this.state = resumed ?? this.newState();
+    this.eveningPending = false;
+    this.tutorialPending = false;
+    this.tutorialShown = this.state.tutorial === 'fused' || this.state.tutorial === 'done';
+    this.tutorialExpireShown = this.state.tutorial === 'done';
     this.rng = RunRng.restore(this.state.seed, this.state.rng);
     if (!resumed) startRun(this.state, this.rng, this.data_, this.bus);
 
@@ -307,6 +322,22 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerup', () => this.newRun());
 
+    this.systemToast = this.add
+      .text(this.scale.width / 2, 16, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: '#ffd166',
+        backgroundColor: '#1a0933ee',
+        padding: { x: 14, y: 8 },
+        align: 'center',
+        wordWrap: { width: Math.min(460, this.scale.width - 24) },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(960)
+      .setVisible(false);
+
     this.debug = new DebugOverlay(this);
     const onResize = (size: Phaser.Structs.Size) => {
       const y = size.height - 34;
@@ -314,6 +345,7 @@ export class GameScene extends Phaser.Scene {
       this.muteBtn.setY(y);
       this.restartBtn.setY(y);
       this.downBanner.setX(size.width / 2);
+      this.systemToast.setX(size.width / 2);
     };
     this.scale.on('resize', onResize);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', onResize));
@@ -340,6 +372,12 @@ export class GameScene extends Phaser.Scene {
         this.eveningMealId = offer.meals.find((m) => m.affordable)?.meal.id ?? null;
         this.eveningChoiceId = 'trap';
         this.eveningPending = true;
+      } else if (phase === 'night' && day === 1 && this.state.mode === 'casual' && !this.tutorialShown) {
+        this.tutorialPending = true;
+        this.tutorialShown = true;
+      } else if (phase === 'day' && day === 2 && this.state.mode === 'casual' && !this.tutorialExpireShown) {
+        this.tutorialExpireShown = true;
+        this.showSystemToast(`ระบบ: "${TUTORIAL_EXPIRE_LINE}"`, 6);
       }
       saveRun(this.syncAndGetState()); // snapshot at each phase boundary as well
     });
@@ -360,13 +398,41 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 0.1); // clamp long frames (tab switch, GC pause)
-    if (!this.eveningPending) {
-      if (this.state.phase === 'day') {
+    if (!this.eveningPending && !this.tutorialPending) {
+      const wasPhase = this.state.phase;
+      if (wasPhase === 'day') {
         this.preEveningInv = { ...(this.state.inventory ?? {}) };
       }
       const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
       if (fx.some((f) => !f.missed)) this.sfx.playCast();
       for (const f of fx) this.liveFx.push({ ...f, ttl: FX_SECONDS });
+
+      // stepRun emits phase:change before onPhaseStart mutates inventory/tutorial state; sync UI after.
+      if (wasPhase === 'day' && this.state.phase === 'evening' && this.eveningPending && this.preEveningInv) {
+        this.state.inventory = { ...this.preEveningInv };
+        this.preEveningInv = null;
+        this.state.coreShield = undefined;
+        this.state.traps = [];
+        const offer = buildEveningOffer(
+          this.state.inventory ?? {},
+          this.state.day,
+          this.state.coreMaxHp,
+          this.state.overtimeUsed ?? this.overtimeUsed,
+          null,
+        );
+        this.eveningMealId = offer.meals.find((m) => m.affordable)?.meal.id ?? null;
+      }
+      if (this.state.mode === 'casual' && this.state.tutorial === 'fused' && !this.tutorialShown) {
+        this.tutorialPending = true;
+        this.tutorialShown = true;
+      } else if (this.state.mode === 'casual' && this.state.tutorial === 'done' && !this.tutorialExpireShown) {
+        this.tutorialExpireShown = true;
+        this.showSystemToast(`ระบบ: "${TUTORIAL_EXPIRE_LINE}"`, 6);
+      }
+    }
+    if (this.systemToastLeft > 0) {
+      this.systemToastLeft = Math.max(0, this.systemToastLeft - dt);
+      this.systemToast.setVisible(this.systemToastLeft > 0);
     }
     const fpsSnap = this.fpsMonitor.recordFrame(deltaMs, this.state.monsters.length);
 
@@ -576,7 +642,7 @@ export class GameScene extends Phaser.Scene {
       .map((o) => {
         const def = this.data_.skills.find((d) => d.id === o.id);
         const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
-        return `${o.id}:${lv}`;
+        return `${o.id}:${lv}:${o.gift ? 1 : 0}`;
       })
       .join(',');
     if (key === this.skillDockKey) return;
@@ -590,15 +656,16 @@ export class GameScene extends Phaser.Scene {
       const def = this.data_.skills.find((d) => d.id === o.id);
       const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
       const x = i * 42;
-      const borderColor = def ? RARITY_COLOR[def.rarity] : 0x9b4dca;
+      const borderColor = o.gift ? 0xff9f1c : def ? RARITY_COLOR[def.rarity] : 0x9b4dca;
       const slot = this.add.rectangle(x, 0, 36, 36, 0x120a24, 0.9).setOrigin(0).setStrokeStyle(2, borderColor);
       dock.add(slot);
       if (this.textures.exists(`icon_${o.id}`)) {
         dock.add(this.add.image(x + 18, 18, `icon_${o.id}`).setDisplaySize(28, 28));
       }
+      const badge = o.gift ? 'ฟรี' : `${lv}`;
       dock.add(
         this.add
-          .text(x + 34, 34, `${lv}`, {
+          .text(x + 34, 34, badge, {
             fontFamily: 'monospace',
             fontSize: '10px',
             fontStyle: 'bold',
@@ -629,7 +696,9 @@ export class GameScene extends Phaser.Scene {
           ? `draft:${s.pendingDraft.join(',')}|fuse:${fusionIds}`
           : this.eveningPending
             ? `evening:${s.day}:${this.eveningMealId ?? 'none'}:${this.eveningChoiceId ?? 'none'}`
-            : '';
+            : this.tutorialPending
+              ? 'tutorial:night1'
+              : '';
     const size = `${this.scale.width}x${this.scale.height}`;
     if (`${key}|${size}` === this.overlayKey) return;
     this.overlayKey = `${key}|${size}`;
@@ -638,6 +707,7 @@ export class GameScene extends Phaser.Scene {
     if (s.status !== 'playing') this.overlay = this.buildEndOverlay();
     else if (s.pendingDraft) this.overlay = this.buildDraftOverlay(s.pendingDraft);
     else if (this.eveningPending) this.overlay = this.buildEveningOverlay();
+    else if (this.tutorialPending) this.overlay = this.buildTutorialOverlay();
     // Children do not inherit the container's scroll factor for input hit tests, so set it on each.
     this.overlay?.each((child: Phaser.GameObjects.GameObject) => {
       (child as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
@@ -954,6 +1024,109 @@ export class GameScene extends Phaser.Scene {
     saveRun(this.syncAndGetState());
   }
 
+  private buildTutorialOverlay(): Phaser.GameObjects.Container {
+    const { box, w, h } = this.overlayBase();
+    const card = buildTutorialFusionCardView();
+    const cardW = Math.min(420, w - 24);
+    const panelH = 310;
+    const topY = Math.max(24, (h - panelH) / 2);
+
+    const panel = this.add
+      .rectangle(w / 2, topY, cardW, panelH, 0x160a2a, 0.97)
+      .setOrigin(0.5, 0)
+      .setStrokeStyle(3, 0xff9f1c);
+    box.add(panel);
+
+    box.add([
+      this.add
+        .text(w / 2, topY + 20, TUTORIAL_WELCOME_TITLE, {
+          fontFamily: 'sans-serif',
+          fontSize: '19px',
+          fontStyle: 'bold',
+          color: '#ffd166',
+          align: 'center',
+          wordWrap: { width: cardW - 28 },
+        })
+        .setOrigin(0.5, 0),
+      this.add
+        .text(w / 2, topY + 52, TUTORIAL_WELCOME_LINE, {
+          fontFamily: 'sans-serif',
+          fontSize: '13px',
+          color: '#cfd2ff',
+          align: 'center',
+          wordWrap: { width: cardW - 28 },
+        })
+        .setOrigin(0.5, 0),
+    ]);
+
+    const iconY = topY + 114;
+    if (this.textures.exists(`icon_${card.sourceIds[0]}`)) {
+      box.add(this.add.image(w / 2 - 96, iconY, `icon_${card.sourceIds[0]}`).setDisplaySize(44, 44));
+    }
+    box.add(this.add.text(w / 2 - 58, iconY, '+', { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffffff' }).setOrigin(0.5));
+    if (this.textures.exists(`icon_${card.sourceIds[1]}`)) {
+      box.add(this.add.image(w / 2 - 20, iconY, `icon_${card.sourceIds[1]}`).setDisplaySize(44, 44));
+    }
+    box.add(this.add.text(w / 2 + 24, iconY, '→', { fontFamily: 'sans-serif', fontSize: '22px', color: '#ffd166' }).setOrigin(0.5));
+    if (this.textures.exists(`icon_${card.resultId}`)) {
+      box.add(this.add.image(w / 2 + 78, iconY, `icon_${card.resultId}`).setDisplaySize(54, 54));
+    }
+
+    box.add([
+      this.add
+        .text(w / 2, topY + 156, card.recipeTitleTh, {
+          fontFamily: 'sans-serif',
+          fontSize: '15px',
+          fontStyle: 'bold',
+          color: '#ff9f1c',
+          align: 'center',
+          wordWrap: { width: cardW - 28 },
+        })
+        .setOrigin(0.5, 0),
+      this.add
+        .text(w / 2, topY + 184, card.descTh, {
+          fontFamily: 'sans-serif',
+          fontSize: '12px',
+          color: '#e0e1dd',
+          align: 'center',
+          wordWrap: { width: cardW - 32 },
+        })
+        .setOrigin(0.5, 0),
+    ]);
+
+    const btn = this.add
+      .rectangle(w / 2, topY + panelH - 58, cardW - 44, 44, 0xff9f1c)
+      .setOrigin(0.5, 0)
+      .setStrokeStyle(2, 0xffffff)
+      .setInteractive({ useHandCursor: true });
+    btn.on('pointerup', () => this.confirmTutorialFusion());
+    box.add([
+      btn,
+      this.add
+        .text(w / 2, topY + panelH - 36, card.buttonLabelTh, {
+          fontFamily: 'sans-serif',
+          fontSize: '17px',
+          fontStyle: 'bold',
+          color: '#0b132b',
+        })
+        .setOrigin(0.5),
+    ]);
+
+    return box;
+  }
+
+  private confirmTutorialFusion(): void {
+    this.tutorialPending = false;
+    this.sfx.playFuse();
+    this.showSystemToast('ระบบ: "รับอุกกาบาตตกใส่ตัวเอง Lv1 (ทดลองใช้คืนแรก)!"', 4);
+    saveRun(this.syncAndGetState());
+  }
+
+  private showSystemToast(message: string, seconds = 5): void {
+    this.systemToast.setText(message).setVisible(true);
+    this.systemToastLeft = seconds;
+  }
+
   private buildEndOverlay(): Phaser.GameObjects.Container {
     const { box, w, h } = this.overlayBase();
     const s = this.state;
@@ -1005,6 +1178,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private choose(index: number): void {
+    if (this.tutorialPending && index === 0) {
+      this.confirmTutorialFusion();
+      return;
+    }
     if (this.state.status !== 'playing' || !this.state.pendingDraft) return;
     if (index < this.state.pendingDraft.length) {
       pickDraft(this.state, index, this.data_.skills, this.bus);
