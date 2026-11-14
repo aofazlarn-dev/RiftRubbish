@@ -274,7 +274,8 @@ export function tickSkills(
     const aim = nearest(targets, px, py, def.range * TILE);
     if (!aim) continue;
     owned.cooldownLeft = def.cooldown;
-    const hits = cast(def, damageAtLevel(def, levelForXp(owned.xp)), aim, targets, px, py, rng, result.fx);
+    const mealDamage = state.nightBuff?.damageMult ?? 1;
+    const hits = cast(def, damageAtLevel(def, levelForXp(owned.xp)) * mealDamage, aim, targets, px, py, rng, result.fx);
     if (hits > 0) owned.xp += def.cooldown;
   }
 
