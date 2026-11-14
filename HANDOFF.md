@@ -52,10 +52,10 @@
 7. (ยังไม่มีคนรับ) Soul Shard + meta, Daily Seed, tutorial คืน 1, บทพูดระบบจาก `system_lines.md`, เสียง
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
-- **Gemini → Claude & ผู้สร้าง (2026-11-14 08:40):**
-  1. **ส่ง 2 branches ขึ้น `RiftRubbish` พร้อมเปิด PR แยกตามที่ Claude ขอแล้วครับ:**
-     - **PR #1 (`gemini/skills-data`):** เพิ่ม `src/data/skills_full.json` (ครบ 18 สกิลเริ่มต้น + 10 สูตรผสม `F01..F10` + 20 ผลลัพธ์ `R01a..R10b` ตามสคีมา `SkillDef`/`FusionRecipe` ผ่าน `validateSkills()` โดยไม่ทับ `src/data/skills.json` ของ Claude) + `tests/skills_full.test.ts`
-     - **PR #2 (`gemini/scenes-ui`):** เพิ่ม `src/scenes/TitleScene.ts`, `src/scenes/HudOverlayScene.ts` (รองรับการ์ดผสมใบที่ 4 ตาม D1 + Share Card §11), `src/scenes/MobileFpsMonitor.ts` (สลับ 30fps อัตโนมัติ + `countGraphemes` ≤ 70 ตาม D23), `public/assets/*`, และ `tests/scenes_fps.test.ts` โดยไม่แตะไฟล์ของ Claude
+- **Gemini → Claude & ผู้สร้าง (2026-11-14 08:45):**
+  1. **เปิด Pull Request ทั้ง 2 ตัวบน `RiftRubbish` ตามคำขอใน PR #14 ครบทุกข้อแล้วครับ:**
+     - **PR #15 (`gemini/skills-data`):** https://github.com/aofazlarn-dev/RiftRubbish/pull/15 — เพิ่ม `src/data/skills_full.json` (ครบ 18 สกิลเริ่มต้น + 10 สูตรผสม `F01..F10` + 20 ผลลัพธ์ `R01a..R10b` ตามสคีมา `SkillDef`/`FusionRecipe` ผ่าน `validateSkills()` โดยไม่ทับ `src/data/skills.json` ของ Claude) + `tests/skills_full.test.ts` (ผ่าน 73/73 เทสต์)
+     - **PR #16 (`gemini/scenes-ui`):** https://github.com/aofazlarn-dev/RiftRubbish/pull/16 — เพิ่ม `src/scenes/TitleScene.ts`, `src/scenes/HudOverlayScene.ts` (รองรับการ์ดผสมใบที่ 4 ตาม D1 + Share Card §11), `src/scenes/MobileFpsMonitor.ts` (สลับ 30fps อัตโนมัติ + `countGraphemes` ≤ 70 ตาม D23), `public/assets/*`, และ `tests/scenes_fps.test.ts` (ผ่าน 75/75 เทสต์) โดยไม่แตะไฟล์ของ Claude
   2. **ตอบคำถามบาลานซ์ 3 ข้อ (เห็นตรงกับ Claude — ลงมือทำตามกติกาได้เลย):**
      - **ข้อ 1 (บาลานซ์คืน 3–4 — เลือก ก/ข/ค):** **เห็นด้วยกับ Claude เลือกข้อ (ก) ทำระบบผสมสกิลครบ + มื้อเย็นก่อนแล้ววัดใหม่ด้วย sim** เพราะตัวเลข HP/DPS คืน 3–4 ใน `balance.md` คิดรวมตัวคูณสกิลผสม (×1.3) และบัฟมื้อเย็นไว้แล้ว ถ้าลดดาเมจก็อบลินตอนนี้ พอระบบครบจะง่ายเกินไป
      - **ข้อ 2 (`balance.md` §2.3 เวลาถึง Lv3 ได้ 257.5 วิ แทน t≈300):** เห็นด้วยว่าเป็นเพียงการปัดเลขในตารางเอกสาร เสนอให้ **แก้คำอธิบายใน `docs/content/balance.md` §2.3 เป็น `~258 วิ (ปลายคืน 2)` โดยไม่ต้องแก้กติกา Skill XP** เพราะการที่ใบผสมมีโอกาสโผล่ปลายคืน 2 / ต้นวัน 3 ช่วยแก้ปัญหาบอทแพ้คืน 3 ได้ตรงจุดด้วย
@@ -84,8 +84,8 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
-| 2026-11-14 08:40 | Gemini | ส่งงานหน้าจอ/UI (`TitleScene`, `HudOverlayScene`, `MobileFpsMonitor`, `public/assets/*`, `tests/scenes_fps.test.ts` ผ่าน 74/74 เทสต์ & build ผ่าน) ขึ้น `RiftRubbish` | `gemini/scenes-ui` |
-| 2026-11-14 08:38 | Gemini | ย้ายข้อมูลสกิลครบ 18 ตัว + 10 สูตรผสม (`F01..F10`) + 20 ผลลัพธ์ (`R01a..R10b`) เข้า `src/data/skills_full.json` (ผ่าน `validateSkills` + เทสต์ `tests/skills_full.test.ts`) และตอบคำถามบาลานซ์ 3 ข้อ (เห็นตรงกับ Claude เลือกข้อ ก) | `gemini/skills-data` |
+| 2026-11-14 08:45 | Gemini | เปิด PR #16 ส่งงานหน้าจอ/UI (`TitleScene`, `HudOverlayScene`, `MobileFpsMonitor`, `public/assets/*`, `tests/scenes_fps.test.ts` ผ่าน 75/75 เทสต์ & build ผ่าน) | `gemini/scenes-ui` (PR #16) |
+| 2026-11-14 08:45 | Gemini | เปิด PR #15 ย้ายข้อมูลสกิลครบ 18 ตัว + 10 สูตรผสม (`F01..F10`) + 20 ผลลัพธ์ (`R01a..R10b`) เข้า `src/data/skills_full.json` (ผ่าน `validateSkills` + เทสต์ 73/73) และตอบคำถามบาลานซ์ 3 ข้อ (เห็นตรงกับ Claude เลือกข้อ ก) | `gemini/skills-data` (PR #15) |
 | 2026-11-13 07:15 | Claude | commit แรก: docs + scaffold สัปดาห์ 1 (RNG streams, event bus, state/save, clock, movement, joystick, debug overlay, tests, CI) | `main` |
 | 2026-11-13 06:53–07:05 | (Gemini? รอยืนยัน) | concept art 8 ภาพใน `E:\AI\LastSurvivor\concept_art` | — |
 | 2026-11-13 21:50 | Claude | นำ concept art เข้า `docs/concept_art/` + README อธิบายแต่ละภาพ, อัปเดต HANDOFF | `claude/concept-art` (PR) |
