@@ -162,3 +162,31 @@ export function eveningMeal(inv: Inventory): EveningResult {
   }
   return { inventory: inv, buff: HUNGRY_DEBUFF, mealId: null };
 }
+
+/** Trap layout: TRAP_COUNT traps evenly spaced on a ring around the core (balance §6.3). */
+export function trapPositions(cx: number, cy: number, tilePx: number): { x: number; y: number; uses: number }[] {
+  const out: { x: number; y: number; uses: number }[] = [];
+  for (let i = 0; i < TRAP_COUNT; i++) {
+    const a = (Math.PI * 2 * i) / TRAP_COUNT;
+    out.push({ x: cx + Math.cos(a) * TRAP_RADIUS_TILES * tilePx, y: cy + Math.sin(a) * TRAP_RADIUS_TILES * tilePx, uses: TRAP_USES });
+  }
+  return out;
+}
+
+/** A trap fires when a unit comes this close (px). */
+export const TRAP_TRIGGER_PX = 16;
+
+/** True if the stock can cook at least one meal (the fence needs a spare dish). */
+export function hasSpareMeal(inv: Inventory): boolean {
+  return MEALS.some((m) => canCook(m, inv));
+}
+
+/**
+ * The evening choice the game will use. A requested choice is used only if it is available
+ * today; otherwise the game falls back to the free trap (balance §6.3).
+ */
+export function resolveEveningChoice(requested: EveningChoiceId | undefined, ctx: EveningContext): EveningChoiceId {
+  const options = availableChoices(ctx);
+  if (requested && options.includes(requested)) return requested;
+  return 'trap';
+}
