@@ -3,10 +3,16 @@
   "skills": [
     {
       "id": "W01",
-      "name": { "th": "ฟันลาวา", "en": "Magma Cleave" },
+      "name": {
+        "th": "ฟันลาวา",
+        "en": "Magma Cleave"
+      },
       "kind": "active",
       "rarity": "common",
-      "tags": ["earth", "fire"],
+      "tags": [
+        "earth",
+        "fire"
+      ],
       "damage": 6,
       "cooldown": 1.2,
       "range": 2.5,
@@ -15,10 +21,15 @@
     },
     {
       "id": "E01",
-      "name": { "th": "ลูกไฟ", "en": "Fireball" },
+      "name": {
+        "th": "ลูกไฟ",
+        "en": "Fireball"
+      },
       "kind": "active",
       "rarity": "common",
-      "tags": ["fire"],
+      "tags": [
+        "fire"
+      ],
       "damage": 6,
       "cooldown": 1.8,
       "range": 8,
@@ -27,22 +38,32 @@
     },
     {
       "id": "E02",
-      "name": { "th": "หอกน้ำแข็ง", "en": "Frost Lance" },
+      "name": {
+        "th": "หอกน้ำแข็ง",
+        "en": "Frost Lance"
+      },
       "kind": "active",
       "rarity": "rare",
-      "tags": ["ice"],
+      "tags": [
+        "ice"
+      ],
       "damage": 12,
-      "cooldown": 2.0,
+      "cooldown": 2,
       "range": 8,
       "shape": "line",
       "slowSeconds": 2
     },
     {
       "id": "E03",
-      "name": { "th": "โซ่สายฟ้า", "en": "Chain Lightning" },
+      "name": {
+        "th": "โซ่สายฟ้า",
+        "en": "Chain Lightning"
+      },
       "kind": "active",
       "rarity": "epic",
-      "tags": ["lightning"],
+      "tags": [
+        "lightning"
+      ],
       "damage": 12,
       "cooldown": 2.2,
       "range": 6,
@@ -53,10 +74,15 @@
     },
     {
       "id": "J03",
-      "name": { "th": "ขว้างหิน", "en": "Throw Rock" },
+      "name": {
+        "th": "ขว้างหิน",
+        "en": "Throw Rock"
+      },
       "kind": "active",
       "rarity": "common",
-      "tags": ["earth"],
+      "tags": [
+        "earth"
+      ],
       "damage": 10,
       "cooldown": 1.3,
       "range": 6,
@@ -66,65 +92,505 @@
     },
     {
       "id": "W03",
-      "name": { "th": "ผิวหินผา", "en": "Stoneskin" },
+      "name": {
+        "th": "ผิวหินผา",
+        "en": "Stoneskin"
+      },
       "kind": "passive",
       "rarity": "common",
-      "tags": ["earth"],
+      "tags": [
+        "earth"
+      ],
       "damage": 0,
       "cooldown": 0,
       "range": 0,
       "shape": "self",
-      "defense": { "reduction": [0, 0.08, 0.1, 0.12, 0.15, 0.18], "maxHp": [0, 10, 15, 20, 25, 30] }
+      "defense": {
+        "reduction": [
+          0,
+          0.08,
+          0.1,
+          0.12,
+          0.15,
+          0.18
+        ],
+        "maxHp": [
+          0,
+          10,
+          15,
+          20,
+          25,
+          30
+        ]
+      }
     },
     {
       "id": "R05a",
-      "name": { "th": "ลูกไฟไอน้ำ", "en": "Steam Burst" },
-      "kind": "active", "rarity": "epic", "tags": ["fire", "ice"],
-      "damage": 22, "cooldown": 2.4, "range": 8, "shape": "projectile", "splash": 2,
-      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3
+      "name": {
+        "th": "ลูกไฟไอน้ำ",
+        "en": "Steam Burst"
+      },
+      "kind": "active",
+      "rarity": "epic",
+      "tags": [
+        "fire",
+        "ice"
+      ],
+      "damage": 22,
+      "cooldown": 2.4,
+      "range": 8,
+      "shape": "projectile",
+      "splash": 2,
+      "fusedOnly": true,
+      "maxLevel": 7,
+      "baseLevel": 3
     },
     {
       "id": "R05b",
-      "name": { "th": "หอกแกนลาวา", "en": "Magma-Core Lance" },
-      "kind": "active", "rarity": "epic", "tags": ["ice", "fire"],
-      "damage": 28, "cooldown": 2.2, "range": 10, "shape": "line", "bothWays": true, "slowSeconds": 1,
-      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3
+      "name": {
+        "th": "หอกแกนลาวา",
+        "en": "Magma-Core Lance"
+      },
+      "kind": "active",
+      "rarity": "epic",
+      "tags": [
+        "ice",
+        "fire"
+      ],
+      "damage": 28,
+      "cooldown": 2.2,
+      "range": 10,
+      "shape": "line",
+      "bothWays": true,
+      "slowSeconds": 1,
+      "fusedOnly": true,
+      "maxLevel": 7,
+      "baseLevel": 3
     },
     {
       "id": "R07a",
-      "name": { "th": "รอยแยกลาวา", "en": "Lava Rift" },
-      "kind": "active", "rarity": "epic", "tags": ["earth", "fire"],
-      "damage": 18, "cooldown": 2.0, "range": 2.5, "shape": "cone", "arc": 360,
-      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3
+      "name": {
+        "th": "รอยแยกลาวา",
+        "en": "Lava Rift"
+      },
+      "kind": "active",
+      "rarity": "epic",
+      "tags": [
+        "earth",
+        "fire"
+      ],
+      "damage": 18,
+      "cooldown": 2,
+      "range": 2.5,
+      "shape": "cone",
+      "arc": 360,
+      "fusedOnly": true,
+      "maxLevel": 7,
+      "baseLevel": 3
     },
     {
       "id": "R07b",
-      "name": { "th": "เกราะธารน้ำแข็ง", "en": "Glacier Bulwark" },
-      "kind": "passive", "rarity": "epic", "tags": ["earth", "ice"],
-      "damage": 0, "cooldown": 0, "range": 0, "shape": "self",
-      "defense": { "reduction": [0, 0, 0, 0.15, 0.18, 0.22, 0.24, 0.25], "maxHp": [0, 0, 0, 30, 40, 50, 60, 70] },
-      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3
+      "name": {
+        "th": "เกราะธารน้ำแข็ง",
+        "en": "Glacier Bulwark"
+      },
+      "kind": "passive",
+      "rarity": "epic",
+      "tags": [
+        "earth",
+        "ice"
+      ],
+      "damage": 0,
+      "cooldown": 0,
+      "range": 0,
+      "shape": "self",
+      "defense": {
+        "reduction": [
+          0,
+          0,
+          0,
+          0.15,
+          0.18,
+          0.22,
+          0.24,
+          0.25
+        ],
+        "maxHp": [
+          0,
+          0,
+          0,
+          30,
+          40,
+          50,
+          60,
+          70
+        ]
+      },
+      "fusedOnly": true,
+      "maxLevel": 7,
+      "baseLevel": 3
     },
     {
       "id": "R10a",
-      "name": { "th": "หินล่อฟ้า", "en": "Lightning-Rod Pebble" },
-      "kind": "active", "rarity": "legendary", "tags": ["earth", "lightning"],
-      "damage": 10, "cooldown": 0.5, "range": 6, "shape": "projectile", "splash": 1.5,
-      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3,
+      "name": {
+        "th": "หินล่อฟ้า",
+        "en": "Lightning-Rod Pebble"
+      },
+      "kind": "active",
+      "rarity": "legendary",
+      "tags": [
+        "earth",
+        "lightning"
+      ],
+      "damage": 10,
+      "cooldown": 0.5,
+      "range": 6,
+      "shape": "projectile",
+      "splash": 1.5,
+      "fusedOnly": true,
+      "maxLevel": 7,
+      "baseLevel": 3,
       "_approx": "Spec: up to 3 rods, each strikes 10 in r1.5 every 1 s. Slice: one r1.5 strike of 10 every 0.5 s (about 2 rods active)."
     },
     {
       "id": "R10b",
-      "name": { "th": "อสนีกรวด", "en": "Thunder Gravel" },
-      "kind": "active", "rarity": "legendary", "tags": ["lightning", "earth"],
-      "damage": 20, "cooldown": 2.2, "range": 6, "shape": "chain", "jumps": 5, "jumpRange": 3, "falloff": 0,
-      "fusedOnly": true, "maxLevel": 7, "baseLevel": 3
+      "name": {
+        "th": "อสนีกรวด",
+        "en": "Thunder Gravel"
+      },
+      "kind": "active",
+      "rarity": "legendary",
+      "tags": [
+        "lightning",
+        "earth"
+      ],
+      "damage": 20,
+      "cooldown": 2.2,
+      "range": 6,
+      "shape": "chain",
+      "jumps": 5,
+      "jumpRange": 3,
+      "falloff": 0,
+      "fusedOnly": true,
+      "maxLevel": 7,
+      "baseLevel": 3
+    },
+    {
+      "id": "J01",
+      "name": {
+        "th": "เตะฝุ่น",
+        "en": "Kick Dust"
+      },
+      "branch": "trash",
+      "kind": "active",
+      "rarity": "common",
+      "junk": true,
+      "tags": [
+        "earth"
+      ],
+      "components": [
+        "aoe"
+      ],
+      "triggers": [
+        "periodic"
+      ],
+      "statuses": [
+        "blind"
+      ],
+      "damage": 3,
+      "cooldown": 3,
+      "range": 1.5,
+      "shape": "cone",
+      "arc": 120
+    },
+    {
+      "id": "J02",
+      "name": {
+        "th": "สะดุดล้ม",
+        "en": "Trip Over"
+      },
+      "branch": "trash",
+      "kind": "passive",
+      "rarity": "common",
+      "junk": true,
+      "tags": [
+        "earth"
+      ],
+      "components": [
+        "aoe",
+        "buff"
+      ],
+      "triggers": [
+        "chance"
+      ],
+      "statuses": [
+        "stun"
+      ],
+      "damage": 4,
+      "cooldown": 20,
+      "range": 1.5,
+      "shape": "ring"
+    },
+    {
+      "id": "J04",
+      "name": {
+        "th": "จุดไฟติดยาก",
+        "en": "Reluctant Spark"
+      },
+      "branch": "trash",
+      "kind": "passive",
+      "rarity": "common",
+      "junk": true,
+      "tags": [
+        "fire"
+      ],
+      "components": [
+        "aoe",
+        "dot"
+      ],
+      "triggers": [
+        "periodic",
+        "chance"
+      ],
+      "statuses": [
+        "burn",
+        "blind"
+      ],
+      "damage": 4,
+      "cooldown": 5,
+      "range": 1,
+      "shape": "ring"
+    },
+    {
+      "id": "J05",
+      "name": {
+        "th": "จามแรง",
+        "en": "Mighty Sneeze"
+      },
+      "branch": "trash",
+      "kind": "active",
+      "rarity": "common",
+      "junk": true,
+      "tags": [
+        "ice"
+      ],
+      "components": [
+        "aoe"
+      ],
+      "triggers": [
+        "periodic",
+        "chance"
+      ],
+      "statuses": [
+        "knockback",
+        "freeze"
+      ],
+      "damage": 2,
+      "cooldown": 5,
+      "range": 2.5,
+      "shape": "cone",
+      "arc": 110
+    },
+    {
+      "id": "J06",
+      "name": {
+        "th": "แมวดำจรจัด",
+        "en": "Stray Black Cat"
+      },
+      "branch": "trash",
+      "kind": "passive",
+      "rarity": "common",
+      "junk": true,
+      "tags": [
+        "beast",
+        "shadow"
+      ],
+      "components": [
+        "summon"
+      ],
+      "triggers": [
+        "periodic"
+      ],
+      "statuses": [],
+      "damage": 4,
+      "cooldown": 1.5,
+      "range": 1.5,
+      "shape": "summon"
+    },
+    {
+      "id": "R01a",
+      "recipeId": "F01",
+      "dominantSkillId": "J03",
+      "name": {
+        "th": "อุกกาบาตตกใส่ตัวเอง",
+        "en": "Self-Inflicted Meteor"
+      },
+      "kind": "active",
+      "rarity": "epic",
+      "tags": [
+        "earth",
+        "fire"
+      ],
+      "components": [
+        "aoe"
+      ],
+      "triggers": [
+        "periodic"
+      ],
+      "statuses": [
+        "stun"
+      ],
+      "damage": 78,
+      "cooldown": 8,
+      "range": 3.5,
+      "shape": "cone",
+      "arc": 360,
+      "selfHpCostMaxPct": 0.1,
+      "casualStopBelowHpPct": 0.2,
+      "fusedOnly": true,
+      "maxLevel": 7,
+      "baseLevel": 3
+    },
+    {
+      "id": "R01b",
+      "recipeId": "F01",
+      "dominantSkillId": "J02",
+      "name": {
+        "th": "ล้มหน้าคะมำแผ่นดินไหว",
+        "en": "Faceplant Quake"
+      },
+      "kind": "passive",
+      "rarity": "epic",
+      "tags": [
+        "earth"
+      ],
+      "components": [
+        "aoe",
+        "buff"
+      ],
+      "triggers": [
+        "periodic"
+      ],
+      "statuses": [
+        "stun"
+      ],
+      "damage": 30,
+      "cooldown": 7,
+      "range": 3,
+      "shape": "ring",
+      "fusedOnly": true,
+      "maxLevel": 7,
+      "baseLevel": 3
+    },
+    {
+      "id": "R02a",
+      "recipeId": "F02",
+      "dominantSkillId": "J01",
+      "name": {
+        "th": "ทอร์นาโดเพลิง",
+        "en": "Fire Tornado"
+      },
+      "kind": "active",
+      "rarity": "epic",
+      "tags": [
+        "fire",
+        "earth"
+      ],
+      "components": [
+        "projectile",
+        "aoe",
+        "dot"
+      ],
+      "triggers": [
+        "periodic"
+      ],
+      "statuses": [
+        "pull",
+        "burn"
+      ],
+      "damage": 24,
+      "cooldown": 7,
+      "range": 3,
+      "shape": "projectile",
+      "splash": 3,
+      "fusedOnly": true,
+      "maxLevel": 7,
+      "baseLevel": 3
+    },
+    {
+      "id": "R02b",
+      "recipeId": "F02",
+      "dominantSkillId": "J04",
+      "name": {
+        "th": "กองไฟเดินได้",
+        "en": "Walking Campfire"
+      },
+      "kind": "passive",
+      "rarity": "epic",
+      "tags": [
+        "fire"
+      ],
+      "components": [
+        "summon",
+        "aura"
+      ],
+      "triggers": [
+        "periodic",
+        "onKill"
+      ],
+      "statuses": [
+        "burn"
+      ],
+      "damage": 7,
+      "playerHealPerSec": 0.5,
+      "cooldown": 1,
+      "range": 2,
+      "shape": "ring",
+      "fusedOnly": true,
+      "maxLevel": 7,
+      "baseLevel": 3
     }
   ],
   "_fusionComment": "Recipes from skills_fusion.md §3.1 that use only the 6 MVP skills. The result follows the higher-level source: resultA if `a` is higher (tie = the one taken first). Fused numbers are the Lv3 values; extra effects (steam cloud, heat shock, rift lines, scale burst, gravel) are not in the slice.",
   "fusions": [
-    { "id": "F05", "a": "E01", "b": "E02", "resultA": "R05a", "resultB": "R05b" },
-    { "id": "F07", "a": "W01", "b": "W03", "resultA": "R07a", "resultB": "R07b" },
-    { "id": "F10", "a": "J03", "b": "E03", "resultA": "R10a", "resultB": "R10b" }
+    {
+      "id": "F05",
+      "a": "E01",
+      "b": "E02",
+      "resultA": "R05a",
+      "resultB": "R05b"
+    },
+    {
+      "id": "F07",
+      "a": "W01",
+      "b": "W03",
+      "resultA": "R07a",
+      "resultB": "R07b"
+    },
+    {
+      "id": "F10",
+      "a": "J03",
+      "b": "E03",
+      "resultA": "R10a",
+      "resultB": "R10b"
+    },
+    {
+      "id": "F01",
+      "a": "J03",
+      "b": "J02",
+      "resultA": "R01a",
+      "resultB": "R01b",
+      "baseRarity": "epic",
+      "requiresCore": false
+    },
+    {
+      "id": "F02",
+      "a": "J01",
+      "b": "J04",
+      "resultA": "R02a",
+      "resultB": "R02b",
+      "baseRarity": "epic",
+      "requiresCore": false
+    }
   ]
 }

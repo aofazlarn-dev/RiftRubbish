@@ -236,9 +236,12 @@ describe('progression and Draft (balance ยง1.2, ยง9)', () => {
     for (const id of ['W01', 'E01', 'E02', 'E03']) s.skills.push({ id, xp: 0, cooldownLeft: 0 });
     s.draftsOwed = 1;
     openDraftIfOwed(s, RunRng.fromSeed('slots').get('draft'), data.skills);
-    expect(s.pendingDraft).not.toContain('skill:J03');
-    expect(s.pendingDraft).toContain('skill:W03');
-    expect(s.pendingDraft!.filter((c) => c.startsWith('up:'))).toHaveLength(2);
+    const kindOf = (id: string) => data.skills.find((d) => d.id === id)!.kind;
+    const skillCards = s.pendingDraft!.filter((c) => c.startsWith('skill:')).map((c) => c.slice(6));
+    // Enough passives in the pool now, so no 5th Active and no fused result is offered.
+    expect(skillCards.every((id) => kindOf(id) === 'passive')).toBe(true);
+    expect(skillCards.some((id) => data.skills.find((d) => d.id === id)!.fusedOnly)).toBe(false);
+    expect(s.pendingDraft).toHaveLength(3);
   });
 
   it('an upgrade card adds +40 Skill XP at Lv1', () => {
