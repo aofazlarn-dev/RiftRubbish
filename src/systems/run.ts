@@ -28,7 +28,10 @@ import { expireTutorialGifts, forceTutorialFusion, grantTutorialGift } from './t
 import { clearChests, spawnChests, tickChests } from './chests';
 import { attachSystemVoice } from './systemVoice';
 import { attachShardLedger } from './shards';
-import { startingSkillsFor } from './meta';
+import { attachMissionTracker, chooseMissions, settleDay } from './missionTracker';
+import { freshDayStats } from './missions';
+import { applyMeta, startingSkillsFor } from './meta';
+import { loadMeta } from '../core/metaSave';
 import { grantXp, openDraftIfOwed } from './progression';
 import type { SkillDef } from './skills';
 import { buildNightSpawns, waveForNight, type MonsterDef, type WavesData } from './waves';
@@ -53,6 +56,7 @@ export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: Eve
     if (!state.skills.some((s) => s.id === id)) state.skills.push({ id, xp: 0, cooldownLeft: 0 });
   }
   const patrol = data.waves.days.find((d) => d.day === 1);
+  if (state.mode === 'casual') applyMeta(state, loadMeta().owned); // owned meta applies to Casual runs only (GDD §2)
   if (patrol) spawnDayPatrols(state, patrol, rng.get('combat'), data.monsters);
   state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
   spawnChests(state, rng.get('loot'));
@@ -61,7 +65,9 @@ export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: Eve
   if (bus) {
     attachSystemVoice(bus, state); // subscribe before run:start so the welcome line plays (G5)
     attachShardLedger(bus, state); // settles Soul Shard when the run ends (G7)
+    attachMissionTracker(bus, state); // per-day counters for the approved missions
   }
+  chooseMissions(state, new Date().toISOString().slice(0, 10)); // Casual: 3 missions for today (Daily: none)
   bus?.emit('run:start', { seed: state.seed, mode: state.mode });
 }
 
@@ -87,8 +93,11 @@ export function beginEvening(state: GameState): void {
     state.overtimeUsed = true;
     state.overtimeChosen = true;
     state.nightBuff = HUNGRY_DEBUFF;
+    state.dayStats = { ...(state.dayStats ?? freshDayStats()), hungry: true }; // overtime skips the meal
     return;
   }
+  // No meal cooked and not overtime = hungry tonight; mission M_EAT reads this at dawn.
+  if (planned.mealId === null) state.dayStats = { ...(state.dayStats ?? freshDayStats()), hungry: true };
 
   // Cooks from stock; the buff lasts through tonight (balance §6.2).
   let after = planned.inventory;
@@ -117,6 +126,8 @@ function tickPlayerTraps(state: GameState, dt: number): void {
 function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
   const combat = rng.get('combat');
   if (state.phase === 'night') {
+    state.nightCoreStart = state.coreHp; // mission M_NOCORE reads this at dawn
+    state.nightKillBase = state.kills; // mission M_KILL30 counts kills from here
     if (state.day === 1) {
       // Welcome gift at the start of night 1: J02 + J03 are fused into R01a at once (G2, GDD §3).
       grantTutorialGift(state);
@@ -138,9 +149,20 @@ function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
       };
     }
   } else if (state.phase === 'evening') {
+    // Mission input for today: opened chests (M_CHEST), then the chests end at dusk.
+    const opened = (state.chests ?? []).filter((c) => c.opened).length;
+    state.dayStats = { ...(state.dayStats ?? freshDayStats()), chestsOpened: opened };
     clearChests(state); // daytime chests end at dusk
     beginEvening(state);
   } else if (state.phase === 'day') {
+    // Dawn: read the night's stats before repairs, then score the day's missions (approved draft).
+    const ds = state.dayStats ?? freshDayStats();
+    state.dayStats = {
+      ...ds,
+      kills: state.kills - (state.nightKillBase ?? 0), // day 1 has no night base yet
+      coreLost: state.coreHp < (state.nightCoreStart ?? state.coreHp),
+    };
+    settleDay(state);
     clearMonstersAtDawn(state);
     dawnRepair(state);
     state.nightBuff = undefined;

@@ -19,6 +19,7 @@ import type { CombatFx } from '../systems/combat';
 import { dailySeed } from '../systems/daily';
 import { fenceShieldHp, trapPositions, type EveningChoiceId, type Inventory } from '../systems/evening';
 import type { Vec2 } from '../systems/movement';
+import { attachMissionTracker } from '../systems/missionTracker';
 import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
 import { startRun, stepRun, type RunData } from '../systems/run';
 import { attachShardLedger } from '../systems/shards';
@@ -243,13 +244,17 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1600)
       .setVisible(false);
-    attachSystemVoice(this.bus, this.state);
-    attachShardLedger(this.bus, this.state);
     this.bus.on('system:say', ({ th }) => {
       this.showSystemToast(`ระบบ: "${th}"`, 5);
     });
     this.rng = RunRng.restore(this.state.seed, this.state.rng);
-    if (!resumed) startRun(this.state, this.rng, this.data_, this.bus);
+    if (resumed) {
+      attachSystemVoice(this.bus, this.state);
+      attachShardLedger(this.bus, this.state);
+      attachMissionTracker(this.bus, this.state);
+    } else {
+      startRun(this.state, this.rng, this.data_, this.bus);
+    }
 
     // Dev builds only: lets a debugger reach the live state (e.g. to test the end screens).
     if (import.meta.env.DEV) (window as unknown as { __scene?: GameScene }).__scene = this;

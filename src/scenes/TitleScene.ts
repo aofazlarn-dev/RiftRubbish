@@ -120,6 +120,12 @@ export class TitleScene extends Phaser.Scene {
     );
     y += step;
 
+    // Meta shop and today's missions (approved draft, PR #44)
+    this.createMenuButton(width * 0.5, y, '🛒 ร้าน META', 0x2a9d8f, true, () => this.scene.start('MetaShopScene'));
+    y += step;
+    this.createMenuButton(width * 0.5, y, '📜 ภารกิจวันนี้', 0x2a9d8f, true, () => this.scene.start('MissionScene'));
+    y += step;
+
     // 3. Locked Hardcore Button (GDD §2: shown locked on launch day)
     this.createMenuButton(
       width * 0.5,
