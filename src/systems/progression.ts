@@ -48,6 +48,7 @@ function buildCards(state: GameState, rng: RngStream, pool: readonly SkillDef[],
   const passiveFull = count('passive') >= MAX_PASSIVE;
 
   const eligible = pool.filter((s) => {
+    if (s.fusedOnly) return false; // fusion results come only from recipes (GDD §7)
     if (owned.has(s.id)) return false;
     if (s.kind === 'active' ? activeFull : passiveFull) return false;
     // The very first card is always a real attack so the first level-up comes quickly (balance §1.2).
@@ -84,7 +85,7 @@ export function openDraftIfOwed(
 }
 
 /** Applies the chosen card and closes the Draft. Returns false for an invalid index. */
-export function pickDraft(state: GameState, index: number, bus?: EventBus): boolean {
+export function pickDraft(state: GameState, index: number, skillDefs: readonly SkillDef[], bus?: EventBus): boolean {
   const card = state.pendingDraft?.[index];
   if (!card) return false;
   const [type, id] = card.split(':');
@@ -95,7 +96,7 @@ export function pickDraft(state: GameState, index: number, bus?: EventBus): bool
     if (owned) owned.xp += upgradeXp(levelForXp(owned.xp));
   }
   state.pendingDraft = null;
-  applyPassives(state);
+  applyPassives(state, skillDefs);
   bus?.emit('draft:pick', { card });
   return true;
 }
