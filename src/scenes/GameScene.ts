@@ -37,7 +37,8 @@ import {
   hotkeyLabelForSlot,
   RO_PALETTE,
 } from '../ui/roTheme';
-import { buildEveningOffer, formatInventorySummary, formatSynergySummary } from './eveningUiModel';
+import { buildEveningOffer, formatInventorySummary, formatSynergyTiers } from './eveningUiModel';
+import { SYNERGY_TEXT_TH } from '../systems/synergy';
 import { buildShareCardSummary, findAvailableFusions, pickFusionCard } from './HudOverlayScene';
 import { MobileFpsMonitor, type FpsMonitorSnapshot } from './MobileFpsMonitor';
 import {
@@ -980,10 +981,8 @@ export class GameScene extends Phaser.Scene {
 
     const invStr = formatInventorySummary(s.inventory ?? {});
     const coreStr = (s.cores ?? 0) > 0 ? ` · Core ×${s.cores}` : '';
-    const synStr = formatSynergySummary(
-      s.skills.filter((o) => !o.gift).map((o) => o.id),
-      this.data_.skills,
-    );
+    // Synergy tier and its effect from the rules' own state (R4); gift skills never count.
+    const synStr = formatSynergyTiers(s.synergy, SYNERGY_TEXT_TH);
     this.hudInvText.setWordWrapWidth(panelW - 22);
     this.hudInvText.setText(`ของ: ${invStr}${coreStr}${synStr ? ` · ${synStr}` : ''}`);
 
