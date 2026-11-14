@@ -13,6 +13,7 @@ import { advanceClock } from './clock';
 import { tickSkills, type CombatFx } from './combat';
 import { clearMonstersAtDawn, findDef, ringPoint, spawnDayPatrols, spawnMonster, tickMonsters, tickSpawns } from './monsters';
 import { movePlayer, type Vec2 } from './movement';
+import { eveningMeal, gatherDay } from './evening';
 import { grantXp, openDraftIfOwed } from './progression';
 import type { SkillDef } from './skills';
 import { buildNightSpawns, waveForNight, type MonsterDef, type WavesData } from './waves';
@@ -34,6 +35,7 @@ const BOSS_CORE_REACH = 60;
 export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: EventBus): void {
   const patrol = data.waves.days.find((d) => d.day === 1);
   if (patrol) spawnDayPatrols(state, patrol, rng.get('combat'), data.monsters);
+  state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
   state.draftsOwed += 1;
   openDraftIfOwed(state, rng.get('draft'), data.skills, bus, true);
   bus?.emit('run:start', { seed: state.seed, mode: state.mode });
@@ -57,9 +59,16 @@ function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
         rules: createBoss(),
       };
     }
+  } else if (state.phase === 'evening') {
+    // Cooks from stock; the buff lasts through tonight (balance §6.2). No meal = hungry debuff.
+    const result = eveningMeal(state.inventory ?? {});
+    state.inventory = result.inventory;
+    state.nightBuff = result.buff;
   } else if (state.phase === 'day') {
     clearMonstersAtDawn(state);
     dawnRepair(state);
+    state.nightBuff = undefined;
+    state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
     const patrol = data.waves.days.find((d) => d.day === state.day);
     if (patrol) spawnDayPatrols(state, patrol, combat, data.monsters);
   }
@@ -124,7 +133,9 @@ export function stepRun(
   if (state.pendingDraft) return [];
 
   tickSurvival(state, dt);
-  if (!isPlayerDown(state)) movePlayer(state.player, input, dt, { width: WORLD, height: WORLD });
+  if (!isPlayerDown(state)) {
+    movePlayer(state.player, input, dt * (state.nightBuff?.speedMult ?? 1), { width: WORLD, height: WORLD });
+  }
 
   const before = `${state.day}:${state.phase}`;
   advanceClock(state, dt, bus);
