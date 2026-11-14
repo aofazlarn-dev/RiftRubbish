@@ -116,6 +116,8 @@ export interface GameState {
   chestCoreGiven?: boolean;
   /** Seconds since the run started (for line cooldowns). */
   runTime?: number;
+  /** Soul Shard earned by this run, set when the run ends (balance §7). Undefined until then. */
+  shardsEarned?: number;
   /** Last time each limited System line was said (run seconds). */
   lineLastAt?: Record<string, number>;
   monsters: MonsterInstance[];
