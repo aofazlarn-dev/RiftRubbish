@@ -16,7 +16,7 @@ import { VirtualJoystick } from '../input/joystick';
 import { isPlayerDown } from '../systems/base';
 import { phaseRemaining, recallEarly } from '../systems/clock';
 import type { CombatFx } from '../systems/combat';
-import type { EveningChoiceId, Inventory } from '../systems/evening';
+import { fenceShieldHp, trapPositions, type EveningChoiceId, type Inventory } from '../systems/evening';
 import type { Vec2 } from '../systems/movement';
 import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
 import { startRun, stepRun, type RunData } from '../systems/run';
@@ -327,11 +327,14 @@ export class GameScene extends Phaser.Scene {
           this.state.inventory = { ...this.preEveningInv };
           this.preEveningInv = null;
         }
+        // Reset auto-applied beginEvening defaults while the Evening Overlay lets the player choose.
+        this.state.coreShield = undefined;
+        this.state.traps = [];
         const offer = buildEveningOffer(
           this.state.inventory ?? {},
           day,
           this.state.coreMaxHp,
-          this.overtimeUsed,
+          this.state.overtimeUsed ?? this.overtimeUsed,
           null,
         );
         this.eveningMealId = offer.meals.find((m) => m.affordable)?.meal.id ?? null;
@@ -506,6 +509,11 @@ export class GameScene extends Phaser.Scene {
   private drawBars(): void {
     const s = this.state;
     const g = this.barGraphics.clear();
+    for (const t of s.traps ?? []) {
+      if (t.uses <= 0) continue;
+      g.lineStyle(2, 0xff9f1c, 0.85).strokeCircle(t.x, t.y, 14);
+      g.fillStyle(0xff9f1c, 0.22).fillCircle(t.x, t.y, 14);
+    }
     const bar = (x: number, y: number, w: number, ratio: number, color: number) => {
       g.fillStyle(0x000000, 0.6).fillRect(x - w / 2, y, w, 6);
       g.fillStyle(color, 1).fillRect(x - w / 2, y, w * Phaser.Math.Clamp(ratio, 0, 1), 6);
@@ -545,7 +553,8 @@ export class GameScene extends Phaser.Scene {
     const time = Number.isFinite(left) ? `${Math.ceil(left)} วิ` : 'จันทร์เลือด';
     this.hudTitle.setText(`วันที่ ${s.day}/7 · ${PHASE_LABEL[s.phase]} · ${time}`);
     this.hudHpText.setText(`เลือด ${Math.ceil(s.player.hp)}/${s.player.maxHp}`);
-    this.hudCoreText.setText(`แกนฐาน ${Math.ceil(s.coreHp)}/${s.coreMaxHp}`);
+    const shieldTxt = (s.coreShield ?? 0) > 0 ? ` (+โล่ ${Math.ceil(s.coreShield!)})` : '';
+    this.hudCoreText.setText(`แกนฐาน ${Math.ceil(s.coreHp)}/${s.coreMaxHp}${shieldTxt}`);
     const fpsText = fpsSnap
       ? ` · FPS ${Math.round(fpsSnap.averageFps)}${fpsSnap.lowEndFallbackActive ? ' (30fps)' : ''}`
       : '';
@@ -758,7 +767,7 @@ export class GameScene extends Phaser.Scene {
     const { box, w, h } = this.overlayBase();
     const s = this.state;
     const inv = s.inventory ?? {};
-    const offer = buildEveningOffer(inv, s.day, s.coreMaxHp, this.overtimeUsed, this.eveningMealId);
+    const offer = buildEveningOffer(inv, s.day, s.coreMaxHp, s.overtimeUsed ?? this.overtimeUsed, this.eveningMealId);
     const cardW = Math.min(440, w - 20);
     const leftX = w / 2 - cardW / 2;
     const panelH = Math.min(h - 24, 590);
@@ -817,7 +826,7 @@ export class GameScene extends Phaser.Scene {
         bg.on('pointerup', () => {
           this.eveningMealId = opt.meal.id;
           // If fence becomes unaffordable after picking a meal, fallback to trap.
-          const nextOffer = buildEveningOffer(inv, s.day, s.coreMaxHp, this.overtimeUsed, opt.meal.id);
+          const nextOffer = buildEveningOffer(inv, s.day, s.coreMaxHp, s.overtimeUsed ?? this.overtimeUsed, opt.meal.id);
           if (this.eveningChoiceId === 'fence' && !nextOffer.choices.find((c) => c.id === 'fence')?.enabled) {
             this.eveningChoiceId = 'trap';
           }
@@ -933,7 +942,13 @@ export class GameScene extends Phaser.Scene {
     const res = resolveEveningSelection(this.state.inventory ?? {}, this.eveningMealId, choiceId);
     this.state.inventory = res.inventory;
     this.state.nightBuff = res.buff;
-    if (res.usedOvertime) this.overtimeUsed = true;
+    this.state.coreShield = choiceId === 'fence' ? fenceShieldHp(this.state.coreMaxHp) : undefined;
+    this.state.traps = choiceId === 'trap' ? trapPositions(CORE_X, CORE_Y, TILE) : [];
+    if (res.usedOvertime) {
+      this.overtimeUsed = true;
+      this.state.overtimeUsed = true;
+      this.state.overtimeChosen = true;
+    }
     this.eveningPending = false;
     this.sfx.playLevelUp();
     saveRun(this.syncAndGetState());
