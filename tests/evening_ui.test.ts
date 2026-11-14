@@ -4,6 +4,7 @@ import {
   countCookableDishes,
   formatInventorySummary,
   formatMealBuff,
+  formatSynergySummary,
   resolveEveningSelection,
 } from '../src/scenes/eveningUiModel';
 import { HUNGRY_DEBUFF, MEALS } from '../src/systems/evening';
@@ -47,5 +48,23 @@ describe('eveningUiModel (G3 Evening UI)', () => {
     expect(res.usedOvertime).toBe(false);
     expect(res.buff).toEqual(MEALS[0].buff);
     expect(res.inventory.grain).toBe(0);
+  });
+
+  it('locks overtime in Daily mode even on day 4+ and formats active Synergy >= 2', () => {
+    const dailyOffer = buildEveningOffer({ grain: 4 }, 5, 1000, false, 'hard_bread', 'daily');
+    const overtime = dailyOffer.choices.find((c) => c.id === 'overtime');
+    expect(overtime?.enabled).toBe(false);
+    expect(overtime?.lockedReasonTh).toBe('ไม่มีทำโอทีในโหมด Daily Seed');
+
+    const syn = formatSynergySummary(
+      ['E01', 'W01', 'J03'],
+      [
+        { id: 'E01', tags: ['fire'] },
+        { id: 'W01', tags: ['fire'] },
+        { id: 'J03', tags: ['earth'] },
+      ],
+    );
+    expect(syn).toBe('Synergy: ไฟ (2)');
+    expect(formatSynergySummary(['E01'], [{ id: 'E01', tags: ['fire'] }])).toBe('');
   });
 });

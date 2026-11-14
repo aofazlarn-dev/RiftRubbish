@@ -16,13 +16,16 @@ import { VirtualJoystick } from '../input/joystick';
 import { isPlayerDown } from '../systems/base';
 import { phaseRemaining, recallEarly } from '../systems/clock';
 import type { CombatFx } from '../systems/combat';
+import { dailySeed } from '../systems/daily';
 import { fenceShieldHp, trapPositions, type EveningChoiceId, type Inventory } from '../systems/evening';
 import type { Vec2 } from '../systems/movement';
 import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
 import { startRun, stepRun, type RunData } from '../systems/run';
+import { attachShardLedger } from '../systems/shards';
 import { damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
+import { attachSystemVoice } from '../systems/systemVoice';
 import { DebugOverlay } from '../ui/DebugOverlay';
-import { buildEveningOffer, resolveEveningSelection } from './eveningUiModel';
+import { buildEveningOffer, formatInventorySummary, formatSynergySummary, resolveEveningSelection } from './eveningUiModel';
 import { buildShareCardSummary, findAvailableFusions, pickFusionCard } from './HudOverlayScene';
 import { MobileFpsMonitor, type FpsMonitorSnapshot } from './MobileFpsMonitor';
 import {
@@ -107,6 +110,7 @@ export class GameScene extends Phaser.Scene {
   private hudHpText!: Phaser.GameObjects.Text;
   private hudCoreText!: Phaser.GameObjects.Text;
   private hudMetaText!: Phaser.GameObjects.Text;
+  private hudInvText!: Phaser.GameObjects.Text;
   private downBanner!: Phaser.GameObjects.Text;
   private recallBtn!: Phaser.GameObjects.Text;
   private muteBtn!: Phaser.GameObjects.Text;
@@ -224,6 +228,26 @@ export class GameScene extends Phaser.Scene {
     this.tutorialPending = false;
     this.tutorialShown = this.state.tutorial === 'fused' || this.state.tutorial === 'done';
     this.tutorialExpireShown = this.state.tutorial === 'done';
+    this.systemToast = this.add
+      .text(this.scale.width / 2, 16, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: '#ffd166',
+        backgroundColor: '#1a0933ee',
+        padding: { x: 14, y: 8 },
+        align: 'center',
+        wordWrap: { width: Math.min(460, this.scale.width - 24) },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(1600)
+      .setVisible(false);
+    attachSystemVoice(this.bus, this.state);
+    attachShardLedger(this.bus, this.state);
+    this.bus.on('system:say', ({ th }) => {
+      this.showSystemToast(`ระบบ: "${th}"`, 5);
+    });
     this.rng = RunRng.restore(this.state.seed, this.state.rng);
     if (!resumed) startRun(this.state, this.rng, this.data_, this.bus);
 
@@ -274,7 +298,11 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(901);
     this.hudMetaText = this.add
-      .text(18, 88, '', { fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#d8b4f8' })
+      .text(18, 86, '', { fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#d8b4f8' })
+      .setScrollFactor(0)
+      .setDepth(900);
+    this.hudInvText = this.add
+      .text(18, 102, '', { fontFamily: 'system-ui, sans-serif', fontSize: '11px', color: '#a8dadc', wordWrap: { width: 228 } })
       .setScrollFactor(0)
       .setDepth(900);
     this.downBanner = this.add
@@ -322,22 +350,6 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerup', () => this.newRun());
 
-    this.systemToast = this.add
-      .text(this.scale.width / 2, 16, '', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '15px',
-        fontStyle: 'bold',
-        color: '#ffd166',
-        backgroundColor: '#1a0933ee',
-        padding: { x: 14, y: 8 },
-        align: 'center',
-        wordWrap: { width: Math.min(460, this.scale.width - 24) },
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(960)
-      .setVisible(false);
-
     this.debug = new DebugOverlay(this);
     const onResize = (size: Phaser.Structs.Size) => {
       const y = size.height - 34;
@@ -368,6 +380,7 @@ export class GameScene extends Phaser.Scene {
           this.state.coreMaxHp,
           this.state.overtimeUsed ?? this.overtimeUsed,
           null,
+          this.state.mode,
         );
         this.eveningMealId = offer.meals.find((m) => m.affordable)?.meal.id ?? null;
         this.eveningChoiceId = 'trap';
@@ -419,6 +432,7 @@ export class GameScene extends Phaser.Scene {
           this.state.coreMaxHp,
           this.state.overtimeUsed ?? this.overtimeUsed,
           null,
+          this.state.mode,
         );
         this.eveningMealId = offer.meals.find((m) => m.affordable)?.meal.id ?? null;
       }
@@ -575,6 +589,15 @@ export class GameScene extends Phaser.Scene {
   private drawBars(): void {
     const s = this.state;
     const g = this.barGraphics.clear();
+    for (const c of s.chests ?? []) {
+      if (c.opened) {
+        g.lineStyle(1.5, 0x6c757d, 0.6).strokeRect(c.x - 9, c.y - 7, 18, 14);
+      } else {
+        g.fillStyle(0xffd166, 0.2).fillCircle(c.x, c.y, 18);
+        g.fillStyle(0xd97706, 1).fillRect(c.x - 9, c.y - 7, 18, 14);
+        g.lineStyle(2, 0xffea00, 1).strokeRect(c.x - 9, c.y - 7, 18, 14);
+      }
+    }
     for (const t of s.traps ?? []) {
       if (t.uses <= 0) continue;
       g.lineStyle(2, 0xff9f1c, 0.85).strokeCircle(t.x, t.y, 14);
@@ -596,8 +619,8 @@ export class GameScene extends Phaser.Scene {
     const g = this.hudGraphics.clear();
 
     // Translucent dark RPG HUD panel
-    g.fillStyle(0x0d0614, 0.82).fillRoundedRect(10, 10, panelW, 100, 10);
-    g.lineStyle(1.5, 0x9b4dca, 0.9).strokeRoundedRect(10, 10, panelW, 100, 10);
+    g.fillStyle(0x0d0614, 0.82).fillRoundedRect(10, 10, panelW, 118, 10);
+    g.lineStyle(1.5, 0x9b4dca, 0.9).strokeRoundedRect(10, 10, panelW, 118, 10);
 
     // Player HP bar
     const hpRatio = Phaser.Math.Clamp(s.player.hp / Math.max(1, s.player.maxHp), 0, 1);
@@ -625,6 +648,13 @@ export class GameScene extends Phaser.Scene {
       ? ` · FPS ${Math.round(fpsSnap.averageFps)}${fpsSnap.lowEndFallbackActive ? ' (30fps)' : ''}`
       : '';
     this.hudMetaText.setText(`Lv${s.player.level} · ปราบ ${s.kills} · มอน ${s.monsters.length}${fpsText}`);
+    const invStr = formatInventorySummary(s.inventory ?? {});
+    const coreStr = (s.cores ?? 0) > 0 ? ` · Core ×${s.cores}` : '';
+    const synStr = formatSynergySummary(
+      s.skills.map((o) => o.id),
+      this.data_.skills,
+    );
+    this.hudInvText.setText(`ของ: ${invStr}${coreStr}${synStr ? ` · ${synStr}` : ''}`);
 
     this.recallBtn.setVisible(s.phase === 'day' && s.status === 'playing' && !s.pendingDraft);
     this.muteBtn.setText(`[M] ${this.sfx.isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด'}`);
@@ -651,7 +681,7 @@ export class GameScene extends Phaser.Scene {
     this.skillDock = undefined;
     if (this.state.skills.length === 0) return;
 
-    const dock = this.add.container(10, 116).setScrollFactor(0).setDepth(900);
+    const dock = this.add.container(10, 134).setScrollFactor(0).setDepth(900);
     this.state.skills.forEach((o, i) => {
       const def = this.data_.skills.find((d) => d.id === o.id);
       const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
@@ -731,8 +761,22 @@ export class GameScene extends Phaser.Scene {
     const cardW = Math.min(420, w - 32);
     const cardH = 92;
     const gap = 14;
-    const top = Math.max(70, h / 2 - (totalCards * (cardH + gap)) / 2);
+    const top = Math.max(84, h / 2 - (totalCards * (cardH + gap)) / 2);
     const title = this.state.skills.length === 0 ? 'เลือกสกิลแรกของคุณ' : `เลเวล ${this.state.player.level}! เลือก 1 ใบ`;
+    if (this.state.skills.length === 0 && this.state.day === 1) {
+      box.add(
+        this.add
+          .text(w / 2, top - 78, '🚚 ตู้ม!! รถบรรทุกพุ่งชนคุณกระเด็นข้ามมิติ... ระบบกำลังติดตั้งสกิลเริ่มต้น', {
+            fontFamily: 'sans-serif',
+            fontSize: '14px',
+            fontStyle: 'bold',
+            color: '#ff9f1c',
+            align: 'center',
+            wordWrap: { width: Math.min(440, w - 24) },
+          })
+          .setOrigin(0.5),
+      );
+    }
     box.add(this.add.text(w / 2, top - 44, title, { fontFamily: 'sans-serif', fontSize: '24px', color: '#ffffff' }).setOrigin(0.5));
 
     cards.forEach((card, i) => {
@@ -837,7 +881,7 @@ export class GameScene extends Phaser.Scene {
     const { box, w, h } = this.overlayBase();
     const s = this.state;
     const inv = s.inventory ?? {};
-    const offer = buildEveningOffer(inv, s.day, s.coreMaxHp, s.overtimeUsed ?? this.overtimeUsed, this.eveningMealId);
+    const offer = buildEveningOffer(inv, s.day, s.coreMaxHp, s.overtimeUsed ?? this.overtimeUsed, this.eveningMealId, s.mode);
     const cardW = Math.min(440, w - 20);
     const leftX = w / 2 - cardW / 2;
     const panelH = Math.min(h - 24, 590);
@@ -896,7 +940,7 @@ export class GameScene extends Phaser.Scene {
         bg.on('pointerup', () => {
           this.eveningMealId = opt.meal.id;
           // If fence becomes unaffordable after picking a meal, fallback to trap.
-          const nextOffer = buildEveningOffer(inv, s.day, s.coreMaxHp, s.overtimeUsed ?? this.overtimeUsed, opt.meal.id);
+          const nextOffer = buildEveningOffer(inv, s.day, s.coreMaxHp, s.overtimeUsed ?? this.overtimeUsed, opt.meal.id, s.mode);
           if (this.eveningChoiceId === 'fence' && !nextOffer.choices.find((c) => c.id === 'fence')?.enabled) {
             this.eveningChoiceId = 'trap';
           }
@@ -1136,7 +1180,8 @@ export class GameScene extends Phaser.Scene {
     const line = won
       ? 'ระบบ: "ไม่อยู่ในแผนเลยนะเนี่ย... ยินดีด้วย"'
       : 'ระบบ: "แกนฐานรุ่นนี้ประกันหมดเมื่อวาน ระบบขออภัย"';
-    const stats = `รอดถึงวันที่ ${s.day} · เลเวล ${s.player.level} · ปราบมอน ${s.kills} ตัว`;
+    const shardLine = ` · ได้รับ +${s.shardsEarned ?? 0} Soul Shard`;
+    const stats = `รอดถึงวันที่ ${s.day} · เลเวล ${s.player.level} · ปราบมอน ${s.kills} ตัว${shardLine}`;
     const share = buildShareCardSummary(s, this.data_.skills);
     const topSkillsText = share.topSkillsTh.length > 0 ? `สกิลเด่น: ${share.topSkillsTh.join(' · ')}` : `Seed: ${share.seed}`;
     const cardW = Math.min(420, w - 24);
@@ -1216,8 +1261,11 @@ export class GameScene extends Phaser.Scene {
 
   private newState(): GameState {
     const linkSeed = new URLSearchParams(window.location.search).get('seed');
-    const seed = linkSeed ?? this.launchOpts?.seed ?? `run-${Date.now().toString(36)}`;
     const mode: Mode = this.launchOpts?.mode ?? 'casual';
+    const seed =
+      linkSeed ??
+      this.launchOpts?.seed ??
+      (mode === 'daily' ? dailySeed(new Date().toISOString().slice(0, 10)) : `run-${Date.now().toString(36)}`);
     const run = createRun({ seed, mode, fromSeedLink: linkSeed !== null });
     run.player.x = CORE_X + TILE * 2;
     run.player.y = CORE_Y;

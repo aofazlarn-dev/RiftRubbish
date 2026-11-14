@@ -3,6 +3,8 @@
  * Kept free of Phaser so it can be unit-tested in Vitest alongside evening.ts.
  */
 
+import type { Mode } from '../core/state';
+import { overtimeAllowed } from '../systems/daily';
 import {
   availableChoices,
   canCook,
@@ -117,6 +119,7 @@ export function buildEveningOffer(
   coreMaxHp: number,
   overtimeUsed: boolean,
   selectedMealId: string | null,
+  mode: Mode = 'casual',
 ): EveningOffer {
   const afterMealInv =
     selectedMealId !== null
@@ -127,6 +130,7 @@ export function buildEveningOffer(
       : inv;
   const spareMeals = countCookableDishes(afterMealInv);
   const allowed = new Set(availableChoices({ day, spareMeals, overtimeUsed }));
+  const canOvertime = overtimeAllowed(mode) && allowed.has('overtime');
   const shieldHp = fenceShieldHp(coreMaxHp);
 
   const choices: EveningChoiceCard[] = [
@@ -150,12 +154,14 @@ export function buildEveningOffer(
       titleTh: 'ทำโอทีกะดึก',
       costTh: 'ราคา: อดมื้อเย็นคืนนี้ (ติดหิวจนตาลาย)',
       effectTh: 'Soul Shard ทั้งรอบ +20% (ใช้ได้ครั้งเดียว/รอบ)',
-      enabled: allowed.has('overtime'),
-      lockedReasonTh: overtimeUsed
-        ? 'ใช้ไปแล้วในรอบนี้'
-        : day < OVERTIME_FIRST_DAY
-          ? `เปิดตั้งแต่เย็นวันที่ ${OVERTIME_FIRST_DAY}`
-          : undefined,
+      enabled: canOvertime,
+      lockedReasonTh: !overtimeAllowed(mode)
+        ? 'ไม่มีทำโอทีในโหมด Daily Seed'
+        : overtimeUsed
+          ? 'ใช้ไปแล้วในรอบนี้'
+          : day < OVERTIME_FIRST_DAY
+            ? `เปิดตั้งแต่เย็นวันที่ ${OVERTIME_FIRST_DAY}`
+            : undefined,
     },
   ];
 
@@ -203,4 +209,33 @@ export function resolveEveningSelection(
   }
 
   return { inventory: nextInv, buff, usedOvertime: false };
+}
+
+const SYNERGY_TAG_TH: Record<string, string> = {
+  fire: 'ไฟ',
+  ice: 'น้ำแข็ง',
+  lightning: 'สายฟ้า',
+  shadow: 'เงา',
+  earth: 'ดิน',
+  beast: 'สัตว์',
+};
+
+/** Formats active GDD §6 Synergy tags that have reached threshold >= 2 for the HUD. */
+export function formatSynergySummary(
+  ownedIds: readonly string[],
+  skillDefs: readonly { id: string; tags?: readonly string[] }[],
+): string {
+  const unique = new Set(ownedIds);
+  const counts: Record<string, number> = {};
+  for (const id of unique) {
+    const def = skillDefs.find((d) => d.id === id);
+    if (!def?.tags) continue;
+    for (const tag of def.tags) {
+      if (SYNERGY_TAG_TH[tag]) counts[tag] = (counts[tag] ?? 0) + 1;
+    }
+  }
+  const active = Object.entries(counts)
+    .filter(([, n]) => n >= 2)
+    .map(([tag, n]) => `${SYNERGY_TAG_TH[tag]} (${n})`);
+  return active.length > 0 ? `Synergy: ${active.join(' · ')}` : '';
 }
