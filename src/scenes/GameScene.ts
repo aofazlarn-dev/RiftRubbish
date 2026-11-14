@@ -20,7 +20,8 @@ import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
 import { startRun, stepRun, type RunData } from '../systems/run';
 import { damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
 import { DebugOverlay } from '../ui/DebugOverlay';
-import { findAvailableFusions, pickFusionCard } from './HudOverlayScene';
+import { buildShareCardSummary, findAvailableFusions, pickFusionCard } from './HudOverlayScene';
+import { MobileFpsMonitor, type FpsMonitorSnapshot } from './MobileFpsMonitor';
 
 const FUSION_RECIPES: readonly FusionRecipe[] = skillsJson.fusions as FusionRecipe[];
 
@@ -80,6 +81,7 @@ export class GameScene extends Phaser.Scene {
   private hud!: Phaser.GameObjects.Text;
   private phaseShade!: Phaser.GameObjects.Rectangle;
   private debug!: DebugOverlay;
+  private fpsMonitor = new MobileFpsMonitor();
   private stopAutoSave?: () => void;
   private overlay?: Phaser.GameObjects.Container;
   /** What the overlay currently shows, so it is rebuilt only when that changes. */
@@ -159,13 +161,14 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(deltaMs / 1000, 0.1); // clamp long frames (tab switch, GC pause)
     const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
     for (const f of fx) this.liveFx.push({ ...f, ttl: FX_SECONDS });
+    const fpsSnap = this.fpsMonitor.recordFrame(deltaMs, this.state.monsters.length);
 
     this.drawActors();
     this.drawFx(dt);
     this.drawBars();
     this.phaseShade.setFillStyle(PHASE_TINT[this.state.phase], PHASE_ALPHA[this.state.phase]);
     this.phaseShade.setSize(this.scale.width, this.scale.height);
-    this.drawHud();
+    this.drawHud(fpsSnap);
     this.syncOverlay();
     this.debug.update(this.state, this.children.length);
   }
@@ -248,7 +251,7 @@ export class GameScene extends Phaser.Scene {
     if (s.boss && s.boss.rules.hp > 0) bar(s.boss.x, s.boss.y - 44, 120, s.boss.rules.hp / s.boss.rules.maxHp, 0xff4d6d);
   }
 
-  private drawHud(): void {
+  private drawHud(fpsSnap?: FpsMonitorSnapshot): void {
     const s = this.state;
     const left = phaseRemaining(s);
     const time = Number.isFinite(left) ? `${Math.ceil(left)} วิ` : 'จันทร์เลือด';
@@ -259,11 +262,14 @@ export class GameScene extends Phaser.Scene {
         return `${this.skillName(o.id)} Lv${lv}`;
       })
       .join(' · ');
+    const fpsText = fpsSnap
+      ? ` · FPS ${Math.round(fpsSnap.averageFps)}${fpsSnap.lowEndFallbackActive ? ' · โหมดประหยัด 30fps' : ''}`
+      : '';
     const down = isPlayerDown(s) ? `\nล้มลง! ฟื้นที่ฐานใน ${Math.ceil(s.respawnIn)} วิ` : '';
     this.hud.setText(
       `วันที่ ${s.day}/7 · ${PHASE_LABEL[s.phase]} · ${time}\n` +
         `เลือด ${Math.ceil(s.player.hp)}/${s.player.maxHp} · แกนฐาน ${Math.ceil(s.coreHp)}/${s.coreMaxHp}\n` +
-        `เลเวล ${s.player.level} (${Math.floor(s.player.xp)}/${xpToNext(s.player.level)}) · ปราบ ${s.kills} · มอน ${s.monsters.length}\n` +
+        `เลเวล ${s.player.level} (${Math.floor(s.player.xp)}/${xpToNext(s.player.level)}) · ปราบ ${s.kills} · มอน ${s.monsters.length}${fpsText}\n` +
         (skills ? `${skills}\n` : '') +
         (s.phase === 'day' ? '[R] เรียกคืนเร็ว  ' : '') +
         '[N] รอบใหม่' +
@@ -415,17 +421,38 @@ export class GameScene extends Phaser.Scene {
       ? 'ระบบ: "ไม่อยู่ในแผนเลยนะเนี่ย... ยินดีด้วย"'
       : 'ระบบ: "แกนฐานรุ่นนี้ประกันหมดเมื่อวาน ระบบขออภัย"';
     const stats = `รอดถึงวันที่ ${s.day} · เลเวล ${s.player.level} · ปราบมอน ${s.kills} ตัว`;
+    const share = buildShareCardSummary(s, this.data_.skills);
+    const topSkillsText = share.topSkillsTh.length > 0 ? `สกิลเด่น: ${share.topSkillsTh.join(' · ')}` : `Seed: ${share.seed}`;
     box.add([
-      this.add.text(w / 2, h / 2 - 110, title, { fontFamily: 'sans-serif', fontSize: '30px', color: won ? '#ffd166' : '#ff6b6b', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 - 36, line, { fontFamily: 'sans-serif', fontSize: '17px', color: '#ffffff', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 + 6, stats, { fontFamily: 'sans-serif', fontSize: '17px', color: '#cfd2ff', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 - 138, title, { fontFamily: 'sans-serif', fontSize: '28px', color: won ? '#ffd166' : '#ff6b6b', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 - 74, line, { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 - 30, stats, { fontFamily: 'sans-serif', fontSize: '16px', color: '#cfd2ff', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 + 6, share.nightTrackEmojis, { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffd166', align: 'center' }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 + 38, topSkillsText, { fontFamily: 'sans-serif', fontSize: '14px', color: '#a8dadc', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
     ]);
+    const shareBtn = this.add
+      .rectangle(w / 2, h / 2 + 86, 248, 44, 0x2a9d8f)
+      .setStrokeStyle(2, 0xffffff)
+      .setInteractive({ useHandCursor: true });
+    const shareLabel = this.add
+      .text(w / 2, h / 2 + 86, 'คัดลอกลิงก์ท้าดวล (?seed=)', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' })
+      .setOrigin(0.5);
+    shareBtn.on('pointerup', () => {
+      const shareText = `${share.titleTh}\n${share.nightTrackEmojis}\n${share.shareUrl}`;
+      void navigator.clipboard?.writeText(shareText)?.catch(() => undefined);
+      shareLabel.setText('คัดลอกแล้ว!');
+    });
     const button = this.add
-      .rectangle(w / 2, h / 2 + 70, 220, 54, 0x3a86ff)
+      .rectangle(w / 2, h / 2 + 144, 248, 50, 0x3a86ff)
       .setStrokeStyle(2, 0xffffff)
       .setInteractive({ useHandCursor: true });
     button.on('pointerup', () => this.newRun());
-    box.add([button, this.add.text(w / 2, h / 2 + 70, 'เริ่มรอบใหม่ [N]', { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffffff' }).setOrigin(0.5)]);
+    box.add([
+      shareBtn,
+      shareLabel,
+      button,
+      this.add.text(w / 2, h / 2 + 144, 'เริ่มรอบใหม่ [N]', { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffffff' }).setOrigin(0.5),
+    ]);
     return box;
   }
 
