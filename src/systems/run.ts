@@ -26,6 +26,7 @@ import {
 } from './evening';
 import { expireTutorialGifts, forceTutorialFusion, grantTutorialGift } from './tutorial';
 import { clearChests, spawnChests, tickChests } from './chests';
+import { attachSystemVoice } from './systemVoice';
 import { grantXp, openDraftIfOwed } from './progression';
 import type { SkillDef } from './skills';
 import { buildNightSpawns, waveForNight, type MonsterDef, type WavesData } from './waves';
@@ -51,6 +52,7 @@ export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: Eve
   spawnChests(state, rng.get('loot'));
   state.draftsOwed += 1;
   openDraftIfOwed(state, rng.get('draft'), data.skills, bus, true);
+  if (bus) attachSystemVoice(bus, state); // subscribe before run:start so the welcome line plays (G5)
   bus?.emit('run:start', { seed: state.seed, mode: state.mode });
 }
 
@@ -201,6 +203,7 @@ export function stepRun(
   openDraftIfOwed(state, rng.get('draft'), data.skills, bus);
   if (state.pendingDraft) return [];
 
+  state.runTime = (state.runTime ?? 0) + dt;
   tickSurvival(state, dt);
   tickPlayerTraps(state, dt);
   if (state.phase === 'day') tickChests(state, rng.get('loot'));

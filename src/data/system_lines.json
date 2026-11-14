@@ -1,0 +1,514 @@
+{
+  "WELCOME_01": {
+    "th": "ยินดีด้วย! คุณโดนรถบรรทุกชน ถูกต้องตามสูตรนิยายทุกประการ",
+    "en": "Congratulations! A truck has chosen you. Extremely on-genre."
+  },
+  "WELCOME_02": {
+    "th": "ตรวจบุญเก่า... พอให้เกิดใหม่ได้ แต่ไม่พอให้ได้สกิลดี",
+    "en": "Scanning soul... Quality: acceptable, if we squint."
+  },
+  "WELCOME_03": {
+    "th": "ยินดีต้อนรับสู่ต่างโลก ไม่มีไวไฟ แต่มีมอน ถือว่าแฟร์",
+    "en": "Welcome to another world. No Wi-Fi. Plenty of monsters. Fair trade."
+  },
+  "WELCOME_04": {
+    "th": "ภารกิจ: รอดให้ครบ 7 คืน ข่าวดี: ไม่ต้องไปทำงานวันจันทร์แล้ว",
+    "en": "Objective: survive 7 nights. Upside: Mondays are cancelled."
+  },
+  "WELCOME_05": {
+    "th": "ระบบจะคอยช่วยเหลือคุณ (คำว่า \"ช่วย\" ในที่นี้ใช้แบบหลวมๆ)",
+    "en": "The System is here to help. \"Help\" is used loosely."
+  },
+  "TRASH_01": {
+    "th": "ได้รับ [{skill:J02}] ความสามารถที่คุณฝึกมาทั้งชาติ",
+    "en": "Acquired [{skill:J02}]. Finally, a skill you've practiced for years."
+  },
+  "TRASH_02": {
+    "th": "[{skill:J01}] ศัตรูแสบตา คุณก็แสบตา ยุติธรรมดี",
+    "en": "[{skill:J01}]: blinds enemies. Also you. Mostly you."
+  },
+  "TRASH_03": {
+    "th": "[{skill:J03}] อาวุธยุคหิน สำหรับฮีโร่ยุคหิน",
+    "en": "[{skill:J03}]: cutting-edge tech, circa 10,000 BC."
+  },
+  "TRASH_04": {
+    "th": "[{skill:J04}] ไฟแช็กมือสองยังรู้สึกเหนือกว่า",
+    "en": "[{skill:J04}]: 3% fire, 97% smoke and regret."
+  },
+  "TRASH_05": {
+    "th": "ความหายาก: Common ระบบขอเรียกว่า \"Common มากๆ\"",
+    "en": "Rarity: Common. Aggressively common."
+  },
+  "TRASH_06": {
+    "th": "ระบบไม่ได้ตั้งใจให้สกิลขยะนะ แค่ไม่ได้ตั้งใจให้สกิลดี",
+    "en": "We didn't give you a bad skill on purpose. We just didn't try."
+  },
+  "TRASH_07": {
+    "th": "อย่าเพิ่งทิ้ง ขยะ 2 ชิ้นผสมกัน อาจได้ของเทพ... หรือขยะชิ้นใหญ่",
+    "en": "Don't toss it. Two trash skills might fuse into a legend. Or worse."
+  },
+  "TRASH_08": {
+    "th": "ได้สกิลขยะใบที่ 3 ติด! มอบฉายา \"นักสะสมของเก่า\"",
+    "en": "Third trash skill in a row. Achievement unlocked: Hoarder."
+  },
+  "RARE_01": {
+    "th": "Legendary!? ขอระบบเช็กก่อน... อ้าว ไม่ใช่บั๊กจริงๆ แฮะ",
+    "en": "Legendary?! Checking logs... Huh. Not a bug."
+  },
+  "MYTHIC_01": {
+    "th": "MYTHIC! โปรดทราบ: โชคนี้คุณยืมชาติหน้ามาใช้",
+    "en": "MYTHIC. This luck was borrowed from your next life."
+  },
+  "MYTHIC_02": {
+    "th": "[Mythic] ระบบไม่ได้ตื่นเต้นนะ เสียงมันสั่นเองเฉยๆ",
+    "en": "[Mythic] The System is not excited. The System is just... vibrating."
+  },
+  "MYTHIC_03": {
+    "th": "สูตร Mythic สำเร็จ! ถอดถอนสถานะ \"ตัวประกอบ\" ของคุณแล้ว",
+    "en": "Mythic recipe complete. Your \"Background Character\" status is revoked."
+  },
+  "GIFT_01": {
+    "th": "ของขวัญต้อนรับ! สกิลขยะเกรดพรีเมียม 2 ชิ้น ห่อด้วยความจริงใจ",
+    "en": "Welcome gift! Two premium-grade trash skills. Gift-wrapped."
+  },
+  "GIFT_02": {
+    "th": "การ์ดใบเดียว ปุ่มเดียว กดผสมเลย ระบบไม่ได้ถามความเห็น",
+    "en": "One card. One button. This is not a suggestion."
+  },
+  "GIFT_03": {
+    "th": "ได้ [{skill:R01a}]! แรงมาก เจ็บมาก ทั้งสองฝั่ง",
+    "en": "[{skill:R01a}] acquired! Huge damage. Both directions."
+  },
+  "GIFT_04": {
+    "th": "ทดลองใช้ฟรีหมดแล้ว อยากได้ก็ผสมเองสิ",
+    "en": "Your free trial has expired. Want it back? Craft it yourself."
+  },
+  "QUEST_01": {
+    "th": "เก็บไม้ 20 ชิ้น ไปต่างโลกก็ยังต้องทำงานใช้แรง",
+    "en": "Gather 20 wood. Reincarnation doesn't skip chores. | เก็บไม้ครบ 20 ชิ้นในรอบเดียว | 4 Soul Shard"
+  },
+  "QUEST_02": {
+    "th": "กินมื้อเย็นให้ครบ 3 คืน แม่ฝากมาบอก",
+    "en": "Eat dinner 3 nights. Your mom asked us to check. | กินมื้อเย็น 3 คืนในรอบเดียว | 5 Soul Shard"
+  },
+  "QUEST_03": {
+    "th": "ล้มเองให้ได้ 5 ครั้ง เพื่อวิทยาศาสตร์ (กับดักสะดุดล้มช่วยได้)",
+    "en": "Fall over 5 times. For science. Tip: the Trip Trap helps. | ผู้เล่นล้มรวม 5 ครั้ง จาก {skill:J02} หรือ [กับดักสะดุดล้ม] ในทางเลือกเย็นนี้ (§6, เลือกได้ทุกเย็นจึงทำได้ทุกรอบ) | 5 Soul Shard"
+  },
+  "QUEST_04": {
+    "th": "ผสมสกิล 1 ครั้ง ของขวัญฟรีไม่นับ ระบบจำได้",
+    "en": "Fuse once. The free gift doesn't count. We checked. | ผสมสกิลจาก Draft 1 ครั้ง (ไม่นับ tutorial) | 5 Soul Shard"
+  },
+  "QUEST_05": {
+    "th": "ปราบมอน 300 ตัว ไม่ต้องรู้สึกผิด พวกมันเกิดใหม่ได้",
+    "en": "Defeat 300 monsters. Relax, they have great respawn benefits. | ฆ่ามอนครบ 300 ตัวในรอบเดียว | 5 Soul Shard"
+  },
+  "QUEST_06": {
+    "th": "เปิดหีบเสี่ยง 3 ใบ ชีวิตต้องมีลุ้น",
+    "en": "Open 3 risky chests. What's the worst that could happen? | เปิดหีบเสี่ยง 3 ใบ | 5 Soul Shard"
+  },
+  "QUEST_07": {
+    "th": "รอดคืนที่ 3 โดยแกนฐานเกิน 50% บ้านต้องสวย",
+    "en": "Clear night 3 with the core above 50%. Keep the house tidy. | จบคืนที่ 3 ขณะแกนฐาน HP > 50% | 5 Soul Shard"
+  },
+  "QUEST_08": {
+    "th": "สร้างรั้วขยะ 1 ครั้ง ขยะของคนหนึ่งคือรั้วของอีกคน",
+    "en": "Build a Junk Fence. One person's trash is another's wall. | เลือก \"รั้วขยะ\" ในทางเลือกเย็นนี้ 1 ครั้ง | 4 Soul Shard"
+  },
+  "QUEST_09": {
+    "th": "ห้าม reroll ทั้งรอบ เชื่อในโชคชะตา (ที่ระบบจัดให้)",
+    "en": "Zero rerolls this run. Trust the process. Our process. | ผ่านคืนที่ 3 ขึ้นไปโดยไม่ reroll Draft เลย | 5 Soul Shard"
+  },
+  "QUEST_10": {
+    "th": "ปราบมอน 10 ตัวด้วยอุกกาบาตตัวเอง เจ็บนี้มีความหมาย",
+    "en": "Take out 10 monsters with your own meteor. Pain is a strategy. | ฆ่ามอน 10 ตัวด้วย {skill:R01a} ในรอบเดียว — ตัวทดลองจากของขวัญคืนที่ 1 (มีทุกรอบ Casual) หรือที่ผสมเองก็นับ · ถ้าเกมปิดของขวัญต้อนรับสำหรับผู้เล่นบางกลุ่มในอนาคต ห้ามสุ่มข้อนี้ให้ผู้เล่นกลุ่มนั้น | 5 Soul Shard"
+  },
+  "EV1_OPEN": {
+    "th": "ข้อเสนอพิเศษ! แลกสกิลขยะ 1 ชิ้น กับกล่องสุ่มลึกลับ",
+    "en": "Limited offer: trade one trash skill for a Mystery Box™."
+  },
+  "EV1_OPT_A": {
+    "th": "แลก! ชีวิตคือกาชา",
+    "en": "Deal. Life is a gacha."
+  },
+  "EV1_OPT_B": {
+    "th": "ไม่แลก เราผูกพันกันแล้ว",
+    "en": "No. We've bonded."
+  },
+  "EV1_RES_A_GOOD": {
+    "th": "ได้ Rare ขึ้นไป! ระบบงงพอๆ กับคุณ",
+    "en": "Rare or better! The System is equally confused."
+  },
+  "EV1_RES_A_BAD": {
+    "th": "ได้ Common ใบใหม่ ขยะเปลี่ยนถุง กลิ่นเดิม",
+    "en": "Common. Different trash, same smell."
+  },
+  "EV1_RES_B": {
+    "th": "ระบบเคารพความรัก แม้จะเป็นความรักที่ผิดที่",
+    "en": "Respect. Questionable taste, but respect."
+  },
+  "EV2_OPEN": {
+    "th": "กรุณายอมรับข้อตกลงการใช้งานต่างโลก (4,000 หน้า)",
+    "en": "Please accept the Terms of Reincarnation (4,000 pages)."
+  },
+  "EV2_OPT_A": {
+    "th": "ยอมรับ (ไม่ได้อ่าน)",
+    "en": "Accept (did not read)"
+  },
+  "EV2_OPT_B": {
+    "th": "ขออ่านก่อน",
+    "en": "Actually read it"
+  },
+  "EV2_RES_A": {
+    "th": "ข้อ 3,912: มอนวิ่งเร็วขึ้น 10% ขอบคุณที่ไม่อ่านค่ะ",
+    "en": "Clause 3,912: monsters +10% speed. Thanks for not reading!"
+  },
+  "EV2_RES_B": {
+    "th": "คุณคือคนแรกที่อ่านจริง ระบบซึ้งจนต้องให้ XP เพิ่ม",
+    "en": "First person to ever read it. The System is moved. Have XP."
+  },
+  "EV3_OPEN": {
+    "th": "ระบบกำลังอัปเดต กรุณาอย่าปิดเครื่อง (เครื่อง = คุณ)",
+    "en": "Installing update. Do not turn off your device. You are the device."
+  },
+  "EV3_OPT_A": {
+    "th": "อัปเดตเลย",
+    "en": "Update now"
+  },
+  "EV3_OPT_B": {
+    "th": "เตือนอีกครั้งพรุ่งนี้",
+    "en": "Remind me tomorrow"
+  },
+  "EV3_RES_A": {
+    "th": "อัปเดตเสร็จ! ฟีเจอร์ใหม่: เก่งขึ้นนิดนึง บั๊กเดิม: คุณ",
+    "en": "Update complete. New: slightly stronger. Known issue: still you."
+  },
+  "EV3_RES_B": {
+    "th": "รับทราบ ระบบจะถามใหม่ในเวลาที่ไม่สะดวกที่สุด",
+    "en": "Sure. We'll ask again at the least convenient moment."
+  },
+  "EV4_OPEN": {
+    "th": "แบบสอบถามจากระบบ 1 ข้อ: \"ระบบดูแลคุณดีไหม\" ไม่มีผลอะไร... มั้ง",
+    "en": "System survey: \"Is the System treating you well?\" No effect. Probably."
+  },
+  "EV4_OPT_A": {
+    "th": "ดีมาก ไม่มีอะไรจะติ",
+    "en": "Very well. No notes."
+  },
+  "EV4_OPT_B": {
+    "th": "ควรปรับปรุง",
+    "en": "Needs improvement"
+  },
+  "EV4_RES_A": {
+    "th": "ขอบคุณค่ะ ระบบจะจำความดีนี้ไว้ (ฟื้น HP ให้นิดนึง)",
+    "en": "Thank you! Kindness noted. Have some HP."
+  },
+  "EV4_RES_B": {
+    "th": "รับทราบ ระบบไม่ได้น้อยใจ ปล. คืนนี้มอนเพิ่ม 3 ตัว",
+    "en": "Noted. The System is not upset. Unrelated: 3 bonus monsters tonight."
+  },
+  "EV5_OPEN": {
+    "th": "แมวต่างโลกเดินมานั่งจ้อง มันกำลังประเมินคุณ",
+    "en": "A strange cat is staring at you. You are being evaluated."
+  },
+  "EV5_OPT_A": {
+    "th": "รับเลี้ยง",
+    "en": "Adopt"
+  },
+  "EV5_OPT_B": {
+    "th": "ทำเป็นไม่เห็น",
+    "en": "Pretend you didn't see it"
+  },
+  "EV5_RES_A": {
+    "th": "ยินดีด้วย แมวยอมรับคุณเป็นทาสอย่างเป็นทางการ",
+    "en": "Congratulations. The cat has accepted you as staff."
+  },
+  "EV5_RES_B": {
+    "th": "แมวเดินจากไป แต่มันจำหน้าคุณไว้แล้ว",
+    "en": "The cat leaves. It will remember this."
+  },
+  "EV6_OPEN": {
+    "th": "ห้ามเปิดกล่องนี้ (ระบบพูดจริง รอบนี้ไม่ใช่มุก)",
+    "en": "Do NOT open this box. (We're serious this time.)"
+  },
+  "EV6_OPT_A": {
+    "th": "เปิดสิ รออะไร",
+    "en": "Obviously open it"
+  },
+  "EV6_OPT_B": {
+    "th": "เชื่อระบบสักครั้ง",
+    "en": "Trust the System, just once"
+  },
+  "EV6_RES_A_GOOD": {
+    "th": "ในกล่องมีการ์ดสกิลเกรดดี... ระบบลืมเอาออก ขอคืนได้ไหม",
+    "en": "Good skill cards inside. We forgot to take those out. Give them back?"
+  },
+  "EV6_RES_A_BAD": {
+    "th": "ระบบบอกแล้ว ระบบบอกแล้ว ระบบบอกแล้ว",
+    "en": "We told you. We told you. We told you."
+  },
+  "EV6_RES_B": {
+    "th": "ผู้เล่นคนแรกที่เชื่อฟัง! ระบบซึ้งจนเผลอฮีลให้",
+    "en": "You listened?! Nobody listens. Here, have a heal."
+  },
+  "EVE_FENCE": {
+    "th": "[รั้วขยะ] จ่ายอาหาร 1 ชิ้น แกนฐานได้โล่เฉพาะคืนนี้ ไม่สวยแต่กันได้",
+    "en": "Junk Fence: 1 food → core shield, tonight only. Ugly but load-bearing."
+  },
+  "EVE_TRIP": {
+    "th": "[กับดักสะดุดล้ม] มอนล้ม 2 วิ คุณก็ล้มได้ เพราะคุณคือคุณ",
+    "en": "Trip Trap: monsters fall for 2s. So might you. It's tradition."
+  },
+  "EVE_OT": {
+    "th": "[ทำโอทีกะดึก] Shard +20% ทั้งรอบ แต่อดข้าวเย็น เหมือนชาติก่อนเป๊ะ",
+    "en": "Unpaid Overtime: +20% Shards, no dinner. Just like your past life."
+  },
+  "EVE_OT_DONE": {
+    "th": "ลงเวลาออกงานแล้ว... ล้อเล่น มอนยังไม่เลิกงาน คุณก็เหมือนกัน",
+    "en": "Clocked out. Kidding. The monsters work nights too."
+  },
+  "DOWN_01": {
+    "th": "คุณล้ม (รอบนี้ไม่ใช่สกิล) ฟื้นใน 10 วิ แกนฐานออกค่ารักษาให้",
+    "en": "You're down. Respawn in 10s. The core is covering your hospital bill."
+  },
+  "DOWN_02": {
+    "th": "ตายครั้งที่สองของชีวิต ตัวนับของระบบนับได้ถึงหนึ่ง เลยค้างไปแล้ว",
+    "en": "Second death this lifetime. Our counter only goes to one. It crashed."
+  },
+  "DOWN_03": {
+    "th": "อุกกาบาตหยุดตกตอนคุณเหลือ 20% ตามสัญญา แต่สไลม์ไม่ได้เซ็นด้วย",
+    "en": "Your meteor stopped at 20% HP, as agreed. The slime never signed."
+  },
+  "DOWN_04": {
+    "th": "ล้มบนกับดักตัวเอง มอนขอบคุณสำหรับความร่วมมือ",
+    "en": "Tripped on your own trap. The monsters appreciate your cooperation."
+  },
+  "LOSE_01": {
+    "th": "แกนฐานพังแล้ว ผู้รับเหมาของระบบขอปิดมือถือหนีชั่วคราว",
+    "en": "Base core destroyed. The System's contractor stopped taking calls."
+  },
+  "LOSE_02": {
+    "th": "จบที่คืนที่ {n} ขอเกิดใหม่เป็นตัวร้ายแทนได้ไหม? ไม่ได้ค่ะ",
+    "en": "Fell on night {n}. Requesting villain respawn... Denied."
+  },
+  "LOSE_03": {
+    "th": "แพ้... แต่ยังได้ Shard ครึ่งหนึ่ง ระบบใจดีแบบมีเงื่อนไข",
+    "en": "Defeated. You keep half your Shards. We're generous. Conditionally."
+  },
+  "LOSE_04": {
+    "th": "มอนฉลองกันใหญ่ ทั้งที่รู้ว่าเดี๋ยวคุณก็เกิดใหม่มาอีก",
+    "en": "The monsters are partying. Nobody told them you respawn."
+  },
+  "QUIT_01": {
+    "th": "ยอมแพ้เหรอ? ระบบเข้าใจ อาทิตย์นี้ระบบเองก็ยื่นใบลาไปสองรอบ",
+    "en": "Surrender? Understood. The System filed for leave twice this week."
+  },
+  "QUIT_02": {
+    "th": "ได้ Shard ครึ่งเดียว เท่าแพ้เป๊ะ ระบบคิดเลขไม่เก่ง เลยทำให้ง่าย",
+    "en": "Half your Shards, same as losing. We kept the math simple. For us."
+  },
+  "QUIT_03": {
+    "th": "กลับกลางวันแสกๆ มอนยังไม่ทันได้ทักทายเลย",
+    "en": "Leaving in broad daylight? The monsters didn't even get to say hi."
+  },
+  "WIN_01": {
+    "th": "รอดครบ 7 คืน! ระบบขอถอนคำพูดที่ผ่านมา... เกือบทั้งหมด",
+    "en": "7 nights survived. The System retracts most of its comments."
+  },
+  "WIN_02": {
+    "th": "จันทร์เลือดดับแล้ว ด้วยสกิลที่เริ่มจากขยะ ขยะก็มีวันของมัน",
+    "en": "Blood Moon down. Built from trash. Trash had its day."
+  },
+  "WIN_03": {
+    "th": "ชนะ! Shard +30% ระบบไม่ได้ปรบมือนะ มือมันลื่น",
+    "en": "Victory! +30% Shards. That wasn't applause. Our hand slipped."
+  },
+  "WIN_04": {
+    "th": "เลื่อนขั้นจาก \"ตัวประกอบ\" เป็น \"ตัวประกอบที่รอด\" ยินดีด้วย",
+    "en": "Promoted: from \"Extra\" to \"Extra Who Survived.\""
+  },
+  "FUSE_01": {
+    "th": "ผสมสำเร็จ! ขยะ + ขยะ = ไม่ใช่ขยะ คณิตศาสตร์ต่างโลกค่ะ",
+    "en": "Fusion complete. Trash + trash = not trash. Don't check our math."
+  },
+  "FUSE_02": {
+    "th": "ระบบไม่รู้ว่ามันได้ยังไง แต่มันได้",
+    "en": "Nobody knows why it works. It works."
+  },
+  "FUSE_03": {
+    "th": "ช่องสกิลว่าง 1 ช่อง ความว่างเปล่าที่น่าภูมิใจ",
+    "en": "One slot freed. Inner peace, but for your inventory."
+  },
+  "FUSE_04": {
+    "th": "ช่อง ??? ในสารานุกรมลดลง ระบบเริ่มกังวลแล้ว",
+    "en": "Another ??? revealed. The Encyclopedia is getting nervous."
+  },
+  "FUSE_05": {
+    "th": "ผสมเองครั้งแรก! ไม่มีทดลองใช้ฟรี นี่ของจริงทั้งหมด",
+    "en": "Your first real fusion. No free trial. That was all you."
+  },
+  "RECALL_01": {
+    "th": "กดปุ่ม \"เรียกคืนเร็ว\" ตอนกลางวัน (D22)",
+    "en": "เรียกคืนเร็ว! ข้ามไปตอนเย็นเลย มอนยังแต่งตัวไม่เสร็จ | Early recall! Skipping to dusk. The monsters aren't dressed yet."
+  },
+  "RECALL_02": {
+    "th": "ต่อจาก RECALL_01 ถ้ายังมีของบนแผนที่ (ไม่มีโบนัส ไม่มีโทษ)",
+    "en": "ของที่ยังไม่เก็บ ระบบขอบริจาคให้ธรรมชาติ ไม่มีโบนัสนะ | Unlooted stuff has been donated to nature. No bonus. Just vibes."
+  },
+  "IMPORT_01": {
+    "th": "import save จากเมนูหลัก ขณะมีรอบค้าง → รอบเก่านับเป็นยอมแพ้ (D19)",
+    "en": "นำเข้าเซฟแล้ว รอบที่ค้างนับเป็นยอมแพ้ มอนที่รออยู่ผิดหวังมาก | Save imported. Old run = surrender. The monsters waited for nothing."
+  },
+  "PRACTICE_01": {
+    "th": "เริ่ม Daily ครั้งที่ 2+ ของวัน (D19)",
+    "en": "Daily วันนี้นับไปแล้ว รอบนี้เป็น \"ซ้อม\" ระบบจะบอกทุกคนบนการ์ด | Daily already counted today. This one's \"Practice\". It's on the card."
+  },
+  "SEED_01": {
+    "th": "เริ่มรอบจากลิงก์ `?seed=` (D19)",
+    "en": "รอบจากลิงก์เพื่อน เล่นได้เต็มที่ แต่ไม่ได้ Shard ระบบไม่ใช่สปอนเซอร์ | Friend's seed: full run, zero Shards. The System isn't a sponsor."
+  },
+  "PRE_01": {
+    "th": "เกิดใหม่ทั้งทีก็ดันเป็น",
+    "en": "Reborn as the"
+  },
+  "PRE_02": {
+    "th": "ถูกรถชนแล้วกลายเป็น",
+    "en": "So I Got Hit by a Truck and Became the"
+  },
+  "PRE_03": {
+    "th": "ตำนาน",
+    "en": "The Legend of the"
+  },
+  "PRE_04": {
+    "th": "บันทึกลับของ",
+    "en": "Secret Diary of the"
+  },
+  "PRE_05": {
+    "th": "เมื่อฉันกลายเป็น",
+    "en": "That Time I Became the"
+  },
+  "PRE_06": {
+    "th": "ชีวิตสโลว์ไลฟ์ของ",
+    "en": "My Slow Life as the"
+  },
+  "PRE_07": {
+    "th": "ถูกไล่ออกจากปาร์ตี้ แต่ดันเป็น",
+    "en": "Kicked from the Party, Now I'm the"
+  },
+  "PRE_08": {
+    "th": "ไม่ได้อยากเก่ง แต่ดันเป็น",
+    "en": "I Never Asked to Be the"
+  },
+  "PRE_09": {
+    "th": "ระบบส่งมาให้เป็น",
+    "en": "The System Made Me the"
+  },
+  "PRE_10": {
+    "th": "คู่มือเอาตัวรอดของ",
+    "en": "Survival Guide of the"
+  },
+  "PRE_11": {
+    "th": "ชาติก่อนเป็นพนักงานออฟฟิศ ชาตินี้เป็น",
+    "en": "Ex-Office Worker, Now the"
+  },
+  "PRE_12": {
+    "th": "ปฐมบทแห่ง",
+    "en": "Prologue of the"
+  },
+  "CORE_01": {
+    "th": "J03",
+    "en": "นักขว้างหิน | Rock-Throwing Prodigy"
+  },
+  "CORE_02": {
+    "th": "J02 / R01b",
+    "en": "จอมสะดุด | Professional Tripper"
+  },
+  "CORE_03": {
+    "th": "R01a",
+    "en": "อุกกาบาตเดินได้ | Walking Meteor"
+  },
+  "CORE_04": {
+    "th": "J01 / R02a",
+    "en": "เจ้าพายุฝุ่น | Dust Tornado Lord"
+  },
+  "CORE_05": {
+    "th": "J04 / R02b",
+    "en": "จอมเวทไฟติดยาก | Barely-Lit Archmage"
+  },
+  "CORE_06": {
+    "th": "tag ไฟ",
+    "en": "เชฟเพลิงนรก | Hellfire Chef"
+  },
+  "CORE_07": {
+    "th": "tag น้ำแข็ง",
+    "en": "จอมเวทน้ำแข็งขี้หนาว | Frost Mage Who Hates Cold"
+  },
+  "CORE_08": {
+    "th": "tag สายฟ้า",
+    "en": "มนุษย์ปลั๊กพ่วง | Human Power Strip"
+  },
+  "CORE_09": {
+    "th": "tag สัตว์",
+    "en": "ทาสแมวผู้ยิ่งใหญ่ | Supreme Cat Servant"
+  },
+  "CORE_10": {
+    "th": "tag ดิน",
+    "en": "สถาปนิกโคลน | Mud Architect"
+  },
+  "CORE_11": {
+    "th": "tag เงา",
+    "en": "ฝึกงานแห่งเงา | Shadow Intern"
+  },
+  "CORE_12": {
+    "th": "รั้วขยะ (เลือก ≥3 คืน)",
+    "en": "อัศวินรั้วขยะ | Junk Fence Paladin"
+  },
+  "SUF_01": {
+    "th": "—",
+    "en": "ที่ไม่มีใครขอ | Nobody Asked For"
+  },
+  "SUF_02": {
+    "th": "—",
+    "en": "แต่อยากนอนเฉยๆ | Who Just Wants a Nap"
+  },
+  "SUF_03": {
+    "th": "ชนะโดยแกนฐาน ≤10%",
+    "en": "กับบ้านที่เหลือ 1% | with 1% Base HP"
+  },
+  "SUF_04": {
+    "th": "เลือกทำโอทีกะดึก",
+    "en": "ผู้ทำโอทีไม่ได้ค่าแรง | Who Works Unpaid Overtime"
+  },
+  "SUF_05": {
+    "th": "อดมื้อเย็น ≥3 คืน",
+    "en": "ผู้ไม่เคยได้กินข้าวเย็น | Who Skipped Dinner (Again)"
+  },
+  "SUF_06": {
+    "th": "—",
+    "en": "ที่ระบบไม่ค่อยปลื้ม | the System Barely Tolerates"
+  },
+  "SUF_07": {
+    "th": "ดาเมจอันดับ 1 = สกิลขยะ",
+    "en": "ผู้ทำลายสมดุลโลกด้วยขยะ | Who Broke the Meta with Trash"
+  },
+  "SUF_08": {
+    "th": "ชนะ",
+    "en": "ผู้รอดครบ 7 คืน (เกือบไม่รอด) | Who Survived 7 Nights (Barely)"
+  },
+  "SUF_09": {
+    "th": "—",
+    "en": "ฉบับทดลองใช้ฟรี | (Free Trial Edition)"
+  },
+  "SUF_10": {
+    "th": "—",
+    "en": "ที่หมอกยังไม่กล้ากลืน | the Fog Is Scared Of"
+  },
+  "SUF_11": {
+    "th": "ไม่เคยผสมสกิล",
+    "en": "ผู้ไม่เชื่อในการผสม | Who Refuses to Fuse"
+  },
+  "SUF_12": {
+    "th": "—",
+    "en": "ฉบับรีมาสเตอร์ | (Remastered)"
+  }
+}
