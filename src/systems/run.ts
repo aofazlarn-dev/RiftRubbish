@@ -25,6 +25,7 @@ import {
 import { overtimeAllowed } from './daily';
 import { expireTutorialGifts, forceTutorialFusion, grantTutorialGift } from './tutorial';
 import { clearChests, spawnChests, tickChests } from './chests';
+import { BEAST_T4_SPEED_MULT } from './synergy';
 import { clearGatherDay, placeWell, spawnGatherDay, tickGather } from './gather';
 import { attachSystemVoice } from './systemVoice';
 import { attachShardLedger } from './shards';
@@ -139,6 +140,7 @@ function tickPlayerTraps(state: GameState, dt: number): void {
 function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
   const combat = rng.get('combat');
   if (state.phase === 'night') {
+    state.shadowSaved = false; // shadow 6 can save the player once per night (R4)
     // The evening was opened but not confirmed (sim, or skipped): the game picks for the player.
     if (state.eveningResolved === false) beginEvening(state);
     state.nightCoreStart = state.coreHp; // mission M_NOCORE reads this at dawn
@@ -259,7 +261,8 @@ export function stepRun(
   if (state.phase === 'day') tickChests(state, rng.get('loot'));
   tickGather(state, bus); // daytime auto-pickup of ingredients (R2)
   if (!isPlayerDown(state) && (state.player.stunLeft ?? 0) <= 0) {
-    movePlayer(state.player, input, dt * (state.nightBuff?.speedMult ?? 1), { width: WORLD, height: WORLD });
+    const beastSpeed = (state.synergy?.beast ?? 0) >= 4 ? BEAST_T4_SPEED_MULT : 1; // synergy (R4)
+    movePlayer(state.player, input, dt * (state.nightBuff?.speedMult ?? 1) * beastSpeed, { width: WORLD, height: WORLD });
   }
 
   const before = `${state.day}:${state.phase}`;
