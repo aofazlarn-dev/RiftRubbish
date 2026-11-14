@@ -118,6 +118,13 @@ export interface GameState {
   runTime?: number;
   /** Soul Shard earned by this run, set when the run ends (balance §7). Undefined until then. */
   shardsEarned?: number;
+  /** Today's missions (Casual only) and their running stats; Shards from completed missions (approved draft). */
+  missionIds?: string[];
+  dayStats?: import('../systems/missions').DayStats;
+  missionShards?: number;
+  /** Core HP and kill count at the start of tonight, read at dawn. */
+  nightCoreStart?: number;
+  nightKillBase?: number;
   /** Last time each limited System line was said (run seconds). */
   lineLastAt?: Record<string, number>;
   monsters: MonsterInstance[];

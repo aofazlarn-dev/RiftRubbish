@@ -48,12 +48,14 @@ export function attachShardLedger(bus: EventBus, state: GameState): () => void {
   const off = bus.on('run:end', ({ night, result }) => {
     const outcome = result === 'win' ? 'win' : result === 'surrender' ? 'surrender' : 'lose';
     const nightsSurvived = outcome === 'win' ? 7 : Math.max(0, night - 1);
-    state.shardsEarned = runPayout({
-      nightsSurvived,
-      outcome,
-      overtime: state.overtimeChosen ?? false,
-      seedLink: state.fromSeedLink,
-    });
+    // Mission Shards from completed missions are added after the outcome multiplier (approved draft).
+    state.shardsEarned =
+      runPayout({
+        nightsSurvived,
+        outcome,
+        overtime: state.overtimeChosen ?? false,
+        seedLink: state.fromSeedLink,
+      }) + (state.fromSeedLink ? 0 : state.missionShards ?? 0);
   });
   return off;
 }

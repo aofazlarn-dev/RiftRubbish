@@ -41,3 +41,38 @@ export function dailyMissions(seed: string, isoDate: string, mode: 'casual' | 'd
   }
   return out;
 }
+
+/** What happened today, collected during the day and night, read at dawn. */
+export interface DayStats {
+  kills: number;
+  coreLost: boolean;
+  fuses: number;
+  chestsOpened: number;
+  downs: number;
+  hungry: boolean;
+}
+
+export function freshDayStats(): DayStats {
+  return { kills: 0, coreLost: false, fuses: 0, chestsOpened: 0, downs: 0, hungry: false };
+}
+
+/** Which of the chosen missions were completed today. */
+export function completedMissions(ids: readonly string[], s: DayStats): Mission['id'][] {
+  const done: Mission['id'][] = [];
+  for (const id of ids) {
+    const ok =
+      id === 'M_KILL30' ? s.kills >= 30 :
+      id === 'M_NOCORE' ? !s.coreLost :
+      id === 'M_FUSE' ? s.fuses >= 1 :
+      id === 'M_CHEST' ? s.chestsOpened >= 2 :
+      id === 'M_SURVIVE' ? s.downs <= 1 :
+      id === 'M_EAT' ? !s.hungry : false;
+    if (ok) done.push(id as Mission['id']);
+  }
+  return done;
+}
+
+/** Shards for the completed missions (each already capped at 5). */
+export function missionShards(done: readonly Mission['id'][]): number {
+  return done.reduce((sum, id) => sum + (MISSIONS.find((m) => m.id === id)?.shards ?? 0), 0);
+}
