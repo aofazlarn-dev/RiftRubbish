@@ -280,10 +280,16 @@ export function tickSkills(
     if (hits > 0 && !owned.gift) owned.xp += def.cooldown; // gift skills never level up (G2)
   }
 
-  // "Fresh meat": 3% per kill, heals 20 HP (balance §1.1). The slice applies it at once instead of as a pickup.
+  // "Fresh meat": 3% per kill, heals 20 HP (balance §1.1) and goes into the bag as an
+  // ingredient for the evening (balance §6.2, R2). Applied at once instead of as a pickup.
+  // Hungry tonight = no healing from meat (balance §6.2 debuff).
   const killed = state.monsters.filter((m) => m.hp <= 0).length;
   for (let i = 0; i < killed; i++) {
-    if (rng.chance(MEAT_DROP_CHANCE)) state.player.hp = Math.min(state.player.maxHp, state.player.hp + MEAT_HEAL);
+    if (!rng.chance(MEAT_DROP_CHANCE)) continue;
+    if (state.nightBuff?.hpRegenPerSec !== 0) {
+      state.player.hp = Math.min(state.player.maxHp, state.player.hp + MEAT_HEAL);
+    }
+    state.inventory = { ...(state.inventory ?? {}), meat: (state.inventory?.meat ?? 0) + 1 };
   }
   for (const m of state.monsters) if (m.hp <= 0) eliteCoreOnDeath(state, m.defId); // Elite drops a Core (D6)
   queueDeathEffects(state);

@@ -16,7 +16,6 @@ import { movePlayer, type Vec2 } from './movement';
 import {
   autoMealId,
   fenceShieldHp,
-  gatherDay,
   resolveEvening,
   TRAP_PLAYER_STUN_SEC,
   TRAP_TRIGGER_PX,
@@ -26,6 +25,7 @@ import {
 import { overtimeAllowed } from './daily';
 import { expireTutorialGifts, forceTutorialFusion, grantTutorialGift } from './tutorial';
 import { clearChests, spawnChests, tickChests } from './chests';
+import { clearGatherDay, placeWell, spawnGatherDay, tickGather } from './gather';
 import { attachSystemVoice } from './systemVoice';
 import { attachShardLedger } from './shards';
 import { attachMissionTracker, chooseMissions, settleDay } from './missionTracker';
@@ -58,7 +58,8 @@ export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: Eve
   const patrol = data.waves.days.find((d) => d.day === 1);
   if (state.mode === 'casual') applyMeta(state, loadMeta().owned); // owned meta applies to Casual runs only (GDD §2)
   if (patrol) spawnDayPatrols(state, patrol, rng.get('combat'), data.monsters);
-  state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
+  placeWell(state, rng.get('map'));
+  spawnGatherDay(state, rng.get('loot'));
   spawnChests(state, rng.get('loot'));
   state.draftsOwed += 1;
   openDraftIfOwed(state, rng.get('draft'), data.skills, bus, true);
@@ -167,6 +168,7 @@ function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
     const opened = (state.chests ?? []).filter((c) => c.opened).length;
     state.dayStats = { ...(state.dayStats ?? freshDayStats()), chestsOpened: opened };
     clearChests(state); // daytime chests end at dusk
+    clearGatherDay(state); // unpicked grain and mushrooms wither (R2)
     // The evening opens; the player resolves it on the evening screen (submitEvening).
     // If nothing resolves it (sim, or the player never confirms), night start does (below).
     state.eveningResolved = false;
@@ -184,7 +186,8 @@ function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
     state.nightBuff = undefined;
     state.coreShield = 0; // the fence lasts only through the night
     state.traps = [];
-    state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
+    placeWell(state, rng.get('map')); // older saves had no well
+    spawnGatherDay(state, rng.get('loot')); // nodes to walk to; nothing is given for free (R2)
     expireTutorialGifts(state); // the welcome gift leaves at dawn of day 2 (G2)
     spawnChests(state, rng.get('loot'));
     const patrol = data.waves.days.find((d) => d.day === state.day);
@@ -254,6 +257,7 @@ export function stepRun(
   tickSurvival(state, dt);
   tickPlayerTraps(state, dt);
   if (state.phase === 'day') tickChests(state, rng.get('loot'));
+  tickGather(state, bus); // daytime auto-pickup of ingredients (R2)
   if (!isPlayerDown(state) && (state.player.stunLeft ?? 0) <= 0) {
     movePlayer(state.player, input, dt * (state.nightBuff?.speedMult ?? 1), { width: WORLD, height: WORLD });
   }

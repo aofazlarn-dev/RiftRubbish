@@ -18,6 +18,8 @@ export interface GameEvents {
   'disaster:warn': { id: string; inSeconds: number };
   /** A line from the "System" (system_lines.md). `id` is the line id; the scene shows th or en. */
   'system:say': { id: string; th: string; en: string };
+  /** Daytime auto-pickup of an ingredient (Gap round 2 R2). */
+  'item:pickup': { kind: string; count: number; x: number; y: number };
 }
 
 type Handler<T> = (payload: T) => void;
