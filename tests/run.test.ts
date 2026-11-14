@@ -115,9 +115,19 @@ describe('monsters (balance ยง3.3, ยง5.1)', () => {
     expect(s.spawnQueue).toHaveLength(20);
   });
 
-  it('affix monsters have +50% HP', () => {
+  it('junk-shield affix adds a shield worth 50% of max HP (the +50% effective HP), HP unchanged', () => {
     const s = newState();
-    expect(spawnMonster(s, findDef(data.monsters, 'goblin'), 0, 0, { affix: true }).hp).toBe(45);
+    const m = spawnMonster(s, findDef(data.monsters, 'goblin'), 0, 0, { affixId: 'junk_shield' });
+    expect(m.hp).toBe(30);
+    expect(m.shield).toBe(15);
+    expect(m.affix).toBe(true);
+  });
+
+  it('other affixes do not change HP', () => {
+    const s = newState();
+    const m = spawnMonster(s, findDef(data.monsters, 'goblin'), 0, 0, { affixId: 'rush' });
+    expect(m.hp).toBe(30);
+    expect(m.shield).toBeUndefined();
   });
 });
 

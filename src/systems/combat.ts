@@ -12,7 +12,8 @@ import type { GameState } from '../core/state';
 import { dist, TILE } from '../core/world';
 import { applyPassives, isPlayerDown } from './base';
 import { damageBoss } from './boss';
-import { AFFIX_XP_MULTIPLIER, findDef } from './monsters';
+import { applyDamageWithShield, combinedResist, resistChoiceFor, RESIST_CHOICE_RATIO } from './affix';
+import { AFFIX_XP_MULTIPLIER, findDef, queueDeathEffects } from './monsters';
 import { damageAtLevel, levelForXp, type SkillDef } from './skills';
 import type { MonsterDef } from './waves';
 
@@ -61,6 +62,19 @@ export function elementMultiplier(def: Pick<MonsterDef, 'weak' | 'resist'>, tags
   return best;
 }
 
+/**
+ * Element multiplier plus the resist-by-choice affix (balance §4). The affix resist (50%)
+ * applies when the hit carries the monster's chosen tag. Total reduction is capped at 75%
+ * (combinedResist). A weakness (mult > 1) is kept and only reduced by the affix.
+ */
+export function affixedMultiplier(m: { resistTag?: string | null }, def: Pick<MonsterDef, 'weak' | 'resist'>, tags: readonly string[]): number {
+  const base = elementMultiplier(def, tags);
+  const affixRes = tags.some((t) => resistChoiceFor(t, m.resistTag ?? null) > 0) ? RESIST_CHOICE_RATIO : 0;
+  if (affixRes === 0) return base;
+  if (base > 1) return base * (1 - affixRes);
+  return 1 - combinedResist(1 - base, affixRes);
+}
+
 function buildTargets(
   state: GameState,
   monsterDefs: readonly MonsterDef[],
@@ -75,7 +89,11 @@ function buildTargets(
       dead: m.hp <= 0,
       hit(damage, tags) {
         if (target.dead) return;
-        m.hp -= damage * elementMultiplier(def, tags);
+        const hit = damage * affixedMultiplier(m, def, tags);
+        if (m.shieldMax !== undefined) m.shieldIdle = 0; // any hit resets the junk-shield regen timer
+        const after = applyDamageWithShield(m.shield ?? 0, m.hp, hit);
+        m.shield = after.shield;
+        m.hp = after.hp;
         if (m.hp <= 0) {
           target.dead = true;
           state.kills += 1;
@@ -265,6 +283,7 @@ export function tickSkills(
   for (let i = 0; i < killed; i++) {
     if (rng.chance(MEAT_DROP_CHANCE)) state.player.hp = Math.min(state.player.maxHp, state.player.hp + MEAT_HEAL);
   }
+  queueDeathEffects(state);
   state.monsters = state.monsters.filter((m) => m.hp > 0);
   applyPassives(state, skillDefs); // passive defence may have levelled up
   return result;

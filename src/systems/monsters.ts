@@ -1,18 +1,32 @@
 /**
- * Monster spawning, steering and attacks (balance §3.3, §5.1, §5.2). Pure, no Phaser.
+ * Monster spawning, steering and attacks (balance §3.3, §4, §5.1, §5.2). Pure, no Phaser.
  * Monsters are plain objects in GameState.monsters; the scene pools the sprites.
  * Steering is a straight line to the target (GDD §12) — no pathfinding in the slice.
  */
 
 import type { EventBus } from '../core/events';
 import type { RngStream } from '../core/rng';
-import type { GameState, MonsterInstance } from '../core/state';
+import type { GameState, MonsterInstance, PendingBurst } from '../core/state';
 import { clampToWorld, CORE_X, CORE_Y, dist, TILE } from '../core/world';
+import {
+  AFFIXES,
+  BURST_CORE_DAMAGE,
+  BURST_DELAY_SEC,
+  BURST_PLAYER_DAMAGE,
+  BURST_RADIUS_PX,
+  dominantTag,
+  inLeaderAura,
+  JUNK_SHIELD_REGEN_AFTER_SEC,
+  junkShieldHp,
+  LEADER_AURA_DAMAGE_MULT,
+  LEADER_AURA_SPEED_MULT,
+  RUSH_SPEED_MULT,
+  type AffixId,
+} from './affix';
 import { damageCore, damagePlayer, isPlayerDown } from './base';
+import type { SkillDef } from './skills';
 import type { DayPatrol, MonsterDef } from './waves';
 
-/** Affix monsters are tougher; the slice folds all affixes into +50% HP (balance §4 estimate). */
-export const AFFIX_HP_MULTIPLIER = 1.5;
 export const AFFIX_XP_MULTIPLIER = 2;
 const CONTACT_RANGE = 22;
 const CORE_REACH = 44;
@@ -30,27 +44,38 @@ export function findDef(defs: readonly MonsterDef[], id: string): MonsterDef {
   return def;
 }
 
-export function spawnMonster(
-  state: GameState,
-  def: MonsterDef,
-  x: number,
-  y: number,
-  opts: { affix?: boolean; patrol?: boolean } = {},
-): MonsterInstance {
-  const hp = def.hp * (opts.affix ? AFFIX_HP_MULTIPLIER : 1);
+export interface SpawnOptions {
+  affixId?: AffixId;
+  /** Resist-by-choice tag, decided when the monster spawns (balance §4). */
+  resistTag?: string | null;
+  patrol?: boolean;
+}
+
+export function spawnMonster(state: GameState, def: MonsterDef, x: number, y: number, opts: SpawnOptions = {}): MonsterInstance {
   const monster: MonsterInstance = {
     uid: state.nextUid++,
     defId: def.id,
     x: clampToWorld(x),
     y: clampToWorld(y),
-    hp,
-    maxHp: hp,
+    hp: def.hp,
+    maxHp: def.hp,
     attackTimer: RANGED_INTERVAL,
     coreTimer: def.coreInterval,
     slowLeft: 0,
-    affix: opts.affix ?? false,
+    affix: opts.affixId !== undefined,
     patrol: opts.patrol ?? false,
   };
+  if (opts.affixId !== undefined) {
+    monster.affixId = opts.affixId;
+    monster.resistTag = opts.resistTag ?? null;
+    if (opts.affixId === 'junk_shield') {
+      // The junk shield is the +50% effective HP that balance §4 assumes (not a raw HP bonus).
+      const shield = junkShieldHp(def.hp);
+      monster.shield = shield;
+      monster.shieldMax = shield;
+      monster.shieldIdle = 0;
+    }
+  }
   state.monsters.push(monster);
   return monster;
 }
@@ -62,11 +87,29 @@ export function ringPoint(rng: RngStream, minTiles: number, maxTiles: number, cx
   return { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
 }
 
+/** Owned skills' tags, counted once per skill (balance §4: "the tag the player has the most of"). */
+function ownedTagCounts(state: GameState, skillDefs: readonly SkillDef[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const owned of state.skills) {
+    const def = skillDefs.find((d) => d.id === owned.id);
+    if (!def) continue;
+    for (const tag of def.tags) counts[tag] = (counts[tag] ?? 0) + 1;
+  }
+  return counts;
+}
+
 /**
  * Spawns tonight's queued monsters whose time has come, 14–18 tiles from the core.
  * Stops at `maxOnScreen`; the rest wait in the queue (balance §5.1).
+ * Affixed monsters get a random affix from the five (balance §4).
  */
-export function tickSpawns(state: GameState, rng: RngStream, defs: readonly MonsterDef[], maxOnScreen: number): void {
+export function tickSpawns(
+  state: GameState,
+  rng: RngStream,
+  defs: readonly MonsterDef[],
+  maxOnScreen: number,
+  skillDefs: readonly SkillDef[] = [],
+): void {
   while (
     state.spawnQueue.length > 0 &&
     state.spawnQueue[0].t <= state.phaseElapsed &&
@@ -74,7 +117,10 @@ export function tickSpawns(state: GameState, rng: RngStream, defs: readonly Mons
   ) {
     const event = state.spawnQueue.shift()!;
     const p = ringPoint(rng, 14, 18);
-    spawnMonster(state, findDef(defs, event.monsterId), p.x, p.y, { affix: event.affix });
+    const affixId = event.affix ? rng.pick(AFFIXES).id : undefined;
+    const resistTag =
+      affixId === 'resist_choice' ? dominantTag(ownedTagCounts(state, skillDefs), (tags) => rng.pick(tags)) : null;
+    spawnMonster(state, findDef(defs, event.monsterId), p.x, p.y, { affixId, resistTag });
   }
 }
 
@@ -108,6 +154,20 @@ export function spawnDayPatrols(
 export function clearMonstersAtDawn(state: GameState): void {
   state.monsters = [];
   state.spawnQueue = [];
+  state.bursts = [];
+}
+
+/**
+ * Queues a burst for every dead monster with the burst affix. Call this before the dead
+ * monsters are removed from state.monsters (balance §4: the burst goes off 1.0 s later).
+ */
+export function queueDeathEffects(state: GameState): void {
+  for (const m of state.monsters) {
+    if (m.hp > 0 || m.affixId !== 'burst') continue;
+    const list: PendingBurst[] = state.bursts ?? [];
+    list.push({ x: m.x, y: m.y, timer: BURST_DELAY_SEC });
+    state.bursts = list;
+  }
 }
 
 type Target = 'player' | 'core' | 'none';
@@ -135,12 +195,52 @@ function moveToward(m: MonsterInstance, tx: number, ty: number, speed: number, d
   m.y += ((ty - m.y) / d) * step;
 }
 
-/** Moves every monster and resolves its attacks on the player and the core. */
+/** Junk shield: refills after JUNK_SHIELD_REGEN_AFTER_SEC without a hit (balance §4). */
+function tickShield(m: MonsterInstance, dt: number): void {
+  if (m.shieldMax === undefined) return;
+  m.shieldIdle = (m.shieldIdle ?? 0) + dt;
+  if (m.shieldIdle >= JUNK_SHIELD_REGEN_AFTER_SEC) m.shield = m.shieldMax;
+}
+
+/** Pack leader aura: any other live leader within range gives the bonus (no stacking). */
+function inAura(state: GameState, m: MonsterInstance): boolean {
+  return state.monsters.some(
+    (leader) => leader !== m && leader.affixId === 'pack_leader' && inLeaderAura(dist(m.x, m.y, leader.x, leader.y), 1),
+  );
+}
+
+/** Explosions from dead burst monsters: hit the player and the core if inside the radius. */
+function tickBursts(state: GameState, dt: number, bus?: EventBus): void {
+  const list = state.bursts ?? [];
+  if (list.length === 0) return;
+  const ready: PendingBurst[] = [];
+  const rest: PendingBurst[] = [];
+  for (const b of list) {
+    b.timer -= dt;
+    (b.timer <= 0 ? ready : rest).push(b);
+  }
+  state.bursts = rest;
+  for (const b of ready) {
+    if (dist(b.x, b.y, state.player.x, state.player.y) <= BURST_RADIUS_PX) {
+      damagePlayer(state, BURST_PLAYER_DAMAGE, bus);
+    }
+    if (dist(b.x, b.y, CORE_X, CORE_Y) <= BURST_RADIUS_PX) damageCore(state, BURST_CORE_DAMAGE, bus);
+  }
+}
+
+/** Moves every monster, resolves its attacks on the player and the core, then explosions. */
 export function tickMonsters(state: GameState, dt: number, defs: readonly MonsterDef[], bus?: EventBus): void {
   for (const m of state.monsters) {
-    if (state.status !== 'playing') return;
+    if (state.status !== 'playing') break;
     const def = findDef(defs, m.defId);
-    const speed = def.speed * (m.slowLeft > 0 ? SLOW_FACTOR : 1);
+    tickShield(m, dt);
+    const aura = inAura(state, m);
+    const speed =
+      def.speed *
+      (m.slowLeft > 0 ? SLOW_FACTOR : 1) *
+      (m.affixId === 'rush' ? RUSH_SPEED_MULT : 1) *
+      (aura ? LEADER_AURA_SPEED_MULT : 1);
+    const dmgMult = aura ? LEADER_AURA_DAMAGE_MULT : 1;
     if (m.slowLeft > 0) m.slowLeft = Math.max(0, m.slowLeft - dt);
 
     const target = chooseTarget(state, m, def);
@@ -153,21 +253,22 @@ export function tickMonsters(state: GameState, dt: number, defs: readonly Monste
       if (ranged) {
         m.attackTimer -= dt;
         if (m.attackTimer <= 0 && d <= RANGED_SHOOT_TILES * TILE) {
-          damagePlayer(state, def.damage, bus);
+          damagePlayer(state, def.damage * dmgMult, bus);
           m.attackTimer = RANGED_INTERVAL;
         }
       } else if (d <= CONTACT_RANGE) {
-        damagePlayer(state, def.damage, bus);
+        damagePlayer(state, def.damage * dmgMult, bus);
       }
     } else {
       moveToward(m, CORE_X, CORE_Y, speed, dt, CORE_REACH * 0.8);
       if (def.coreDamage > 0 && dist(m.x, m.y, CORE_X, CORE_Y) <= CORE_REACH) {
         m.coreTimer -= dt;
         if (m.coreTimer <= 0) {
-          damageCore(state, def.coreDamage, bus);
+          damageCore(state, def.coreDamage * dmgMult, bus);
           m.coreTimer = def.coreInterval;
         }
       }
     }
   }
+  tickBursts(state, dt, bus);
 }
