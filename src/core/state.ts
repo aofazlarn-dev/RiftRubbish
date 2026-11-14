@@ -37,6 +37,8 @@ export interface OwnedSkill {
   xp: number;
   /** Seconds until an Active can cast again. Unused for Passives. */
   cooldownLeft: number;
+  /** Welcome gift (tutorial): outside the slots, never levels up, leaves at dawn of day 2. */
+  gift?: boolean;
 }
 
 export interface MonsterInstance {
@@ -100,6 +102,8 @@ export interface GameState {
   rng: RngState;
   status: RunStatus;
   skills: OwnedSkill[];
+  /** Welcome gift state (Casual only): 'gift' → 'fused' → 'done'. Undefined = no gift. */
+  tutorial?: 'gift' | 'fused' | 'done';
   monsters: MonsterInstance[];
   /** Optional so saves made before affixes existed still load. Use `?? []`. */
   bursts?: PendingBurst[];

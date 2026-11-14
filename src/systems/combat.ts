@@ -276,7 +276,7 @@ export function tickSkills(
     owned.cooldownLeft = def.cooldown;
     const mealDamage = state.nightBuff?.damageMult ?? 1;
     const hits = cast(def, damageAtLevel(def, levelForXp(owned.xp)) * mealDamage, aim, targets, px, py, rng, result.fx);
-    if (hits > 0) owned.xp += def.cooldown;
+    if (hits > 0 && !owned.gift) owned.xp += def.cooldown; // gift skills never level up (G2)
   }
 
   // "Fresh meat": 3% per kill, heals 20 HP (balance §1.1). The slice applies it at once instead of as a pickup.

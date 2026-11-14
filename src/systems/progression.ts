@@ -42,8 +42,9 @@ export function upgradeXp(level: number): number {
 
 function buildCards(state: GameState, rng: RngStream, pool: readonly SkillDef[], first: boolean): string[] {
   const owned = new Set(state.skills.map((s) => s.id));
+  // Gift skills sit outside the slots, so they do not count toward the caps.
   const count = (kind: SkillDef['kind']) =>
-    state.skills.filter((s) => pool.find((d) => d.id === s.id)?.kind === kind).length;
+    state.skills.filter((s) => !s.gift && pool.find((d) => d.id === s.id)?.kind === kind).length;
   const activeFull = count('active') >= MAX_ACTIVE;
   const passiveFull = count('passive') >= MAX_PASSIVE;
 
@@ -58,7 +59,7 @@ function buildCards(state: GameState, rng: RngStream, pool: readonly SkillDef[],
   const cards = drawDraft(rng, eligible, owned, { count: DRAFT_CARDS }).map((s) => `skill:${s.id}`);
 
   // Fill the remaining cards with upgrades for skills that can still level.
-  const upgradable = state.skills.filter((s) => levelForXp(s.xp) < MAX_NORMAL_LEVEL).map((s) => s.id);
+  const upgradable = state.skills.filter((s) => !s.gift && levelForXp(s.xp) < MAX_NORMAL_LEVEL).map((s) => s.id);
   while (cards.length < DRAFT_CARDS && upgradable.length > 0) {
     const id = rng.pick(upgradable);
     upgradable.splice(upgradable.indexOf(id), 1);
