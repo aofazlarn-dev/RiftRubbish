@@ -94,7 +94,17 @@ export class GameScene extends Phaser.Scene {
   private sfx = new SoundEffects();
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private joystick!: VirtualJoystick;
-  private hud!: Phaser.GameObjects.Text;
+  private hudGraphics!: Phaser.GameObjects.Graphics;
+  private hudTitle!: Phaser.GameObjects.Text;
+  private hudHpText!: Phaser.GameObjects.Text;
+  private hudCoreText!: Phaser.GameObjects.Text;
+  private hudMetaText!: Phaser.GameObjects.Text;
+  private downBanner!: Phaser.GameObjects.Text;
+  private recallBtn!: Phaser.GameObjects.Text;
+  private muteBtn!: Phaser.GameObjects.Text;
+  private restartBtn!: Phaser.GameObjects.Text;
+  private skillDock?: Phaser.GameObjects.Container;
+  private skillDockKey = '';
   private phaseShade!: Phaser.GameObjects.Rectangle;
   private debug!: DebugOverlay;
   private fpsMonitor = new MobileFpsMonitor();
@@ -185,6 +195,8 @@ export class GameScene extends Phaser.Scene {
     this.liveFx = [];
     this.overlay = undefined;
     this.overlayKey = '';
+    this.skillDock = undefined;
+    this.skillDockKey = '';
     this.bus.clear();
     this.ensureAnimations();
 
@@ -226,19 +238,75 @@ export class GameScene extends Phaser.Scene {
     }
     this.joystick = new VirtualJoystick(this);
 
-    this.hud = this.add
-      .text(12, 12, '', {
-        fontFamily: 'sans-serif',
-        fontSize: '16px',
-        color: '#ffffff',
-        lineSpacing: 3,
-        wordWrap: { width: this.hudWrapWidth() },
-      })
+    this.hudGraphics = this.add.graphics().setScrollFactor(0).setDepth(890);
+    this.hudTitle = this.add
+      .text(18, 16, '', { fontFamily: 'system-ui, sans-serif', fontSize: '14px', fontStyle: 'bold', color: '#ffd166' })
       .setScrollFactor(0)
       .setDepth(900);
+    this.hudHpText = this.add
+      .text(22, 37, '', { fontFamily: 'system-ui, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#ffffff' })
+      .setScrollFactor(0)
+      .setDepth(901);
+    this.hudCoreText = this.add
+      .text(22, 55, '', { fontFamily: 'system-ui, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#ffffff' })
+      .setScrollFactor(0)
+      .setDepth(901);
+    this.hudMetaText = this.add
+      .text(18, 88, '', { fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#d8b4f8' })
+      .setScrollFactor(0)
+      .setDepth(900);
+    this.downBanner = this.add
+      .text(this.scale.width / 2, 130, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#ff6b6b',
+        backgroundColor: '#1a0814dd',
+        padding: { x: 12, y: 6 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(905)
+      .setVisible(false);
+
+    const btnStyle = {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '13px',
+      color: '#ffffff',
+      backgroundColor: '#1b122bcc',
+      padding: { x: 8, y: 5 },
+    };
+    const btnY = this.scale.height - 34;
+    this.recallBtn = this.add
+      .text(10, btnY, '[R] เรียกคืนเร็ว', btnStyle)
+      .setScrollFactor(0)
+      .setDepth(900)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => {
+        if (this.state.status === 'playing' && !this.state.pendingDraft) recallEarly(this.state, this.bus);
+      });
+    this.muteBtn = this.add
+      .text(122, btnY, '[M] เสียง: เปิด', btnStyle)
+      .setScrollFactor(0)
+      .setDepth(900)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => {
+        this.sfx.toggleMute();
+      });
+    this.restartBtn = this.add
+      .text(226, btnY, '[N] รอบใหม่', btnStyle)
+      .setScrollFactor(0)
+      .setDepth(900)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => this.newRun());
+
     this.debug = new DebugOverlay(this);
     const onResize = (size: Phaser.Structs.Size) => {
-      this.hud.setWordWrapWidth(this.hudWrapWidth(size.width));
+      const y = size.height - 34;
+      this.recallBtn.setY(y);
+      this.muteBtn.setY(y);
+      this.restartBtn.setY(y);
+      this.downBanner.setX(size.width / 2);
     };
     this.scale.on('resize', onResize);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', onResize));
@@ -421,33 +489,93 @@ export class GameScene extends Phaser.Scene {
 
   private drawHud(fpsSnap?: FpsMonitorSnapshot): void {
     const s = this.state;
+    const panelW = Math.min(248, Math.max(196, this.scale.width - (import.meta.env.DEV ? 154 : 20)));
+    const barW = panelW - 16;
+    const g = this.hudGraphics.clear();
+
+    // Translucent dark RPG HUD panel
+    g.fillStyle(0x0d0614, 0.82).fillRoundedRect(10, 10, panelW, 100, 10);
+    g.lineStyle(1.5, 0x9b4dca, 0.9).strokeRoundedRect(10, 10, panelW, 100, 10);
+
+    // Player HP bar
+    const hpRatio = Phaser.Math.Clamp(s.player.hp / Math.max(1, s.player.maxHp), 0, 1);
+    g.fillStyle(0x2b121e, 1).fillRoundedRect(18, 36, barW, 14, 4);
+    g.fillStyle(hpRatio < 0.35 ? 0xff4d6d : 0x06d6a0, 1).fillRoundedRect(18, 36, Math.max(2, barW * hpRatio), 14, 4);
+
+    // Core HP bar
+    const coreRatio = Phaser.Math.Clamp(s.coreHp / Math.max(1, s.coreMaxHp), 0, 1);
+    g.fillStyle(0x1b122b, 1).fillRoundedRect(18, 54, barW, 14, 4);
+    g.fillStyle(0x9d4edd, 1).fillRoundedRect(18, 54, Math.max(2, barW * coreRatio), 14, 4);
+
+    // XP bar
+    const nextXp = Math.max(1, xpToNext(s.player.level));
+    const xpRatio = Phaser.Math.Clamp(s.player.xp / nextXp, 0, 1);
+    g.fillStyle(0x102136, 1).fillRoundedRect(18, 73, barW, 7, 3);
+    g.fillStyle(0x4cc9f0, 1).fillRoundedRect(18, 73, Math.max(2, barW * xpRatio), 7, 3);
+
     const left = phaseRemaining(s);
     const time = Number.isFinite(left) ? `${Math.ceil(left)} วิ` : 'จันทร์เลือด';
-    const skills = s.skills
+    this.hudTitle.setText(`วันที่ ${s.day}/7 · ${PHASE_LABEL[s.phase]} · ${time}`);
+    this.hudHpText.setText(`เลือด ${Math.ceil(s.player.hp)}/${s.player.maxHp}`);
+    this.hudCoreText.setText(`แกนฐาน ${Math.ceil(s.coreHp)}/${s.coreMaxHp}`);
+    const fpsText = fpsSnap
+      ? ` · FPS ${Math.round(fpsSnap.averageFps)}${fpsSnap.lowEndFallbackActive ? ' (30fps)' : ''}`
+      : '';
+    this.hudMetaText.setText(`Lv${s.player.level} · ปราบ ${s.kills} · มอน ${s.monsters.length}${fpsText}`);
+
+    this.recallBtn.setVisible(s.phase === 'day' && s.status === 'playing' && !s.pendingDraft);
+    this.muteBtn.setText(`[M] ${this.sfx.isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด'}`);
+    if (isPlayerDown(s)) {
+      this.downBanner.setText(`ล้มลง! ฟื้นที่ฐานใน ${Math.ceil(s.respawnIn)} วิ`).setVisible(true);
+    } else {
+      this.downBanner.setVisible(false);
+    }
+
+    this.syncSkillDock();
+  }
+
+  private syncSkillDock(): void {
+    const key = this.state.skills
       .map((o) => {
         const def = this.data_.skills.find((d) => d.id === o.id);
         const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
-        return `${this.skillName(o.id)} Lv${lv}`;
+        return `${o.id}:${lv}`;
       })
-      .join(' · ');
-    const fpsText = fpsSnap
-      ? ` · FPS ${Math.round(fpsSnap.averageFps)}${fpsSnap.lowEndFallbackActive ? ' · โหมดประหยัด 30fps' : ''}`
-      : '';
-    const down = isPlayerDown(s) ? `\nล้มลง! ฟื้นที่ฐานใน ${Math.ceil(s.respawnIn)} วิ` : '';
-    this.hud.setText(
-      `วันที่ ${s.day}/7 · ${PHASE_LABEL[s.phase]} · ${time}\n` +
-        `เลือด ${Math.ceil(s.player.hp)}/${s.player.maxHp} · แกนฐาน ${Math.ceil(s.coreHp)}/${s.coreMaxHp}\n` +
-        `เลเวล ${s.player.level} (${Math.floor(s.player.xp)}/${xpToNext(s.player.level)}) · ปราบ ${s.kills} · มอน ${s.monsters.length}${fpsText}\n` +
-        (skills ? `${skills}\n` : '') +
-        (s.phase === 'day' ? '[R] เรียกคืนเร็ว  ' : '') +
-        '[N] รอบใหม่  ' +
-        `[M] ${this.sfx.isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด'}` +
-        down,
-    );
-  }
+      .join(',');
+    if (key === this.skillDockKey) return;
+    this.skillDockKey = key;
+    this.skillDock?.destroy();
+    this.skillDock = undefined;
+    if (this.state.skills.length === 0) return;
 
-  private skillName(id: string): string {
-    return this.data_.skills.find((d) => d.id === id)?.name.th ?? id;
+    const dock = this.add.container(10, 116).setScrollFactor(0).setDepth(900);
+    this.state.skills.forEach((o, i) => {
+      const def = this.data_.skills.find((d) => d.id === o.id);
+      const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
+      const x = i * 42;
+      const borderColor = def ? RARITY_COLOR[def.rarity] : 0x9b4dca;
+      const slot = this.add.rectangle(x, 0, 36, 36, 0x120a24, 0.9).setOrigin(0).setStrokeStyle(2, borderColor);
+      dock.add(slot);
+      if (this.textures.exists(`icon_${o.id}`)) {
+        dock.add(this.add.image(x + 18, 18, `icon_${o.id}`).setDisplaySize(28, 28));
+      }
+      dock.add(
+        this.add
+          .text(x + 34, 34, `${lv}`, {
+            fontFamily: 'monospace',
+            fontSize: '10px',
+            fontStyle: 'bold',
+            color: '#ffd166',
+            backgroundColor: '#0d0614cc',
+            padding: { x: 2, y: 0 },
+          })
+          .setOrigin(1, 1),
+      );
+    });
+    dock.each((child: Phaser.GameObjects.GameObject) => {
+      (child as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
+    });
+    this.skillDock = dock;
   }
 
   // ---- Draft and end-of-run overlays -----------------------------------------------------
@@ -607,12 +735,17 @@ export class GameScene extends Phaser.Scene {
     const stats = `รอดถึงวันที่ ${s.day} · เลเวล ${s.player.level} · ปราบมอน ${s.kills} ตัว`;
     const share = buildShareCardSummary(s, this.data_.skills);
     const topSkillsText = share.topSkillsTh.length > 0 ? `สกิลเด่น: ${share.topSkillsTh.join(' · ')}` : `Seed: ${share.seed}`;
+    const cardW = Math.min(420, w - 24);
+    const cardBg = this.add
+      .rectangle(w / 2, h / 2 + 12, cardW, 384, 0x120a24, 0.94)
+      .setStrokeStyle(2.5, won ? 0xffd166 : 0xff2a55);
     box.add([
-      this.add.text(w / 2, h / 2 - 138, title, { fontFamily: 'sans-serif', fontSize: '28px', color: won ? '#ffd166' : '#ff6b6b', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 - 74, line, { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 - 30, stats, { fontFamily: 'sans-serif', fontSize: '16px', color: '#cfd2ff', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+      cardBg,
+      this.add.text(w / 2, h / 2 - 138, title, { fontFamily: 'sans-serif', fontSize: '28px', fontStyle: 'bold', color: won ? '#ffd166' : '#ff6b6b', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 - 74, line, { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 - 30, stats, { fontFamily: 'sans-serif', fontSize: '16px', color: '#cfd2ff', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
       this.add.text(w / 2, h / 2 + 6, share.nightTrackEmojis, { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffd166', align: 'center' }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 + 38, topSkillsText, { fontFamily: 'sans-serif', fontSize: '14px', color: '#a8dadc', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 + 38, topSkillsText, { fontFamily: 'sans-serif', fontSize: '14px', color: '#a8dadc', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
     ]);
     const shareBtn = this.add
       .rectangle(w / 2, h / 2 + 86, 248, 44, 0x2a9d8f)
@@ -661,11 +794,6 @@ export class GameScene extends Phaser.Scene {
   private syncAndGetState(): GameState {
     this.state.rng = this.rng.snapshot();
     return this.state;
-  }
-
-  private hudWrapWidth(width = this.scale.width): number {
-    // Keep clear of the top-right DebugOverlay in dev builds and screen edges on narrow mobile viewports.
-    return Math.max(180, width - (import.meta.env.DEV ? 160 : 24));
   }
 
   /** A saved run that is still in progress, unless a ?seed= link or menu selection asks for a new one. */

@@ -48,6 +48,10 @@
 8. (จากผล QA & Review ล่าสุด) เชื่อม `TitleScene.ts` เข้า `src/main.ts` (เมนู Casual / Daily Seed / Hardcore 🔒) และเพิ่ม `wordWrap: { width: this.scale.width - 24 }` ให้ `this.hud` ใน `src/scenes/GameScene.ts` เพื่อไม่ให้บรรทัดสถานะ/รายชื่อสกิลบนจอมือถือ 390px ยาวชน `DebugOverlay` หรือล้นขอบขวา
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
+- **Gemini → Claude & ผู้สร้าง (2026-11-14 17:10) — ยกระดับ UI & กราฟิกใหม่แล้ว (`gemini/ui-graphics-overhaul`):**
+  - ใส่ภาพ Key Art เต็มจอ (`public/assets/ui/title_bg.jpg`) + Blood Moon vignette ใน `TitleScene.ts`
+  - เปลี่ยน HUD ใน `GameScene.ts` จากข้อความล้วนเป็นแผง RPG HUD พร้อมหลอดเลือดผู้เล่น, หลอดเลือดแกนฐาน, หลอด XP, แถบไอคอนสกิล (`Skill Icon Dock`) พร้อมป้ายเลเวล, ปุ่มลัดกดบนมือถือได้ (`[R]`, `[M]`, `[N]`), และกรอบ Share Card บนหน้าจบรอบ
+  - ทดสอบจริงในเบราว์เซอร์ (`?renderer=canvas` เดสก์ท็อป + มือถือ 390×844): 0 console/page/network errors (50/50 assets 200 OK) และ `npm test` 126/126 + `npm run build` ผ่านทั้งหมด
 - **Gemini → Claude & ผู้สร้าง (2026-11-14 17:00) — เติมไอคอนสกิลครบ 38 ตัว + เชื่อม `vfx_*.png` และ Web Audio SFX แล้ว (`gemini/full-icons-and-vfx`):**
   - สร้างไอคอนสกิล 64×64 ส่วนที่เหลือ 21 ไฟล์ใน `public/assets/icons/` จนครบทั้ง 38 สกิลใน `skills_full.json`, อัปเดต `GameScene.ts` ให้ใช้ `FUSION_RECIPES` จาก `skills_full.json` ครบ `F01–F10`, เชื่อม `vfx_{projectile,cone,ring,line}.png` แบบ pool+tint ตามธาตุสกิล, และเพิ่ม Web Audio SFX (`src/audio/sfx.ts` พร้อมปุ่ม `[M]` เปิด/ปิดเสียง)
 - **Gemini → Claude & ผู้สร้าง (2026-11-14 16:55) — เชื่อมภาพ Asset ชุด 1–4 เข้า `GameScene.ts` เสร็จแล้ว (`gemini/wire-assets`):**
@@ -104,6 +108,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-14 17:10 | Gemini | ยกระดับ UI & กราฟิก (`title_bg.jpg` Key Art ใน `TitleScene.ts`, แผง RPG HUD + หลอดเลือด/แกนฐาน/XP + Skill Icon Dock + ปุ่มแตะ `[R]/[M]/[N]` + กรอบ Share Card ใน `GameScene.ts`; Live Browser QA 50/50 assets 200 OK, 0 errors, `npm test` 126/126 & `npm run build` ผ่าน) | `gemini/ui-graphics-overhaul` |
 | 2026-11-14 17:00 | Gemini | เติมไอคอนสกิล 64×64 ครบ 38/38 ตัวใน `public/assets/icons/` (เพิ่ม 21 ไฟล์), อัปเดต `GameScene.ts` ให้ใช้สูตร `F01–F10` จาก `skills_full.json`, เชื่อม `vfx_*.png` แบบ pool + tint สีธาตุ, และเพิ่ม Web Audio SFX (`src/audio/sfx.ts` + ปุ่ม `[M]` เปิด/ปิดเสียง) | `gemini/full-icons-and-vfx` |
 | 2026-11-14 16:55 | Gemini | เชื่อม Asset PNG ชุด 1–4 เข้า `GameScene.ts` (`preload`, `ensureAnimations`, `RenderTexture` floor, pooled `Sprite` มอน/ฮีโร่/บอส/แกนฐาน, ไอคอนสกิล + กรอบการ์ดบน Draft; Live Browser QA 0 errors & `npm test` + `npm run build` ผ่าน) | `gemini/wire-assets` (PR #28) |
 | 2026-11-14 17:40 | Claude | ผู้สร้างอนุมัติ 2 เรื่อง: (1) เกมโหลด `skills_full.json` (สูตร F01–F10 ใช้ได้จริง, ผลผสม `fusedOnly` ไม่โผล่ใน Draft) (2) ต่อ affix 5 แบบเข้าการรบ: เกราะขยะ = โล่ 50% (แทน HP +50%), เร่งรีบ +40%, จ่าฝูงออร่า 96 px +20%, ระเบิดตอนตายหลัง 1 วิ, ต้านธาตุที่เด่นสุด 50% (รวมไม่เกิน 75%) · state เพิ่ม field แบบ optional (save เก่ายังโหลดได้) · เทสต์ 126 ผ่าน, build ผ่าน | `claude/game-uses-full-skills` (PR #27) |
