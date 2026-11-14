@@ -131,6 +131,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-14 18:40 | Claude | ผู้สร้างเลือกให้มอนลาดตระเวนไล่ผู้เล่นได้ไกลขึ้น: ระยะตรวจจับ 5 → 8 tile (ต่างจาก balance §5.2 ที่เขียน 5), ไล่ได้ไม่เกิน 10 tile จากจุดเกิด · เทสต์ 130 ผ่าน, build ผ่าน · sim: kills/คืน เพิ่ม, บอทยังแพ้คืน 3–4 | `claude/day-patrol-check` (PR) |
 | 2026-11-14 18:10 | Claude | เก็บวัตถุดิบ 5–7 ชิ้นต่อวันตอนรุ่งเช้า, มื้อเย็นทำอัตโนมัติจากวัตถุดิบ (ไม่มีมื้อ = หิว), บัฟดาเมจ/ความเร็วตลอดคืน ล้างตอนเช้า · เทสต์ 132 ผ่าน, build ผ่าน · ยังไม่มี UI เลือกเมนู และยังไม่มีเนื้อสด/บัฟอื่น · บอทยังแพ้คืน 3–4 | `claude/evening-meal-in-run` (PR #29) |
 | 2026-11-14 17:10 | Gemini | ยกระดับ UI & กราฟิก (`title_bg.jpg` Key Art ใน `TitleScene.ts`, แผง RPG HUD + หลอดเลือด/แกนฐาน/XP + Skill Icon Dock + ปุ่มแตะ `[R]/[M]/[N]` + กรอบ Share Card ใน `GameScene.ts`; Live Browser QA 50/50 assets 200 OK, 0 errors, `npm test` 126/126 & `npm run build` ผ่าน) | `gemini/ui-graphics-overhaul` |
 | 2026-11-14 17:00 | Gemini | เติมไอคอนสกิล 64×64 ครบ 38/38 ตัวใน `public/assets/icons/` (เพิ่ม 21 ไฟล์), อัปเดต `GameScene.ts` ให้ใช้สูตร `F01–F10` จาก `skills_full.json`, เชื่อม `vfx_*.png` แบบ pool + tint สีธาตุ, และเพิ่ม Web Audio SFX (`src/audio/sfx.ts` + ปุ่ม `[M]` เปิด/ปิดเสียง) | `gemini/full-icons-and-vfx` |
