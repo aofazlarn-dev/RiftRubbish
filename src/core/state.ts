@@ -63,6 +63,10 @@ export interface MonsterInstance {
   resistTag?: string | null;
   /** Daytime patrol: idles until the player comes close, never attacks the core. */
   patrol: boolean;
+  /** Patrol home point (where it spawned) and whether it is currently chasing the player. */
+  homeX?: number;
+  homeY?: number;
+  aggro?: boolean;
 }
 
 /** A burst from a dead "exploding" affix monster, resolved when its timer runs out. */

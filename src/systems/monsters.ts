@@ -33,7 +33,9 @@ const CORE_REACH = 44;
 const SLOW_FACTOR = 0.7;
 const NEAR_TILES = 8;
 const GOBLIN_AGGRO_TILES = 2;
-const PATROL_AGGRO_TILES = 5;
+/** Patrols notice the player within 8 tiles (was 5: too few fights in daytime) and stop chasing 10 tiles from their home point. */
+const PATROL_AGGRO_TILES = 8;
+const PATROL_LEASH_TILES = 10;
 const RANGED_KEEP_TILES = 6;
 const RANGED_SHOOT_TILES = 7;
 const RANGED_INTERVAL = 2;
@@ -65,6 +67,11 @@ export function spawnMonster(state: GameState, def: MonsterDef, x: number, y: nu
     affix: opts.affixId !== undefined,
     patrol: opts.patrol ?? false,
   };
+  if (monster.patrol) {
+    monster.homeX = monster.x;
+    monster.homeY = monster.y;
+    monster.aggro = false;
+  }
   if (opts.affixId !== undefined) {
     monster.affixId = opts.affixId;
     monster.resistTag = opts.resistTag ?? null;
@@ -172,9 +179,31 @@ export function queueDeathEffects(state: GameState): void {
 
 type Target = 'player' | 'core' | 'none';
 
+/**
+ * Patrols start a chase when the player is within PATROL_AGGRO_TILES, and keep chasing while the
+ * player stays within PATROL_LEASH_TILES of their home point. Past the leash they give up.
+ */
+function patrolTarget(state: GameState, m: MonsterInstance, toPlayer: number): Target {
+  if (isPlayerDown(state)) {
+    m.aggro = false;
+    return 'none';
+  }
+  const home = dist(m.homeX ?? m.x, m.homeY ?? m.y, state.player.x, state.player.y);
+  if (m.aggro) {
+    if (home <= PATROL_LEASH_TILES * TILE) return 'player';
+    m.aggro = false;
+    return 'none';
+  }
+  if (toPlayer <= PATROL_AGGRO_TILES * TILE) {
+    m.aggro = true;
+    return 'player';
+  }
+  return 'none';
+}
+
 function chooseTarget(state: GameState, m: MonsterInstance, def: MonsterDef): Target {
   const toPlayer = dist(m.x, m.y, state.player.x, state.player.y);
-  if (m.patrol) return !isPlayerDown(state) && toPlayer <= PATROL_AGGRO_TILES * TILE ? 'player' : 'none';
+  if (m.patrol) return patrolTarget(state, m, toPlayer);
   if (isPlayerDown(state)) return 'core';
   switch (def.ai) {
     case 'player':
