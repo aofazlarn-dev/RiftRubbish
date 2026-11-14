@@ -7,6 +7,7 @@ import type { Phase } from './events';
 import { RunRng, type RngState } from './rng';
 import type { AffixId } from '../systems/affix';
 import type { BossState } from '../systems/boss';
+import type { Inventory, MealBuff } from '../systems/evening';
 import type { SpawnEvent } from '../systems/waves';
 
 export const SAVE_VERSION = 2;
@@ -102,6 +103,10 @@ export interface GameState {
   monsters: MonsterInstance[];
   /** Optional so saves made before affixes existed still load. Use `?? []`. */
   bursts?: PendingBurst[];
+  /** Gathered ingredients (balance §6.2). Optional so older saves still load. Use `?? {}`. */
+  inventory?: Inventory;
+  /** Buff from tonight's evening meal, or the hungry debuff. Cleared at dawn. Undefined = no effect. */
+  nightBuff?: MealBuff;
   nextUid: number;
   /** Tonight's remaining spawns, ordered by time. */
   spawnQueue: SpawnEvent[];

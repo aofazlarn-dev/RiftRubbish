@@ -123,3 +123,42 @@ export function choiceSkipsMeal(choice: EveningChoiceId): boolean {
 export function finalShards(baseShards: number, overtimeChosen: boolean): number {
   return Math.floor(baseShards * (overtimeChosen ? OVERTIME_SHARD_MULT : 1));
 }
+
+/** Items gathered each dawn: 5–7 per day (balance §6.2). Meat only drops from kills, so it is not gathered. */
+export const GATHER_BASE = 5;
+export const GATHER_EXTRA_MAX = 2;
+export const GATHER_KINDS: readonly Ingredient[] = ['grain', 'mushroom', 'water', 'fish'];
+
+/** Adds one day of gathering. Uses a seeded stream (`loot`), so runs stay repeatable. */
+export function gatherDay(inv: Inventory, rng: { pick<T>(items: readonly T[]): T; next(): number }): Inventory {
+  const count = GATHER_BASE + Math.floor(rng.next() * (GATHER_EXTRA_MAX + 1));
+  const next: Inventory = { ...inv };
+  for (let i = 0; i < count; i++) {
+    const kind = rng.pick(GATHER_KINDS);
+    next[kind] = (next[kind] ?? 0) + 1;
+  }
+  return next;
+}
+
+/**
+ * Meal the game cooks when the player has not chosen one: the best affordable meal first.
+ * This stands in for the evening choice UI, which is not built yet.
+ */
+const AUTO_MEAL_ORDER = ['otherworld_bento', 'monster_stew', 'grilled_fish', 'glow_mushroom_soup', 'hard_bread'];
+
+export interface EveningResult {
+  inventory: Inventory;
+  /** Buff for the coming night: the meal's buff, or the hungry debuff if nothing could be cooked. */
+  buff: MealBuff;
+  mealId: string | null;
+}
+
+/** Cooks the evening meal from stock. Returns the buff for the night (hungry if no meal). */
+export function eveningMeal(inv: Inventory): EveningResult {
+  for (const id of AUTO_MEAL_ORDER) {
+    const meal = getMeal(id);
+    const after = cook(meal, inv);
+    if (after) return { inventory: after, buff: meal.buff, mealId: id };
+  }
+  return { inventory: inv, buff: HUNGRY_DEBUFF, mealId: null };
+}
