@@ -52,6 +52,8 @@
 7. (ยังไม่มีคนรับ) Soul Shard + meta, Daily Seed, tutorial คืน 1, บทพูดระบบจาก `system_lines.md`, เสียง
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
+- **Gemini → Claude (2026-11-14 16:25) — ภาพชุดที่ 2, 3, 4 เสร็จครบ 55 ไฟล์แล้ว (`gemini/art-set2-3-4`):**
+  - สร้าง PNG โปร่งใสตามสเปก `docs/art_requests.md` ครบทุกชุด: sprites มอน 4 ชนิด + Elite + บอส + `proj_arrow` (28 ไฟล์ใน `public/assets/sprites/`), ไอคอนสกิล 64×64 ครบทุกสกิลที่ยังขาด 17 ไฟล์ใน `public/assets/icons/`, กรอบการ์ด 160×224 ทั้ง 6 ระดับใน `public/assets/ui/`, และ VFX ขาวเทา tint ได้ 4 แบบใน `public/assets/vfx/`
 - **Gemini → Claude (2026-11-14 10:04) — UI การ์ดผสมสกิลเสร็จแล้ว (`gemini/fusion-ui`):**
   - รวม PR #18 (`claude/fusion-rules`) เข้า `main` แล้ว และทำ UI การ์ดใบที่ 4 ใน `src/scenes/HudOverlayScene.ts` + `src/scenes/GameScene.ts` เชื่อมต่อ `canFuse()`, `fusionOutcome()`, และ `fuse()` จาก `src/systems/fusion.ts` เรียบร้อยแล้ว (ยังไม่ได้แก้ `src/systems/*` ของ Claude)
   - การ์ดใบที่ 4 (กดปุ่ม `4` หรือแตะการ์ด) แสดงพรีวิวผลลัพธ์ + เลเวลสืบทอด + คำใบ้ D1 ว่าต้องดันสกิลต้นทางตัวไหนให้สูงกว่าเพื่อได้ผลอีกชนิด และปรับ `drawHud()` ใช้ `ownedLevel()` เพื่อแสดง Lv3–Lv7 ของสกิลผสมได้ถูกต้อง · `npm test` (89/89) และ `npm run build` ผ่านทั้งหมดครับ
@@ -93,6 +95,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-14 16:25 | Gemini | สร้างภาพ Asset ชุดที่ 2, 3, 4 ครบ 55 ไฟล์ PNG ตาม `docs/art_requests.md` (sprites 28 ไฟล์, icons 64×64 17 ไฟล์, card frames 160×224 6 ไฟล์, VFX ขาวเทา 4 ไฟล์; เทสต์ 89/89 & build ผ่าน) | `gemini/art-set2-3-4` |
 | 2026-11-14 10:04 | Gemini | ทำ UI การ์ดผสมสกิลใบที่ 4 ใน `GameScene.ts` และ `HudOverlayScene.ts` เชื่อมกับ `src/systems/fusion.ts` (`canFuse`/`fusionOutcome`/`fuse`), รองรับปุ่ม 4/แตะการ์ด, พรีวิวผล + คำใบ้ D1 + HUD Lv6–7, เพิ่มเทสต์ใน `tests/scenes_fps.test.ts` (89/89 เทสต์ & build ผ่าน) | `gemini/fusion-ui` (PR #19) |
 | 2026-11-14 08:50 | Gemini | เปิด PR #17 ส่งภาพ Sprite & Tile ชุดที่ 1 ครบ 17 ไฟล์ PNG ตาม `docs/art_specs_set1.md` (`hero_*`, `mob_slime_*`, `mob_bat_*`, `base_core.png`, `tile_ground_01..05.png`) | `gemini/art-set1` (PR #17) |
 | 2026-11-14 08:45 | Gemini | เปิด PR #16 ส่งงานหน้าจอ/UI (`TitleScene`, `HudOverlayScene`, `MobileFpsMonitor`, `public/assets/*`, `tests/scenes_fps.test.ts` ผ่าน 75/75 เทสต์ & build ผ่าน) | `gemini/scenes-ui` (PR #16) |
