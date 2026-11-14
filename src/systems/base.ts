@@ -36,7 +36,9 @@ export function applyPassives(state: GameState, skillDefs: readonly SkillDef[]):
   const tiers = synergyTiers(state, skillDefs);
   state.synergy = tiers;
   if (tiers.earth >= 4) keep *= EARTH_T4_TAKEN_MULT;
-  const maxHp = Math.round((BASE_MAX_HP + bonusHp) * (tiers.earth >= 2 ? EARTH_T2_HP_MULT : 1));
+  // Tonight's meal (balance §6.2, R6): hard bread = Max HP +20%.
+  const mealHp = state.nightBuff?.maxHpMult ?? 1;
+  const maxHp = Math.round((BASE_MAX_HP + bonusHp) * (tiers.earth >= 2 ? EARTH_T2_HP_MULT : 1) * mealHp);
   const gained = maxHp - state.player.maxHp;
   state.player.maxHp = maxHp;
   state.player.damageReduction = 1 - keep;
@@ -87,8 +89,10 @@ export function damageCore(state: GameState, amount: number, bus?: EventBus): vo
   }
 }
 
-/** Counts down i-frames and the respawn timer; revives at full HP when it ends. */
+/** Counts down i-frames and the respawn timer; revives at full HP when it ends. Meal regen ticks here (R6). */
 export function tickSurvival(state: GameState, dt: number): void {
+  const regen = state.nightBuff?.hpRegenPerSec ?? 0;
+  if (regen > 0 && state.respawnIn <= 0) state.player.hp = Math.min(state.player.maxHp, state.player.hp + regen * dt);
   if (state.invulnLeft > 0) state.invulnLeft = Math.max(0, state.invulnLeft - dt);
   if (state.respawnIn > 0) {
     state.respawnIn = Math.max(0, state.respawnIn - dt);

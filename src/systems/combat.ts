@@ -333,15 +333,17 @@ export function tickSkills(
     if (state.status !== 'playing') break; // the boss died mid-tick
     const def = skillDefs.find((s) => s.id === owned.id);
     if (!def) continue;
+    // Tonight's meal (balance §6.2, R6): mushroom soup = Skill XP +30%, bento = cooldown −8%.
+    const xpMult = state.nightBuff?.skillXpMult ?? 1;
     if (def.kind === 'passive') {
-      owned.xp += PASSIVE_SXP_PER_SECOND * dt;
+      if (!owned.gift) owned.xp += PASSIVE_SXP_PER_SECOND * dt * xpMult;
       continue;
     }
     owned.cooldownLeft = Math.max(0, owned.cooldownLeft - dt);
     if (owned.cooldownLeft > 0) continue;
     const aim = nearest(targets, px, py, def.range * TILE);
     if (!aim) continue;
-    owned.cooldownLeft = def.cooldown;
+    owned.cooldownLeft = def.cooldown * (state.nightBuff?.cooldownMult ?? 1);
     const mealDamage = (state.nightBuff?.damageMult ?? 1) * (state.metaDamage ?? 1);
     const coreMult = coreBoostMult(def.rarity, owned.rarityBoost); // Fusion Core "+1 rarity" (R3, D17)
     let synMult = synergyDamageMult(tiers, def);
@@ -352,7 +354,7 @@ export function tickSkills(
       aim.hit(LIGHTNING_T4.damage, ['lightning']); // lightning 4: a follow-up bolt
       result.fx.push({ skillId: 'syn_lightning', shape: 'chain', x1: aim.x, y1: aim.y - 70, x2: aim.x, y2: aim.y });
     }
-    if (hits > 0 && !owned.gift) owned.xp += def.cooldown; // gift skills never level up (G2)
+    if (hits > 0 && !owned.gift) owned.xp += def.cooldown * xpMult; // gift skills never level up (G2)
   }
 
   // Fire 4: a monster killed by fire bursts for 25 around it (bursts do not chain).
