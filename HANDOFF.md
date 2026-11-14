@@ -70,6 +70,7 @@
 ## Claims (งานที่กำลังทำ — ห้ามแตะไฟล์ในรายการของอีกฝ่าย)
 | ใคร | งาน | ไฟล์/โฟลเดอร์ | เริ่ม |
 | --- | --- | --- | --- |
+| Claude (แชต) | **Gap รอบ 2 R1** แหล่งความจริงเดียวของช่วงเย็น (+ แก้ปุ่มเรียกคืนเร็วข้าม onPhaseStart) — แตะฉากเฉพาะ `confirmEvening`/evening hooks/ปุ่ม R | `src/systems/evening.ts`, `src/systems/run.ts`, `src/core/state.ts`, `tests/evening*`, `src/scenes/GameScene.ts` (เฉพาะส่วนเย็น+recall) | 2026-11-14 23:55 |
 
 ## Next up (งานที่ยังไม่มีคนรับ — หยิบแล้วย้ายไป Claims)
 > ⚠️ งานรอง — ทำ **Gap รอบ 2 (R1–R5)** ด้านบนก่อน
