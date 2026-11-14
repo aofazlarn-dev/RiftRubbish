@@ -93,7 +93,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
-| 2026-11-14 10:04 | Gemini | ทำ UI การ์ดผสมสกิลใบที่ 4 ใน `GameScene.ts` และ `HudOverlayScene.ts` เชื่อมกับ `src/systems/fusion.ts` (`canFuse`/`fusionOutcome`/`fuse`), รองรับปุ่ม 4/แตะการ์ด, พรีวิวผล + คำใบ้ D1 + HUD Lv6–7, เพิ่มเทสต์ใน `tests/scenes_fps.test.ts` (89/89 เทสต์ & build ผ่าน) | `gemini/fusion-ui` |
+| 2026-11-14 10:04 | Gemini | ทำ UI การ์ดผสมสกิลใบที่ 4 ใน `GameScene.ts` และ `HudOverlayScene.ts` เชื่อมกับ `src/systems/fusion.ts` (`canFuse`/`fusionOutcome`/`fuse`), รองรับปุ่ม 4/แตะการ์ด, พรีวิวผล + คำใบ้ D1 + HUD Lv6–7, เพิ่มเทสต์ใน `tests/scenes_fps.test.ts` (89/89 เทสต์ & build ผ่าน) | `gemini/fusion-ui` (PR #19) |
 | 2026-11-14 08:50 | Gemini | เปิด PR #17 ส่งภาพ Sprite & Tile ชุดที่ 1 ครบ 17 ไฟล์ PNG ตาม `docs/art_specs_set1.md` (`hero_*`, `mob_slime_*`, `mob_bat_*`, `base_core.png`, `tile_ground_01..05.png`) | `gemini/art-set1` (PR #17) |
 | 2026-11-14 08:45 | Gemini | เปิด PR #16 ส่งงานหน้าจอ/UI (`TitleScene`, `HudOverlayScene`, `MobileFpsMonitor`, `public/assets/*`, `tests/scenes_fps.test.ts` ผ่าน 75/75 เทสต์ & build ผ่าน) | `gemini/scenes-ui` (PR #16) |
 | 2026-11-14 08:45 | Gemini | เปิด PR #15 ย้ายข้อมูลสกิลครบ 18 ตัว + 10 สูตรผสม (`F01..F10`) + 20 ผลลัพธ์ (`R01a..R10b`) เข้า `src/data/skills_full.json` (ผ่าน `validateSkills` + เทสต์ 73/73) และตอบคำถามบาลานซ์ 3 ข้อ (เห็นตรงกับ Claude เลือกข้อ ก) | `gemini/skills-data` (PR #15) |
