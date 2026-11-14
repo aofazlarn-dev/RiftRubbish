@@ -15,8 +15,67 @@ import { damageBoss } from './boss';
 import { applyDamageWithShield, combinedResist, resistChoiceFor, RESIST_CHOICE_RATIO } from './affix';
 import { eliteCoreOnDeath } from './chests';
 import { AFFIX_XP_MULTIPLIER, findDef, queueDeathEffects } from './monsters';
-import { damageAtLevel, levelForXp, type SkillDef } from './skills';
+import { coreBoostMult, damageAtLevel, levelForXp, type SkillDef } from './skills';
 import type { MonsterDef } from './waves';
+import {
+  EARTH_T4_RADIUS_MULT,
+  EARTH_T6_QUAKE,
+  FIRE_T4_BURST,
+  ICE_T2_SLOW_MULT,
+  LIGHTNING_T2_EXTRA_JUMPS,
+  LIGHTNING_T4,
+  LIGHTNING_T6,
+  SHADOW_T2,
+  synergyDamageMult,
+  synergyTiers,
+  type SynergyTiersMap,
+} from './synergy';
+
+/** The skill as cast under synergy (R4): lightning 2 chain +1, ice 2 slow ×1.15, earth 4 splash ×1.15. */
+function synergyShapedDef(def: SkillDef, tiers: SynergyTiersMap): SkillDef {
+  const out: SkillDef = { ...def };
+  if (tiers.lightning >= 2 && def.jumps !== undefined) out.jumps = def.jumps + LIGHTNING_T2_EXTRA_JUMPS;
+  if (tiers.ice >= 2 && def.slowSeconds) out.slowSeconds = def.slowSeconds * ICE_T2_SLOW_MULT;
+  if (tiers.earth >= 4 && def.splash) out.splash = def.splash * EARTH_T4_RADIUS_MULT;
+  return out;
+}
+
+/** Lightning 6 (every 8 s, 5 random targets take 40) and earth 6 (every 10 s, stun within 4 tiles). */
+function tickSynergyTimers(
+  state: GameState,
+  dt: number,
+  tiers: SynergyTiersMap,
+  targets: readonly Target[],
+  rng: RngStream,
+  fx: CombatFx[],
+): void {
+  if (tiers.lightning < 6 && tiers.earth < 6) return;
+  const timers = (state.synergyTimers ??= { bolt: LIGHTNING_T6.every, quake: EARTH_T6_QUAKE.every });
+  if (tiers.lightning >= 6) {
+    timers.bolt -= dt;
+    if (timers.bolt <= 0) {
+      timers.bolt += LIGHTNING_T6.every;
+      const alive = targets.filter((t) => !t.dead);
+      for (let i = 0; i < LIGHTNING_T6.targets && alive.length > 0; i++) {
+        const t = alive.splice(Math.floor(rng.next() * alive.length), 1)[0];
+        t.hit(LIGHTNING_T6.damage, ['lightning']);
+        fx.push({ skillId: 'syn_lightning', shape: 'chain', x1: t.x, y1: t.y - 90, x2: t.x, y2: t.y });
+      }
+    }
+  }
+  if (tiers.earth >= 6) {
+    timers.quake -= dt;
+    if (timers.quake <= 0) {
+      timers.quake += EARTH_T6_QUAKE.every;
+      const r = EARTH_T6_QUAKE.radiusTiles * TILE;
+      const { x, y } = state.player;
+      for (const m of state.monsters) {
+        if (m.hp > 0 && dist(x, y, m.x, m.y) <= r) m.stunLeft = Math.max(m.stunLeft ?? 0, EARTH_T6_QUAKE.stunSeconds);
+      }
+      fx.push({ skillId: 'syn_earth', shape: 'ring', x1: x, y1: y, x2: x, y2: y, radius: r });
+    }
+  }
+}
 
 export const PASSIVE_SXP_PER_SECOND = 0.6;
 const LINE_HALF_WIDTH = 20;
@@ -81,6 +140,7 @@ function buildTargets(
   monsterDefs: readonly MonsterDef[],
   onKillXp: (xp: number) => void,
   bus?: EventBus,
+  onKill?: (x: number, y: number, tags: readonly string[]) => void,
 ): Target[] {
   const targets: Target[] = state.monsters.map((m) => {
     const def = findDef(monsterDefs, m.defId);
@@ -99,6 +159,7 @@ function buildTargets(
           target.dead = true;
           state.kills += 1;
           onKillXp(def.xp * (m.affix ? AFFIX_XP_MULTIPLIER : 1));
+          onKill?.(m.x, m.y, tags);
         }
       },
       slow(seconds) {
@@ -259,31 +320,62 @@ export function tickSkills(
   const result: CombatResult = { fx: [], xpGained: 0 };
   if (state.status !== 'playing' || isPlayerDown(state)) return result;
 
-  const targets = buildTargets(state, monsterDefs, (xp) => (result.xpGained += xp), bus);
+  // Synergy (R4): tiers come from applyPassives; fire 4 bursts are queued on fire kills.
+  const tiers = state.synergy ?? synergyTiers(state, skillDefs);
+  const fireBursts: { x: number; y: number }[] = [];
+  let recordFireKills = tiers.fire >= 4;
+  const targets = buildTargets(state, monsterDefs, (xp) => (result.xpGained += xp), bus, (x, y, tags) => {
+    if (recordFireKills && tags.includes('fire')) fireBursts.push({ x, y });
+  });
   const { x: px, y: py } = state.player;
 
   for (const owned of state.skills) {
     if (state.status !== 'playing') break; // the boss died mid-tick
     const def = skillDefs.find((s) => s.id === owned.id);
     if (!def) continue;
+    // Tonight's meal (balance §6.2, R6): mushroom soup = Skill XP +30%, bento = cooldown −8%.
+    const xpMult = state.nightBuff?.skillXpMult ?? 1;
     if (def.kind === 'passive') {
-      owned.xp += PASSIVE_SXP_PER_SECOND * dt;
+      if (!owned.gift) owned.xp += PASSIVE_SXP_PER_SECOND * dt * xpMult;
       continue;
     }
     owned.cooldownLeft = Math.max(0, owned.cooldownLeft - dt);
     if (owned.cooldownLeft > 0) continue;
     const aim = nearest(targets, px, py, def.range * TILE);
     if (!aim) continue;
-    owned.cooldownLeft = def.cooldown;
+    owned.cooldownLeft = def.cooldown * (state.nightBuff?.cooldownMult ?? 1);
     const mealDamage = (state.nightBuff?.damageMult ?? 1) * (state.metaDamage ?? 1);
-    const hits = cast(def, damageAtLevel(def, levelForXp(owned.xp)) * mealDamage, aim, targets, px, py, rng, result.fx);
-    if (hits > 0 && !owned.gift) owned.xp += def.cooldown; // gift skills never level up (G2)
+    const coreMult = coreBoostMult(def.rarity, owned.rarityBoost); // Fusion Core "+1 rarity" (R3, D17)
+    let synMult = synergyDamageMult(tiers, def);
+    if (tiers.shadow >= 2 && rng.chance(SHADOW_T2.chance)) synMult *= SHADOW_T2.mult; // shadow 2 (slice crit)
+    const eff = synergyShapedDef(def, tiers);
+    const hits = cast(eff, damageAtLevel(def, levelForXp(owned.xp)) * mealDamage * coreMult * synMult, aim, targets, px, py, rng, result.fx);
+    if (hits > 0 && tiers.lightning >= 4 && !aim.dead && rng.chance(LIGHTNING_T4.chance)) {
+      aim.hit(LIGHTNING_T4.damage, ['lightning']); // lightning 4: a follow-up bolt
+      result.fx.push({ skillId: 'syn_lightning', shape: 'chain', x1: aim.x, y1: aim.y - 70, x2: aim.x, y2: aim.y });
+    }
+    if (hits > 0 && !owned.gift) owned.xp += def.cooldown * xpMult; // gift skills never level up (G2)
   }
 
-  // "Fresh meat": 3% per kill, heals 20 HP (balance §1.1). The slice applies it at once instead of as a pickup.
+  // Fire 4: a monster killed by fire bursts for 25 around it (bursts do not chain).
+  recordFireKills = false;
+  const burstR = FIRE_T4_BURST.radiusTiles * TILE;
+  for (const b of fireBursts) {
+    for (const t of targets) if (!t.dead && dist(b.x, b.y, t.x, t.y) <= burstR) t.hit(FIRE_T4_BURST.damage, ['fire']);
+    result.fx.push({ skillId: 'syn_fire', shape: 'ring', x1: b.x, y1: b.y, x2: b.x, y2: b.y, radius: burstR });
+  }
+  tickSynergyTimers(state, dt, tiers, targets, rng, result.fx);
+
+  // "Fresh meat": 3% per kill, heals 20 HP (balance §1.1) and goes into the bag as an
+  // ingredient for the evening (balance §6.2, R2). Applied at once instead of as a pickup.
+  // Hungry tonight = no healing from meat (balance §6.2 debuff).
   const killed = state.monsters.filter((m) => m.hp <= 0).length;
   for (let i = 0; i < killed; i++) {
-    if (rng.chance(MEAT_DROP_CHANCE)) state.player.hp = Math.min(state.player.maxHp, state.player.hp + MEAT_HEAL);
+    if (!rng.chance(MEAT_DROP_CHANCE)) continue;
+    if (state.nightBuff?.hpRegenPerSec !== 0) {
+      state.player.hp = Math.min(state.player.maxHp, state.player.hp + MEAT_HEAL);
+    }
+    state.inventory = { ...(state.inventory ?? {}), meat: (state.inventory?.meat ?? 0) + 1 };
   }
   for (const m of state.monsters) if (m.hp <= 0) eliteCoreOnDeath(state, m.defId); // Elite drops a Core (D6)
   queueDeathEffects(state);

@@ -2,9 +2,9 @@
  * Evening rules: meals, the "hungry" debuff, and the one-of-three evening choice
  * (balance §6.2–6.3, D9, D18). Pure functions, no Phaser, no GameState.
  *
- * Not wired into the run yet: inventory, gathering and the evening UI come later.
  * Numbers are taken from balance.md; the "choice" rules that the doc leaves open
- * are noted where they are decided.
+ * are noted where they are decided. This file is the only place that decides what an
+ * evening costs and gives (Gap round 2 R1): the UI and the sim both call it.
  */
 
 export type Ingredient = 'grain' | 'mushroom' | 'water' | 'fish' | 'meat';
@@ -141,8 +141,8 @@ export function gatherDay(inv: Inventory, rng: { pick<T>(items: readonly T[]): T
 }
 
 /**
- * Meal the game cooks when the player has not chosen one: the best affordable meal first.
- * This stands in for the evening choice UI, which is not built yet.
+ * Meal the game cooks when the player has not chosen one (sim, or evening skipped by
+ * the clock): the best affordable meal first.
  */
 const AUTO_MEAL_ORDER = ['otherworld_bento', 'monster_stew', 'grilled_fish', 'glow_mushroom_soup', 'hard_bread'];
 
@@ -189,4 +189,52 @@ export function resolveEveningChoice(requested: EveningChoiceId | undefined, ctx
   const options = availableChoices(ctx);
   if (requested && options.includes(requested)) return requested;
   return 'trap';
+}
+
+/** The meal the game picks when the player did not choose: best affordable, or null (hungry). */
+export function autoMealId(inv: Inventory): string | null {
+  return eveningMeal(inv).mealId;
+}
+
+export interface EveningSelectionResult {
+  inventory: Inventory;
+  buff: MealBuff;
+  mealId: string | null;
+  choice: EveningChoiceId;
+  hungry: boolean;
+}
+
+/**
+ * Resolves one evening from the stock: the chosen meal (or none) and the chosen option.
+ * An unaffordable meal means no meal; an unavailable option falls back to the free trap.
+ * Overtime skips the meal. The fence costs one more dish, cooked from what is left.
+ * Pure: never mutates `inv`.
+ */
+export function resolveEvening(
+  inv: Inventory,
+  mealId: string | null,
+  requested: EveningChoiceId | undefined,
+  ctx: { day: number; overtimeUsed: boolean; overtimeAllowed: boolean },
+): EveningSelectionResult {
+  const meal = mealId ? MEALS.find((m) => m.id === mealId) : undefined;
+  const afterMeal = meal ? cook(meal, inv) : null;
+  const spareMeals = hasSpareMeal(afterMeal ?? inv) ? 1 : 0;
+  let choice = resolveEveningChoice(requested, { day: ctx.day, spareMeals, overtimeUsed: ctx.overtimeUsed });
+  if (choice === 'overtime' && !ctx.overtimeAllowed) choice = 'trap';
+
+  if (choice === 'overtime') {
+    return { inventory: { ...inv }, buff: HUNGRY_DEBUFF, mealId: null, choice, hungry: true };
+  }
+  let next: Inventory = afterMeal ?? { ...inv };
+  if (choice === 'fence') {
+    const spare = MEALS.find((m) => canCook(m, next));
+    next = (spare && cook(spare, next)) || next;
+  }
+  return {
+    inventory: next,
+    buff: afterMeal && meal ? meal.buff : HUNGRY_DEBUFF,
+    mealId: afterMeal && meal ? meal.id : null,
+    choice,
+    hungry: !afterMeal,
+  };
 }

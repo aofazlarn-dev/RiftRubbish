@@ -8,7 +8,6 @@ import { overtimeAllowed } from '../systems/daily';
 import {
   availableChoices,
   canCook,
-  choiceSkipsMeal,
   cook,
   fenceShieldHp,
   HUNGRY_DEBUFF,
@@ -176,39 +175,6 @@ export function buildEveningOffer(
     choices,
     hungryBuffText: formatMealBuff(HUNGRY_DEBUFF),
   };
-}
-
-export function resolveEveningSelection(
-  inv: Inventory,
-  selectedMealId: string | null,
-  choiceId: EveningChoiceId,
-): { inventory: Inventory; buff: MealBuff; usedOvertime: boolean } {
-  if (choiceSkipsMeal(choiceId)) {
-    return { inventory: { ...inv }, buff: HUNGRY_DEBUFF, usedOvertime: true };
-  }
-
-  let nextInv: Inventory = { ...inv };
-  let buff: MealBuff = HUNGRY_DEBUFF;
-
-  if (selectedMealId) {
-    const meal = MEALS.find((m) => m.id === selectedMealId);
-    if (meal) {
-      const cooked = cook(meal, nextInv);
-      if (cooked) {
-        nextInv = cooked;
-        buff = meal.buff;
-      }
-    }
-  }
-
-  if (choiceId === 'fence') {
-    const spare = MEALS.find((m) => canCook(m, nextInv));
-    if (spare) {
-      nextInv = cook(spare, nextInv) ?? nextInv;
-    }
-  }
-
-  return { inventory: nextInv, buff, usedOvertime: false };
 }
 
 const SYNERGY_TAG_TH: Record<string, string> = {

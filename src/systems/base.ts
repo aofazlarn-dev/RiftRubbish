@@ -9,6 +9,7 @@ import type { EventBus } from '../core/events';
 import type { GameState } from '../core/state';
 import { CORE_X, CORE_Y, TILE } from '../core/world';
 import { ownedLevel, type SkillDef } from './skills';
+import { EARTH_T2_HP_MULT, EARTH_T4_TAKEN_MULT, SHADOW_T6, synergyTiers } from './synergy';
 
 export const RESPAWN_SECONDS = 10;
 export const DEATH_CORE_PENALTY = 0.15;
@@ -31,7 +32,13 @@ export function applyPassives(state: GameState, skillDefs: readonly SkillDef[]):
     bonusHp += def.defense.maxHp[level] ?? 0;
     keep *= 1 - (def.defense.reduction[level] ?? 0);
   }
-  const maxHp = BASE_MAX_HP + bonusHp;
+  // Synergy (R4): earth 2 = Max HP +10%, earth 4 = damage taken −10%.
+  const tiers = synergyTiers(state, skillDefs);
+  state.synergy = tiers;
+  if (tiers.earth >= 4) keep *= EARTH_T4_TAKEN_MULT;
+  // Tonight's meal (balance §6.2, R6): hard bread = Max HP +20%.
+  const mealHp = state.nightBuff?.maxHpMult ?? 1;
+  const maxHp = Math.round((BASE_MAX_HP + bonusHp) * (tiers.earth >= 2 ? EARTH_T2_HP_MULT : 1) * mealHp);
   const gained = maxHp - state.player.maxHp;
   state.player.maxHp = maxHp;
   state.player.damageReduction = 1 - keep;
@@ -49,6 +56,13 @@ export function damagePlayer(state: GameState, amount: number, bus?: EventBus): 
   const taken = amount * (1 - (state.player.damageReduction ?? 0));
   state.player.hp = Math.max(0, state.player.hp - taken);
   state.invulnLeft = HIT_INVULN_SECONDS;
+  // Shadow 6 (R4): once per night a killing hit leaves 30% HP and 3 s untouchable.
+  if (state.player.hp === 0 && (state.synergy?.shadow ?? 0) >= 6 && state.phase === 'night' && !state.shadowSaved) {
+    state.shadowSaved = true;
+    state.player.hp = Math.max(1, Math.round(state.player.maxHp * SHADOW_T6.hpRatio));
+    state.invulnLeft = SHADOW_T6.untouchableSeconds;
+    return taken;
+  }
   if (state.player.hp === 0) {
     state.respawnIn = RESPAWN_SECONDS;
     state.player.x = CORE_X + TILE * 2;
@@ -75,8 +89,10 @@ export function damageCore(state: GameState, amount: number, bus?: EventBus): vo
   }
 }
 
-/** Counts down i-frames and the respawn timer; revives at full HP when it ends. */
+/** Counts down i-frames and the respawn timer; revives at full HP when it ends. Meal regen ticks here (R6). */
 export function tickSurvival(state: GameState, dt: number): void {
+  const regen = state.nightBuff?.hpRegenPerSec ?? 0;
+  if (regen > 0 && state.respawnIn <= 0) state.player.hp = Math.min(state.player.maxHp, state.player.hp + regen * dt);
   if (state.invulnLeft > 0) state.invulnLeft = Math.max(0, state.invulnLeft - dt);
   if (state.respawnIn > 0) {
     state.respawnIn = Math.max(0, state.respawnIn - dt);

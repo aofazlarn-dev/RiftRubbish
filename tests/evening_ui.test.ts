@@ -5,9 +5,8 @@ import {
   formatInventorySummary,
   formatMealBuff,
   formatSynergySummary,
-  resolveEveningSelection,
 } from '../src/scenes/eveningUiModel';
-import { HUNGRY_DEBUFF, MEALS } from '../src/systems/evening';
+import { HUNGRY_DEBUFF, MEALS, resolveEvening } from '../src/systems/evening';
 
 describe('eveningUiModel (G3 Evening UI)', () => {
   it('formats inventory and meal buffs in player-facing Thai without dev terms', () => {
@@ -36,16 +35,16 @@ describe('eveningUiModel (G3 Evening UI)', () => {
 
   it('overtime skips the meal, keeps ingredients, and applies HUNGRY_DEBUFF', () => {
     const inv = { grain: 2, water: 1 };
-    const res = resolveEveningSelection(inv, 'hard_bread', 'overtime');
-    expect(res.usedOvertime).toBe(true);
+    const res = resolveEvening(inv, 'hard_bread', 'overtime', { day: 4, overtimeUsed: false, overtimeAllowed: true });
+    expect(res.choice).toBe('overtime');
     expect(res.buff).toEqual(HUNGRY_DEBUFF);
     expect(res.inventory).toEqual(inv);
   });
 
   it('fence deducts both tonight meal and 1 spare dish', () => {
     const inv = { grain: 4 };
-    const res = resolveEveningSelection(inv, 'hard_bread', 'fence');
-    expect(res.usedOvertime).toBe(false);
+    const res = resolveEvening(inv, 'hard_bread', 'fence', { day: 2, overtimeUsed: false, overtimeAllowed: true });
+    expect(res.choice).toBe('fence');
     expect(res.buff).toEqual(MEALS[0].buff);
     expect(res.inventory.grain).toBe(0);
   });

@@ -7,11 +7,14 @@
  *  - The result starts with the higher source's Skill XP, so it keeps that level and goes on
  *    up to Lv7 on the fused curve (D2).
  *  - Both sources are removed; a source can come back in a later Draft (D4).
+ *  - Fusion Core (GDD §7 rule 4, D14, D17; Gap round 2 R3): a Mythic recipe takes one Core;
+ *    any other fusion may spend one Core for "+1 rarity" (capped at Legendary), which scales
+ *    the result's damage by the rarity budget ratio (Epic → Legendary ≈ ×1.21).
  */
 
 import type { GameState, OwnedSkill } from '../core/state';
 import { applyPassives } from './base';
-import { FUSION_MIN_LEVEL, levelForXp, ownedLevel, type FusionRecipe, type SkillDef } from './skills';
+import { boostedRarity, FUSION_MIN_LEVEL, levelForXp, ownedLevel, type FusionRecipe, type SkillDef } from './skills';
 
 export interface FusionOutcome {
   resultId: string;
@@ -26,8 +29,9 @@ export function findRecipe(recipes: readonly FusionRecipe[], idOne: string, idTw
   );
 }
 
-/** True when both sources are owned and at or above the fusion level. */
+/** True when both sources are owned and at or above the fusion level (and a Core is held for Mythic). */
 export function canFuse(state: GameState, skillDefs: readonly SkillDef[], recipe: FusionRecipe): boolean {
+  if (recipe.requiresCore && (state.cores ?? 0) < 1) return false;
   return [recipe.a, recipe.b].every((id) => {
     const owned = state.skills.find((s) => s.id === id);
     const def = skillDefs.find((d) => d.id === id);
@@ -56,8 +60,25 @@ export function fusionOutcome(
 }
 
 /**
+ * True when spending a Core for "+1 rarity" would change this fusion's result: a Core is held,
+ * the recipe is not a Mythic one (that Core is already spent), and the result is below Legendary.
+ */
+export function canBoostWithCore(
+  state: GameState,
+  skillDefs: readonly SkillDef[],
+  recipe: FusionRecipe,
+  resultId: string,
+): boolean {
+  if (recipe.requiresCore || (state.cores ?? 0) < 1) return false;
+  const def = skillDefs.find((d) => d.id === resultId);
+  return !!def && boostedRarity(def.rarity, 1) !== def.rarity;
+}
+
+/**
  * Fuses two owned skills into one. Returns the outcome, or null when the fusion is not
- * allowed (no recipe, a source missing, or a source below Lv3). State is unchanged on null.
+ * allowed (no recipe, a source missing, a source below Lv3, or no Core for a Mythic recipe).
+ * `useCore` spends one Core for "+1 rarity" when that changes anything; otherwise it is ignored.
+ * State is unchanged on null.
  */
 export function fuse(
   state: GameState,
@@ -65,15 +86,19 @@ export function fuse(
   recipes: readonly FusionRecipe[],
   idOne: string,
   idTwo: string,
+  useCore = false,
 ): FusionOutcome | null {
   const recipe = findRecipe(recipes, idOne, idTwo);
   if (!recipe || !canFuse(state, skillDefs, recipe)) return null;
 
   const outcome = fusionOutcome(state, recipe, idOne);
+  const boost = useCore && canBoostWithCore(state, skillDefs, recipe, outcome.resultId);
+  if (recipe.requiresCore || boost) state.cores = (state.cores ?? 0) - 1;
   const inherited: OwnedSkill = {
     id: outcome.resultId,
     xp: state.skills.find((s) => s.id === outcome.fromId)?.xp ?? 0,
     cooldownLeft: 0,
+    ...(boost ? { rarityBoost: 1 } : {}),
   };
   state.skills = state.skills.filter((s) => s.id !== recipe.a && s.id !== recipe.b);
   state.skills.push(inherited);

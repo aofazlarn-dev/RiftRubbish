@@ -39,6 +39,8 @@ export interface OwnedSkill {
   xp: number;
   /** Seconds until an Active can cast again. Unused for Passives. */
   cooldownLeft: number;
+  /** Rarity steps added by a Fusion Core when this skill was fused (R3, D17). */
+  rarityBoost?: number;
   /** Welcome gift (tutorial): outside the slots, never levels up, leaves at dawn of day 2. */
   gift?: boolean;
 }
@@ -132,10 +134,18 @@ export interface GameState {
   monsters: MonsterInstance[];
   /** Optional so saves made before affixes existed still load. Use `?? []`. */
   bursts?: PendingBurst[];
+  /** Today's grain/mushroom nodes (R2). Cleared at dusk. Optional for older saves. */
+  resourceNodes?: import('../systems/gather').ResourceNode[];
+  /** The well near the spawn: refills at dawn with water and fish (R2). */
+  well?: import('../systems/gather').WellState;
   /** Gathered ingredients (balance §6.2). Optional so older saves still load. Use `?? {}`. */
   inventory?: Inventory;
   /** Evening choice (balance §6.3). `requestedChoice` is set by the UI; the game falls back to trap. */
   requestedChoice?: 'fence' | 'trap' | 'overtime';
+  /** Meal the player picked this evening (null = skip). Undefined = not picked, the game picks. */
+  requestedMeal?: string | null;
+  /** False from the start of an evening until it is resolved (player confirms, or night starts). */
+  eveningResolved?: boolean;
   /** Core shield left from the fence choice; lasts until dawn. */
   coreShield?: number;
   /** Traps around the base (6 at 4 tiles, 3 uses each). Cleared at dawn. */
@@ -143,6 +153,12 @@ export interface GameState {
   /** Overtime: once per run, from day 4. `overtimeChosen` is for the run-end Soul Shard bonus (not built yet). */
   overtimeUsed?: boolean;
   overtimeChosen?: boolean;
+  /** Synergy tiers from owned skills, refreshed by applyPassives (R4). Undefined = none yet. */
+  synergy?: import('../systems/synergy').SynergyTiersMap;
+  /** Shadow tier 6 already saved the player tonight (R4). Reset at night start. */
+  shadowSaved?: boolean;
+  /** Seconds until the next lightning-6 strike and earth-6 quake (R4). */
+  synergyTimers?: { bolt: number; quake: number };
   /** Buff from tonight's evening meal, or the hungry debuff. Cleared at dawn. Undefined = no effect. */
   nightBuff?: MealBuff;
   nextUid: number;

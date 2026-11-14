@@ -47,6 +47,34 @@ export interface FusionRecipe {
   b: string;
   resultA: string;
   resultB: string;
+  /** Mythic recipes (F09) take one Fusion Core (GDD §7 rule 4, D14). */
+  requiresCore?: boolean;
+}
+
+/** balance §5.3: damage budget per rarity. A Fusion Core's "+1 rarity" uses the ratio (D17). */
+export const RARITY_DAMAGE_MULT: Record<Rarity, number> = {
+  common: 1.0,
+  rare: 1.2,
+  epic: 1.45,
+  legendary: 1.75,
+  mythic: 2.1,
+};
+
+/** "+1 rarity" stops at Legendary (D3, D14). */
+export const CORE_BOOST_CAP: Rarity = 'legendary';
+
+/** Rarity after `boost` steps, capped at Legendary (never lowers a Mythic). */
+export function boostedRarity(base: Rarity, boost = 0): Rarity {
+  if (boost <= 0) return base;
+  const capIdx = RARITY_ORDER.indexOf(CORE_BOOST_CAP);
+  const baseIdx = RARITY_ORDER.indexOf(base);
+  if (baseIdx >= capIdx) return base;
+  return RARITY_ORDER[Math.min(capIdx, baseIdx + boost)];
+}
+
+/** Damage multiplier a Core boost gives (Epic → Legendary ≈ ×1.21, D17). 1 when no boost. */
+export function coreBoostMult(base: Rarity, boost = 0): number {
+  return RARITY_DAMAGE_MULT[boostedRarity(base, boost)] / RARITY_DAMAGE_MULT[base];
 }
 
 /** Rarity order, lowest to highest. Used for the downgrade rule (balance §9.1). */

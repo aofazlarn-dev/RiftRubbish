@@ -14,16 +14,18 @@ import { loadRunData } from '../data';
 import skillsFullJson from '../data/skills_full.json';
 import { VirtualJoystick } from '../input/joystick';
 import { isPlayerDown } from '../systems/base';
-import { phaseRemaining, recallEarly } from '../systems/clock';
+import { phaseRemaining } from '../systems/clock';
 import type { CombatFx } from '../systems/combat';
 import { dailySeed } from '../systems/daily';
-import { fenceShieldHp, trapPositions, type EveningChoiceId, type Inventory } from '../systems/evening';
+import { autoMealId, type EveningChoiceId } from '../systems/evening';
 import type { Vec2 } from '../systems/movement';
 import { attachMissionTracker } from '../systems/missionTracker';
 import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
-import { startRun, stepRun, type RunData } from '../systems/run';
+import { recallToEvening, startRun, stepRun, submitEvening, type RunData } from '../systems/run';
+import { forceTutorialFusion } from '../systems/tutorial';
 import { attachShardLedger } from '../systems/shards';
-import { damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
+import { boostedRarity, coreBoostMult, damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
+import { canBoostWithCore } from '../systems/fusion';
 import { attachSystemVoice } from '../systems/systemVoice';
 import { DebugOverlay } from '../ui/DebugOverlay';
 import {
@@ -35,7 +37,7 @@ import {
   hotkeyLabelForSlot,
   RO_PALETTE,
 } from '../ui/roTheme';
-import { buildEveningOffer, formatInventorySummary, formatSynergySummary, resolveEveningSelection } from './eveningUiModel';
+import { buildEveningOffer, formatInventorySummary, formatSynergySummary } from './eveningUiModel';
 import { buildShareCardSummary, findAvailableFusions, pickFusionCard } from './HudOverlayScene';
 import { MobileFpsMonitor, type FpsMonitorSnapshot } from './MobileFpsMonitor';
 import {
@@ -49,6 +51,9 @@ const FUSION_RECIPES: readonly FusionRecipe[] = skillsFullJson.fusions as Fusion
 
 const PHASE_TINT = { day: 0x000000, evening: 0x3a1a00, night: 0x05001a } as const;
 const PHASE_ALPHA = { day: 0, evening: 0.25, night: 0.5 } as const;
+/** Player-facing names for picked-up ingredients (R2). */
+const ITEM_LABEL: Record<string, string> = { grain: '🌾 ธัญพืช', mushroom: '🍄 เห็ด', water: '💧 น้ำ', fish: '🐟 ปลา', meat: '🍖 เนื้อสด' };
+
 const PHASE_LABEL = { day: 'กลางวัน', evening: 'เย็น', night: 'กลางคืน' } as const;
 
 /** Sprite sheet texture key per monster `defId`. */
@@ -101,6 +106,8 @@ interface CombatPopup {
   ttl: number;
   maxTtl: number;
   vy: number;
+  /** Set for ingredient popups: where it started, to stack popups on the same spot. */
+  itemAt?: string;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -152,7 +159,6 @@ export class GameScene extends Phaser.Scene {
   private eveningMealId: string | null = null;
   private eveningChoiceId: EveningChoiceId | null = null;
   private overtimeUsed = false;
-  private preEveningInv: Inventory | null = null;
   private tutorialPending = false;
   private tutorialShown = false;
   private tutorialExpireShown = false;
@@ -253,9 +259,13 @@ export class GameScene extends Phaser.Scene {
 
     const resumed = this.resume();
     this.state = resumed ?? this.newState();
-    this.eveningPending = false;
-    this.tutorialPending = false;
-    this.tutorialShown = this.state.tutorial === 'fused' || this.state.tutorial === 'done';
+    // A save made during an open evening reopens the same evening screen (GDD §10).
+    this.eveningPending = this.state.phase === 'evening' && this.state.eveningResolved === false;
+    this.eveningMealId = this.eveningPending ? autoMealId(this.state.inventory ?? {}) : null;
+    this.eveningChoiceId = 'trap';
+    // A save made while the forced fusion screen was open reopens it (R5).
+    this.tutorialPending = this.state.mode === 'casual' && this.state.tutorial === 'gift' && this.state.phase === 'night';
+    this.tutorialShown = this.tutorialPending || this.state.tutorial === 'fused' || this.state.tutorial === 'done';
     this.tutorialExpireShown = this.state.tutorial === 'done';
     this.systemToast = this.add
       .text(this.scale.width / 2, 16, '', {
@@ -309,9 +319,10 @@ export class GameScene extends Phaser.Scene {
       w: kb.addKey('W'), a: kb.addKey('A'), s: kb.addKey('S'), d: kb.addKey('D'),
     };
     kb.on('keydown-R', () => {
-      if (this.state.status === 'playing' && !this.state.pendingDraft) recallEarly(this.state, this.bus);
+      if (this.state.status === 'playing' && !this.state.pendingDraft) recallToEvening(this.state, this.rng, this.data_, this.bus);
     });
     kb.on('keydown-N', () => this.newRun());
+    kb.on('keydown-C', () => this.chooseFusion(true)); // fuse with a Fusion Core (R3)
     kb.on('keydown-M', () => {
       this.sfx.toggleMute();
     });
@@ -407,7 +418,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(900)
       .setInteractive({ useHandCursor: true })
       .on('pointerup', () => {
-        if (this.state.status === 'playing' && !this.state.pendingDraft) recallEarly(this.state, this.bus);
+        if (this.state.status === 'playing' && !this.state.pendingDraft) recallToEvening(this.state, this.rng, this.data_, this.bus);
       });
     this.muteBtn = this.add
       .text(122, btnY, '[M] เสียง: เปิด', btnStyle)
@@ -442,22 +453,8 @@ export class GameScene extends Phaser.Scene {
       this.sfx.playPhase(phase);
       console.info(`[phase] day ${day} → ${phase}`);
       if (phase === 'evening') {
-        if (this.preEveningInv) {
-          this.state.inventory = { ...this.preEveningInv };
-          this.preEveningInv = null;
-        }
-        // Reset auto-applied beginEvening defaults while the Evening Overlay lets the player choose.
-        this.state.coreShield = undefined;
-        this.state.traps = [];
-        const offer = buildEveningOffer(
-          this.state.inventory ?? {},
-          day,
-          this.state.coreMaxHp,
-          this.state.overtimeUsed ?? this.overtimeUsed,
-          null,
-          this.state.mode,
-        );
-        this.eveningMealId = offer.meals.find((m) => m.affordable)?.meal.id ?? null;
+        // Nothing is cooked yet: the evening is resolved only when the player confirms (R1).
+        this.eveningMealId = autoMealId(this.state.inventory ?? {});
         this.eveningChoiceId = 'trap';
         this.eveningPending = true;
       } else if (phase === 'night' && day === 1 && this.state.mode === 'casual' && !this.tutorialShown) {
@@ -474,6 +471,7 @@ export class GameScene extends Phaser.Scene {
       this.sfx.playHurt();
     });
     this.bus.on('player:levelup', () => this.sfx.playLevelUp());
+    this.bus.on('item:pickup', ({ kind, count, x, y }) => this.spawnItemPopup(kind, count, x, y));
     this.bus.on('run:end', () => clearRun()); // a finished run cannot be resumed
 
     this.stopAutoSave = autoSaveOnHide(
@@ -489,10 +487,6 @@ export class GameScene extends Phaser.Scene {
     this.animTime += dt;
     if (this.castPoseLeft > 0) this.castPoseLeft = Math.max(0, this.castPoseLeft - dt);
     if (!this.eveningPending && !this.tutorialPending) {
-      const wasPhase = this.state.phase;
-      if (wasPhase === 'day') {
-        this.preEveningInv = { ...(this.state.inventory ?? {}) };
-      }
       const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
       if (fx.some((f) => !f.missed)) {
         this.sfx.playCast();
@@ -503,22 +497,6 @@ export class GameScene extends Phaser.Scene {
         this.spawnCombatPopup(f);
       }
 
-      // stepRun emits phase:change before onPhaseStart mutates inventory/tutorial state; sync UI after.
-      if (wasPhase === 'day' && this.state.phase === 'evening' && this.eveningPending && this.preEveningInv) {
-        this.state.inventory = { ...this.preEveningInv };
-        this.preEveningInv = null;
-        this.state.coreShield = undefined;
-        this.state.traps = [];
-        const offer = buildEveningOffer(
-          this.state.inventory ?? {},
-          this.state.day,
-          this.state.coreMaxHp,
-          this.state.overtimeUsed ?? this.overtimeUsed,
-          null,
-          this.state.mode,
-        );
-        this.eveningMealId = offer.meals.find((m) => m.affordable)?.meal.id ?? null;
-      }
       if (this.state.mode === 'casual' && this.state.tutorial === 'fused' && !this.tutorialShown) {
         this.tutorialPending = true;
         this.tutorialShown = true;
@@ -711,6 +689,29 @@ export class GameScene extends Phaser.Scene {
       .setAlpha(1)
       .setVisible(true);
     this.combatPopups.push({ text: txt, ttl: 0.55, maxTtl: 0.55, vy: 34 });
+  }
+
+  /** "+1 ธัญพืช" over a picked-up ingredient (R2). Shares the combat popup pool. */
+  private spawnItemPopup(kind: string, count: number, x: number, y: number): void {
+    if (this.combatPopups.length >= 20) return;
+    const label = ITEM_LABEL[kind] ?? kind;
+    const txt =
+      this.popupPool.pop() ??
+      this.add
+        .text(0, 0, '', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '15px',
+          fontStyle: 'bold',
+          color: '#fde047',
+          stroke: '#090d16',
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5)
+        .setDepth(25);
+    // Stack popups that start on the same spot (the well gives water and fish together).
+    const stacked = this.combatPopups.filter((p) => p.itemAt === `${x},${y}` && p.ttl > p.maxTtl - 0.1).length;
+    txt.setText(`+${count} ${label}`).setColor('#86efac').setPosition(x, y - 18 - stacked * 18).setScale(1).setAlpha(1).setVisible(true);
+    this.combatPopups.push({ text: txt, ttl: 0.9, maxTtl: 0.9, vy: 28, itemAt: `${x},${y}` });
   }
 
   private updatePopups(dt: number): void {
@@ -910,6 +911,32 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0xfef08a, 1).fillRect(c.x - 2, c.y - 3, 4, 5); // gold lockplate
       }
     }
+    // Gatherable ingredients (R2): bright and pulsing so they read apart from the map props.
+    const pulse = 0.5 + 0.5 * Math.sin(this.animTime * 4);
+    for (const n of s.resourceNodes ?? []) {
+      if (n.taken) continue;
+      const glow = n.kind === 'grain' ? 0xfde047 : 0xc084fc;
+      g.fillStyle(glow, 0.18 + 0.18 * pulse).fillCircle(n.x, n.y, 18);
+      g.lineStyle(2, glow, 0.9).strokeCircle(n.x, n.y, 13 + pulse * 2);
+      if (n.kind === 'grain') {
+        g.lineStyle(2, 0xa16207, 1).lineBetween(n.x, n.y + 8, n.x, n.y - 6);
+        g.lineBetween(n.x - 4, n.y + 8, n.x - 5, n.y - 3).lineBetween(n.x + 4, n.y + 8, n.x + 5, n.y - 3);
+        g.fillStyle(0xfacc15, 1).fillEllipse(n.x, n.y - 7, 5, 9).fillEllipse(n.x - 5, n.y - 4, 4, 8).fillEllipse(n.x + 5, n.y - 4, 4, 8);
+      } else {
+        g.fillStyle(0xf5f5f4, 1).fillRect(n.x - 2, n.y - 1, 4, 8);
+        g.fillStyle(0xa855f7, 1).fillEllipse(n.x, n.y - 3, 16, 9);
+        g.fillStyle(0xf0abfc, 1).fillCircle(n.x - 4, n.y - 4, 1.5).fillCircle(n.x + 3, n.y - 5, 1.5);
+      }
+    }
+    if (s.well) {
+      const w = s.well;
+      const full = w.water + w.fish > 0;
+      g.fillStyle(0x090d16, 0.3).fillEllipse(w.x, w.y + 10, 34, 10);
+      g.fillStyle(0x57534e, 1).fillCircle(w.x, w.y, 15);
+      g.fillStyle(full ? 0x0ea5e9 : 0x1e293b, 1).fillCircle(w.x, w.y, 10);
+      g.lineStyle(2, 0xa8a29e, 1).strokeCircle(w.x, w.y, 15);
+      if (full && s.phase === 'day') g.lineStyle(2, 0x7dd3fc, 0.5 + 0.5 * pulse).strokeCircle(w.x, w.y, 20 + pulse * 3);
+    }
     for (const t of s.traps ?? []) {
       if (t.uses <= 0) continue;
       // 2.5D foreshortened rune trap pad
@@ -954,7 +981,7 @@ export class GameScene extends Phaser.Scene {
     const invStr = formatInventorySummary(s.inventory ?? {});
     const coreStr = (s.cores ?? 0) > 0 ? ` · Core ×${s.cores}` : '';
     const synStr = formatSynergySummary(
-      s.skills.map((o) => o.id),
+      s.skills.filter((o) => !o.gift).map((o) => o.id),
       this.data_.skills,
     );
     this.hudInvText.setWordWrapWidth(panelW - 22);
@@ -1116,7 +1143,10 @@ export class GameScene extends Phaser.Scene {
     const showIntro = this.state.skills.length === 0 && this.state.day === 1;
     const cardW = Math.min(432, w - 36);
     const cardH = 88;
-    const fusionCardH = 100;
+    // Taller when the Core button shows, so head, preview, hint and button never overlap (R3).
+    const fusionCanBoost =
+      !!fusion && canBoostWithCore(this.state, this.data_.skills, fusion.recipe, fusion.resultSkill.id);
+    const fusionCardH = fusionCanBoost ? 150 : 122;
     const gap = 10;
     const winW = cardW + 24;
     const headerH = 28;
@@ -1274,15 +1304,24 @@ export class GameScene extends Phaser.Scene {
         fusion.resultSkill.kind === 'active'
           ? `${KIND_LABEL.active} · พลัง ${damageAtLevel(fusion.resultSkill, inheritedLv)} · ทุก ${fusion.resultSkill.cooldown} วิ · ระยะ ${fusion.resultSkill.range} ช่อง`
           : `${KIND_LABEL.passive} · ถึกขึ้น: รับดาเมจน้อยลงและเลือดสูงสุดเพิ่ม`;
-      const hintLine = `อีกผล: "${fusion.alternateSkill.name.th}" (ดัน ${fusion.skillToRaiseForAlternate.name.th} ให้สูงกว่าก่อนผสม)`;
+      const coreNote = fusion.recipe.requiresCore ? ' · ใช้ Fusion Core 1 ลูก' : '';
+      const hintLine = `อีกผล: "${fusion.alternateSkill.name.th}" (ดัน ${fusion.skillToRaiseForAlternate.name.th} ให้สูงกว่าก่อนผสม)${coreNote}`;
+      const canBoost = fusionCanBoost;
 
-      const previewText = this.add.text(cardLeft + 14, y + 38, previewLine, {
+      const headText = this.add.text(cardLeft + 14, y + 10, head, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        wordWrap: { width: cardW - 60 },
+      });
+      const previewText = this.add.text(cardLeft + 14, y + 14 + headText.height, previewLine, {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '13px',
         color: '#e2e8f0',
         wordWrap: { width: cardW - 28 },
       });
-      const hintText = this.add.text(cardLeft + 14, y + 38 + previewText.height + 4, hintLine, {
+      const hintText = this.add.text(cardLeft + 14, previewText.y + previewText.height + 4, hintLine, {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
         color: '#fde047',
@@ -1301,16 +1340,32 @@ export class GameScene extends Phaser.Scene {
             padding: { x: 5, y: 2 },
           })
           .setOrigin(1, 0),
-        this.add.text(cardLeft + 14, y + 10, head, {
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '16px',
-          fontStyle: 'bold',
-          color: '#ffffff',
-          wordWrap: { width: cardW - 60 },
-        }),
+        headText,
         previewText,
         hintText,
       ]);
+      if (canBoost) {
+        // Fusion Core "+1 rarity" (R3, D17): a separate button so a plain tap never spends the Core.
+        const boosted = boostedRarity(fusion.resultSkill.rarity, 1);
+        const mult = coreBoostMult(fusion.resultSkill.rarity, 1).toFixed(2);
+        const label = `💠 ใช้ Core → ${RARITY_LABEL[boosted]} (ดาเมจ ×${mult}) [C]`;
+        const btn = this.add
+          .text(cardLeft + cardW - 10, y + fusionCardH - 8, label, {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '12px',
+            fontStyle: 'bold',
+            color: '#0b132b',
+            backgroundColor: '#67e8f9',
+            padding: { x: 8, y: 4 },
+          })
+          .setOrigin(1, 1)
+          .setInteractive({ useHandCursor: true });
+        btn.on('pointerup', (_p: unknown, _x: number, _y: number, ev: { stopPropagation(): void }) => {
+          ev.stopPropagation();
+          this.chooseFusion(true);
+        });
+        box.add(btn);
+      }
     }
     return box;
   }
@@ -1497,16 +1552,9 @@ export class GameScene extends Phaser.Scene {
 
   private confirmEvening(): void {
     const choiceId: EveningChoiceId = this.eveningChoiceId ?? 'trap';
-    const res = resolveEveningSelection(this.state.inventory ?? {}, this.eveningMealId, choiceId);
-    this.state.inventory = res.inventory;
-    this.state.nightBuff = res.buff;
-    this.state.coreShield = choiceId === 'fence' ? fenceShieldHp(this.state.coreMaxHp) : undefined;
-    this.state.traps = choiceId === 'trap' ? trapPositions(CORE_X, CORE_Y, TILE) : [];
-    if (res.usedOvertime) {
-      this.overtimeUsed = true;
-      this.state.overtimeUsed = true;
-      this.state.overtimeChosen = true;
-    }
+    // The rules live in systems/ (R1): the screen only passes the player's pick.
+    submitEvening(this.state, this.eveningMealId, choiceId);
+    if (this.state.overtimeUsed) this.overtimeUsed = true;
     this.eveningPending = false;
     this.sfx.playLevelUp();
     saveRun(this.syncAndGetState());
@@ -1605,6 +1653,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private confirmTutorialFusion(): void {
+    // The player's press is what fuses the gift (GDD §3 "กดผสมเท่านั้น", R5).
+    forceTutorialFusion(this.state);
     this.tutorialPending = false;
     this.sfx.playFuse();
     this.showSystemToast('ระบบ: "รับอุกกาบาตตกใส่ตัวเอง Lv1 (ทดลองใช้คืนแรก)!"', 4);
@@ -1751,13 +1801,19 @@ export class GameScene extends Phaser.Scene {
     if (index < this.state.pendingDraft.length) {
       pickDraft(this.state, index, this.data_.skills, this.bus);
     } else if (index === this.state.pendingDraft.length) {
-      const fusion = findAvailableFusions(this.state, this.data_.skills, FUSION_RECIPES)[0];
-      if (!fusion) return;
-      const out = pickFusionCard(this.state, fusion.recipe.id, this.data_.skills, FUSION_RECIPES);
-      if (out) {
-        this.sfx.playFuse();
-        this.bus.emit('draft:pick', { card: `fuse:${fusion.recipe.id}` });
-      }
+      this.chooseFusion(false);
+    }
+  }
+
+  /** The 4th card. `useCore` spends a Fusion Core for "+1 rarity" when it can (R3, D17). */
+  private chooseFusion(useCore: boolean): void {
+    if (this.state.status !== 'playing' || !this.state.pendingDraft) return;
+    const fusion = findAvailableFusions(this.state, this.data_.skills, FUSION_RECIPES)[0];
+    if (!fusion) return;
+    const out = pickFusionCard(this.state, fusion.recipe.id, this.data_.skills, FUSION_RECIPES, useCore);
+    if (out) {
+      this.sfx.playFuse();
+      this.bus.emit('draft:pick', { card: `fuse:${fusion.recipe.id}${useCore ? '+core' : ''}` });
     }
   }
 
