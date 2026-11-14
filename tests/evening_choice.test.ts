@@ -74,7 +74,7 @@ describe('beginEvening', () => {
     beginEvening(s);
     expect(s.coreShield).toBe(300);
     expect(s.inventory?.grain).toBe(0);
-    expect(s.traps).toBeUndefined();
+    expect(s.traps ?? []).toEqual([]);
   });
 
   it('overtime: no meal (hungry) and marked used', () => {

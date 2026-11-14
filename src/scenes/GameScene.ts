@@ -14,14 +14,14 @@ import { loadRunData } from '../data';
 import skillsFullJson from '../data/skills_full.json';
 import { VirtualJoystick } from '../input/joystick';
 import { isPlayerDown } from '../systems/base';
-import { phaseRemaining, recallEarly } from '../systems/clock';
+import { phaseRemaining } from '../systems/clock';
 import type { CombatFx } from '../systems/combat';
 import { dailySeed } from '../systems/daily';
-import { fenceShieldHp, trapPositions, type EveningChoiceId, type Inventory } from '../systems/evening';
+import { autoMealId, type EveningChoiceId } from '../systems/evening';
 import type { Vec2 } from '../systems/movement';
 import { attachMissionTracker } from '../systems/missionTracker';
 import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
-import { startRun, stepRun, type RunData } from '../systems/run';
+import { recallToEvening, startRun, stepRun, submitEvening, type RunData } from '../systems/run';
 import { attachShardLedger } from '../systems/shards';
 import { damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
 import { attachSystemVoice } from '../systems/systemVoice';
@@ -35,7 +35,7 @@ import {
   hotkeyLabelForSlot,
   RO_PALETTE,
 } from '../ui/roTheme';
-import { buildEveningOffer, formatInventorySummary, formatSynergySummary, resolveEveningSelection } from './eveningUiModel';
+import { buildEveningOffer, formatInventorySummary, formatSynergySummary } from './eveningUiModel';
 import { buildShareCardSummary, findAvailableFusions, pickFusionCard } from './HudOverlayScene';
 import { MobileFpsMonitor, type FpsMonitorSnapshot } from './MobileFpsMonitor';
 import {
@@ -152,7 +152,6 @@ export class GameScene extends Phaser.Scene {
   private eveningMealId: string | null = null;
   private eveningChoiceId: EveningChoiceId | null = null;
   private overtimeUsed = false;
-  private preEveningInv: Inventory | null = null;
   private tutorialPending = false;
   private tutorialShown = false;
   private tutorialExpireShown = false;
@@ -251,7 +250,10 @@ export class GameScene extends Phaser.Scene {
 
     const resumed = this.resume();
     this.state = resumed ?? this.newState();
-    this.eveningPending = false;
+    // A save made during an open evening reopens the same evening screen (GDD §10).
+    this.eveningPending = this.state.phase === 'evening' && this.state.eveningResolved === false;
+    this.eveningMealId = this.eveningPending ? autoMealId(this.state.inventory ?? {}) : null;
+    this.eveningChoiceId = 'trap';
     this.tutorialPending = false;
     this.tutorialShown = this.state.tutorial === 'fused' || this.state.tutorial === 'done';
     this.tutorialExpireShown = this.state.tutorial === 'done';
@@ -307,7 +309,7 @@ export class GameScene extends Phaser.Scene {
       w: kb.addKey('W'), a: kb.addKey('A'), s: kb.addKey('S'), d: kb.addKey('D'),
     };
     kb.on('keydown-R', () => {
-      if (this.state.status === 'playing' && !this.state.pendingDraft) recallEarly(this.state, this.bus);
+      if (this.state.status === 'playing' && !this.state.pendingDraft) recallToEvening(this.state, this.rng, this.data_, this.bus);
     });
     kb.on('keydown-N', () => this.newRun());
     kb.on('keydown-M', () => {
@@ -405,7 +407,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(900)
       .setInteractive({ useHandCursor: true })
       .on('pointerup', () => {
-        if (this.state.status === 'playing' && !this.state.pendingDraft) recallEarly(this.state, this.bus);
+        if (this.state.status === 'playing' && !this.state.pendingDraft) recallToEvening(this.state, this.rng, this.data_, this.bus);
       });
     this.muteBtn = this.add
       .text(122, btnY, '[M] เสียง: เปิด', btnStyle)
@@ -440,22 +442,8 @@ export class GameScene extends Phaser.Scene {
       this.sfx.playPhase(phase);
       console.info(`[phase] day ${day} → ${phase}`);
       if (phase === 'evening') {
-        if (this.preEveningInv) {
-          this.state.inventory = { ...this.preEveningInv };
-          this.preEveningInv = null;
-        }
-        // Reset auto-applied beginEvening defaults while the Evening Overlay lets the player choose.
-        this.state.coreShield = undefined;
-        this.state.traps = [];
-        const offer = buildEveningOffer(
-          this.state.inventory ?? {},
-          day,
-          this.state.coreMaxHp,
-          this.state.overtimeUsed ?? this.overtimeUsed,
-          null,
-          this.state.mode,
-        );
-        this.eveningMealId = offer.meals.find((m) => m.affordable)?.meal.id ?? null;
+        // Nothing is cooked yet: the evening is resolved only when the player confirms (R1).
+        this.eveningMealId = autoMealId(this.state.inventory ?? {});
         this.eveningChoiceId = 'trap';
         this.eveningPending = true;
       } else if (phase === 'night' && day === 1 && this.state.mode === 'casual' && !this.tutorialShown) {
@@ -487,10 +475,6 @@ export class GameScene extends Phaser.Scene {
     this.animTime += dt;
     if (this.castPoseLeft > 0) this.castPoseLeft = Math.max(0, this.castPoseLeft - dt);
     if (!this.eveningPending && !this.tutorialPending) {
-      const wasPhase = this.state.phase;
-      if (wasPhase === 'day') {
-        this.preEveningInv = { ...(this.state.inventory ?? {}) };
-      }
       const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
       if (fx.some((f) => !f.missed)) {
         this.sfx.playCast();
@@ -501,22 +485,6 @@ export class GameScene extends Phaser.Scene {
         this.spawnCombatPopup(f);
       }
 
-      // stepRun emits phase:change before onPhaseStart mutates inventory/tutorial state; sync UI after.
-      if (wasPhase === 'day' && this.state.phase === 'evening' && this.eveningPending && this.preEveningInv) {
-        this.state.inventory = { ...this.preEveningInv };
-        this.preEveningInv = null;
-        this.state.coreShield = undefined;
-        this.state.traps = [];
-        const offer = buildEveningOffer(
-          this.state.inventory ?? {},
-          this.state.day,
-          this.state.coreMaxHp,
-          this.state.overtimeUsed ?? this.overtimeUsed,
-          null,
-          this.state.mode,
-        );
-        this.eveningMealId = offer.meals.find((m) => m.affordable)?.meal.id ?? null;
-      }
       if (this.state.mode === 'casual' && this.state.tutorial === 'fused' && !this.tutorialShown) {
         this.tutorialPending = true;
         this.tutorialShown = true;
@@ -1448,16 +1416,9 @@ export class GameScene extends Phaser.Scene {
 
   private confirmEvening(): void {
     const choiceId: EveningChoiceId = this.eveningChoiceId ?? 'trap';
-    const res = resolveEveningSelection(this.state.inventory ?? {}, this.eveningMealId, choiceId);
-    this.state.inventory = res.inventory;
-    this.state.nightBuff = res.buff;
-    this.state.coreShield = choiceId === 'fence' ? fenceShieldHp(this.state.coreMaxHp) : undefined;
-    this.state.traps = choiceId === 'trap' ? trapPositions(CORE_X, CORE_Y, TILE) : [];
-    if (res.usedOvertime) {
-      this.overtimeUsed = true;
-      this.state.overtimeUsed = true;
-      this.state.overtimeChosen = true;
-    }
+    // The rules live in systems/ (R1): the screen only passes the player's pick.
+    submitEvening(this.state, this.eveningMealId, choiceId);
+    if (this.state.overtimeUsed) this.overtimeUsed = true;
     this.eveningPending = false;
     this.sfx.playLevelUp();
     saveRun(this.syncAndGetState());

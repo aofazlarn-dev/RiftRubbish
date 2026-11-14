@@ -136,6 +136,10 @@ export interface GameState {
   inventory?: Inventory;
   /** Evening choice (balance §6.3). `requestedChoice` is set by the UI; the game falls back to trap. */
   requestedChoice?: 'fence' | 'trap' | 'overtime';
+  /** Meal the player picked this evening (null = skip). Undefined = not picked, the game picks. */
+  requestedMeal?: string | null;
+  /** False from the start of an evening until it is resolved (player confirms, or night starts). */
+  eveningResolved?: boolean;
   /** Core shield left from the fence choice; lasts until dawn. */
   coreShield?: number;
   /** Traps around the base (6 at 4 tiles, 3 uses each). Cleared at dawn. */
