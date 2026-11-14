@@ -14,6 +14,7 @@ import { tickSkills, type CombatFx } from './combat';
 import { clearMonstersAtDawn, findDef, ringPoint, spawnDayPatrols, spawnMonster, tickMonsters, tickSpawns } from './monsters';
 import { movePlayer, type Vec2 } from './movement';
 import { eveningMeal, gatherDay } from './evening';
+import { expireTutorialGifts, forceTutorialFusion, grantTutorialGift } from './tutorial';
 import { grantXp, openDraftIfOwed } from './progression';
 import type { SkillDef } from './skills';
 import { buildNightSpawns, waveForNight, type MonsterDef, type WavesData } from './waves';
@@ -44,6 +45,11 @@ export function startRun(state: GameState, rng: RunRng, data: RunData, bus?: Eve
 function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
   const combat = rng.get('combat');
   if (state.phase === 'night') {
+    if (state.day === 1) {
+      // Welcome gift at the start of night 1: J02 + J03 are fused into R01a at once (G2, GDD §3).
+      grantTutorialGift(state);
+      forceTutorialFusion(state);
+    }
     const wave = waveForNight(data.waves, state.day);
     const queue = buildNightSpawns(wave, combat, FINAL_NIGHT);
     if (wave.elite) queue.push({ t: ELITE_SPAWN_AT, monsterId: wave.elite, affix: false });
@@ -69,6 +75,7 @@ function onPhaseStart(state: GameState, rng: RunRng, data: RunData): void {
     dawnRepair(state);
     state.nightBuff = undefined;
     state.inventory = gatherDay(state.inventory ?? {}, rng.get('loot'));
+    expireTutorialGifts(state); // the welcome gift leaves at dawn of day 2 (G2)
     const patrol = data.waves.days.find((d) => d.day === state.day);
     if (patrol) spawnDayPatrols(state, patrol, combat, data.monsters);
   }
