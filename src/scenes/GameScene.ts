@@ -4,13 +4,14 @@
  */
 
 import Phaser from 'phaser';
+import { SoundEffects } from '../audio/sfx';
 import { EventBus } from '../core/events';
 import { RunRng } from '../core/rng';
 import { autoSaveOnHide, clearRun, loadRun, saveRun } from '../core/save';
 import { createRun, type GameState, type Mode } from '../core/state';
 import { CORE_X, CORE_Y, MAP_TILES, TILE, WORLD } from '../core/world';
 import { loadRunData } from '../data';
-import skillsJson from '../data/skills.json';
+import skillsFullJson from '../data/skills_full.json';
 import { VirtualJoystick } from '../input/joystick';
 import { isPlayerDown } from '../systems/base';
 import { phaseRemaining, recallEarly } from '../systems/clock';
@@ -23,7 +24,7 @@ import { DebugOverlay } from '../ui/DebugOverlay';
 import { buildShareCardSummary, findAvailableFusions, pickFusionCard } from './HudOverlayScene';
 import { MobileFpsMonitor, type FpsMonitorSnapshot } from './MobileFpsMonitor';
 
-const FUSION_RECIPES: readonly FusionRecipe[] = skillsJson.fusions as FusionRecipe[];
+const FUSION_RECIPES: readonly FusionRecipe[] = skillsFullJson.fusions as FusionRecipe[];
 
 const PHASE_TINT = { day: 0x000000, evening: 0x3a1a00, night: 0x05001a } as const;
 const PHASE_ALPHA = { day: 0, evening: 0.25, night: 0.5 } as const;
@@ -39,11 +40,17 @@ const MONSTER_SPRITE: Record<string, string> = {
   spirit: 'mob_fog_wraith_walk',
   rift_wolf: 'elite_rift_wolf_walk',
 };
-const SKILL_ICON_IDS = [
-  'W01', 'W03', 'E01', 'E02', 'E03', 'J01', 'J02', 'J03', 'J04', 'S01', 'S02',
-  'R05a', 'R05b', 'R07a', 'R07b', 'R10a', 'R10b',
-] as const;
+const SKILL_ICON_IDS: readonly string[] = skillsFullJson.skills.map((s) => s.id);
 const CARD_FRAME_KEYS = ['common', 'rare', 'epic', 'legendary', 'mythic', 'fusion'] as const;
+const VFX_SHAPES = ['projectile', 'cone', 'ring', 'line'] as const;
+const TAG_FX_COLOR: Record<string, number> = {
+  fire: 0xff5400,
+  ice: 0x48cae4,
+  lightning: 0xffe66d,
+  shadow: 0xc77dff,
+  earth: 0x8d6e63,
+  junk: 0xadb5bd,
+};
 const FX_COLOR: Record<string, number> = { W01: 0xff7b00, E01: 0xff4d00, E02: 0x8ecae6, E03: 0xffe066, J03: 0xb0a090 };
 const FX_SECONDS = 0.18;
 
@@ -80,11 +87,24 @@ export class GameScene extends Phaser.Scene {
   private monsterSprites = new Map<number, Phaser.GameObjects.Sprite>();
   private spritePool: Phaser.GameObjects.Sprite[] = [];
   private fxGraphics!: Phaser.GameObjects.Graphics;
+  private fxPool: Phaser.GameObjects.Image[] = [];
+  private activeFxSprites: Phaser.GameObjects.Image[] = [];
   private barGraphics!: Phaser.GameObjects.Graphics;
   private liveFx: LiveFx[] = [];
+  private sfx = new SoundEffects();
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private joystick!: VirtualJoystick;
-  private hud!: Phaser.GameObjects.Text;
+  private hudGraphics!: Phaser.GameObjects.Graphics;
+  private hudTitle!: Phaser.GameObjects.Text;
+  private hudHpText!: Phaser.GameObjects.Text;
+  private hudCoreText!: Phaser.GameObjects.Text;
+  private hudMetaText!: Phaser.GameObjects.Text;
+  private downBanner!: Phaser.GameObjects.Text;
+  private recallBtn!: Phaser.GameObjects.Text;
+  private muteBtn!: Phaser.GameObjects.Text;
+  private restartBtn!: Phaser.GameObjects.Text;
+  private skillDock?: Phaser.GameObjects.Container;
+  private skillDockKey = '';
   private phaseShade!: Phaser.GameObjects.Rectangle;
   private debug!: DebugOverlay;
   private fpsMonitor = new MobileFpsMonitor();
@@ -141,6 +161,9 @@ export class GameScene extends Phaser.Scene {
     for (const r of CARD_FRAME_KEYS) {
       this.load.image(`card_frame_${r}`, `assets/ui/card_frame_${r}.png`);
     }
+    for (const shape of VFX_SHAPES) {
+      this.load.image(`vfx_${shape}`, `assets/vfx/vfx_${shape}.png`);
+    }
   }
 
   private ensureAnimations(): void {
@@ -167,9 +190,13 @@ export class GameScene extends Phaser.Scene {
     this.data_ = loadRunData();
     this.monsterSprites.clear();
     this.spritePool = [];
+    this.fxPool = [];
+    this.activeFxSprites = [];
     this.liveFx = [];
     this.overlay = undefined;
     this.overlayKey = '';
+    this.skillDock = undefined;
+    this.skillDockKey = '';
     this.bus.clear();
     this.ensureAnimations();
 
@@ -203,34 +230,98 @@ export class GameScene extends Phaser.Scene {
       if (this.state.status === 'playing' && !this.state.pendingDraft) recallEarly(this.state, this.bus);
     });
     kb.on('keydown-N', () => this.newRun());
+    kb.on('keydown-M', () => {
+      this.sfx.toggleMute();
+    });
     for (const [key, index] of [['ONE', 0], ['TWO', 1], ['THREE', 2], ['FOUR', 3]] as const) {
       kb.on(`keydown-${key}`, () => this.choose(index));
     }
     this.joystick = new VirtualJoystick(this);
 
-    this.hud = this.add
-      .text(12, 12, '', {
-        fontFamily: 'sans-serif',
-        fontSize: '16px',
-        color: '#ffffff',
-        lineSpacing: 3,
-        wordWrap: { width: this.hudWrapWidth() },
-      })
+    this.hudGraphics = this.add.graphics().setScrollFactor(0).setDepth(890);
+    this.hudTitle = this.add
+      .text(18, 16, '', { fontFamily: 'system-ui, sans-serif', fontSize: '14px', fontStyle: 'bold', color: '#ffd166' })
       .setScrollFactor(0)
       .setDepth(900);
+    this.hudHpText = this.add
+      .text(22, 37, '', { fontFamily: 'system-ui, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#ffffff' })
+      .setScrollFactor(0)
+      .setDepth(901);
+    this.hudCoreText = this.add
+      .text(22, 55, '', { fontFamily: 'system-ui, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#ffffff' })
+      .setScrollFactor(0)
+      .setDepth(901);
+    this.hudMetaText = this.add
+      .text(18, 88, '', { fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#d8b4f8' })
+      .setScrollFactor(0)
+      .setDepth(900);
+    this.downBanner = this.add
+      .text(this.scale.width / 2, 130, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#ff6b6b',
+        backgroundColor: '#1a0814dd',
+        padding: { x: 12, y: 6 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(905)
+      .setVisible(false);
+
+    const btnStyle = {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '13px',
+      color: '#ffffff',
+      backgroundColor: '#1b122bcc',
+      padding: { x: 8, y: 5 },
+    };
+    const btnY = this.scale.height - 34;
+    this.recallBtn = this.add
+      .text(10, btnY, '[R] เรียกคืนเร็ว', btnStyle)
+      .setScrollFactor(0)
+      .setDepth(900)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => {
+        if (this.state.status === 'playing' && !this.state.pendingDraft) recallEarly(this.state, this.bus);
+      });
+    this.muteBtn = this.add
+      .text(122, btnY, '[M] เสียง: เปิด', btnStyle)
+      .setScrollFactor(0)
+      .setDepth(900)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => {
+        this.sfx.toggleMute();
+      });
+    this.restartBtn = this.add
+      .text(226, btnY, '[N] รอบใหม่', btnStyle)
+      .setScrollFactor(0)
+      .setDepth(900)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => this.newRun());
+
     this.debug = new DebugOverlay(this);
     const onResize = (size: Phaser.Structs.Size) => {
-      this.hud.setWordWrapWidth(this.hudWrapWidth(size.width));
+      const y = size.height - 34;
+      this.recallBtn.setY(y);
+      this.muteBtn.setY(y);
+      this.restartBtn.setY(y);
+      this.downBanner.setX(size.width / 2);
     };
     this.scale.on('resize', onResize);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', onResize));
 
     this.bus.on('phase:change', ({ day, phase }) => {
       this.cameras.main.flash(250, 255, 255, 255, false);
+      this.sfx.playPhase(phase);
       console.info(`[phase] day ${day} → ${phase}`);
       saveRun(this.syncAndGetState()); // snapshot at each phase boundary as well
     });
-    this.bus.on('player:down', () => this.cameras.main.shake(300, 0.01));
+    this.bus.on('player:down', () => {
+      this.cameras.main.shake(300, 0.01);
+      this.sfx.playHurt();
+    });
+    this.bus.on('player:levelup', () => this.sfx.playLevelUp());
     this.bus.on('run:end', () => clearRun()); // a finished run cannot be resumed
 
     this.stopAutoSave = autoSaveOnHide(
@@ -244,6 +335,7 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 0.1); // clamp long frames (tab switch, GC pause)
     const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
+    if (fx.some((f) => !f.missed)) this.sfx.playCast();
     for (const f of fx) this.liveFx.push({ ...f, ttl: FX_SECONDS });
     const fpsSnap = this.fpsMonitor.recordFrame(deltaMs, this.state.monsters.length);
 
@@ -329,21 +421,57 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private fxColorForSkill(skillId: string): number {
+    if (FX_COLOR[skillId]) return FX_COLOR[skillId];
+    const def = this.data_.skills.find((d) => d.id === skillId);
+    const tag = def?.tags[0];
+    return (tag && TAG_FX_COLOR[tag]) || 0xffffff;
+  }
+
   private drawFx(dt: number): void {
     const g = this.fxGraphics.clear();
+    for (const img of this.activeFxSprites) {
+      img.setVisible(false);
+      this.fxPool.push(img);
+    }
+    this.activeFxSprites.length = 0;
+
     this.liveFx = this.liveFx.filter((f) => (f.ttl -= dt) > 0);
     for (const f of this.liveFx) {
       const alpha = f.ttl / FX_SECONDS;
-      const color = f.missed ? 0x777777 : (FX_COLOR[f.skillId] ?? 0xffffff);
+      const color = f.missed ? 0x777777 : this.fxColorForSkill(f.skillId);
+      const facing = Math.atan2(f.y2 - f.y1, f.x2 - f.x1);
+      const vfxKey = f.shape === 'cone' ? 'vfx_cone' : f.shape === 'line' ? 'vfx_line' : f.shape === 'ring' ? 'vfx_ring' : 'vfx_projectile';
+
+      if (this.textures.exists(vfxKey)) {
+        const img = this.fxPool.pop() ?? this.add.image(0, 0, vfxKey).setDepth(16);
+        img.setTexture(vfxKey).setVisible(true).setTint(color).setAlpha(0.85 * alpha);
+        if (f.shape === 'cone') {
+          const size = Math.max(48, (f.radius ?? 48) * 1.4);
+          img.setPosition(f.x1, f.y1).setOrigin(0.15, 0.5).setRotation(facing).setDisplaySize(size, size);
+        } else if (f.shape === 'line') {
+          const len = Math.max(32, Math.hypot(f.x2 - f.x1, f.y2 - f.y1));
+          img.setPosition(f.x1, f.y1).setOrigin(0, 0.5).setRotation(facing).setDisplaySize(len, 18);
+        } else if (f.shape === 'ring') {
+          const dia = Math.max(48, (f.radius ?? 48) * 2);
+          img.setPosition(f.x2, f.y2).setOrigin(0.5).setRotation(0).setDisplaySize(dia, dia);
+        } else {
+          const progress = 1 - alpha;
+          const px = f.x1 + (f.x2 - f.x1) * progress;
+          const py = f.y1 + (f.y2 - f.y1) * progress;
+          img.setPosition(px, py).setOrigin(0.5).setRotation(facing).setDisplaySize(26, 26);
+        }
+        this.activeFxSprites.push(img);
+      }
+
       if (f.shape === 'cone' && f.radius) {
-        const facing = Math.atan2(f.y2 - f.y1, f.x2 - f.x1);
-        g.fillStyle(color, 0.35 * alpha);
+        g.fillStyle(color, 0.22 * alpha);
         g.slice(f.x1, f.y1, f.radius, facing - 0.87, facing + 0.87, false).fillPath();
         continue;
       }
-      g.lineStyle(f.shape === 'line' ? 5 : 3, color, alpha);
+      g.lineStyle(f.shape === 'line' ? 4 : 2, color, 0.65 * alpha);
       g.lineBetween(f.x1, f.y1, f.x2, f.y2);
-      if (f.radius) g.fillStyle(color, 0.3 * alpha).fillCircle(f.x2, f.y2, f.radius);
+      if (f.radius) g.fillStyle(color, 0.2 * alpha).fillCircle(f.x2, f.y2, f.radius);
     }
   }
 
@@ -361,32 +489,93 @@ export class GameScene extends Phaser.Scene {
 
   private drawHud(fpsSnap?: FpsMonitorSnapshot): void {
     const s = this.state;
+    const panelW = Math.min(248, Math.max(196, this.scale.width - (import.meta.env.DEV ? 154 : 20)));
+    const barW = panelW - 16;
+    const g = this.hudGraphics.clear();
+
+    // Translucent dark RPG HUD panel
+    g.fillStyle(0x0d0614, 0.82).fillRoundedRect(10, 10, panelW, 100, 10);
+    g.lineStyle(1.5, 0x9b4dca, 0.9).strokeRoundedRect(10, 10, panelW, 100, 10);
+
+    // Player HP bar
+    const hpRatio = Phaser.Math.Clamp(s.player.hp / Math.max(1, s.player.maxHp), 0, 1);
+    g.fillStyle(0x2b121e, 1).fillRoundedRect(18, 36, barW, 14, 4);
+    g.fillStyle(hpRatio < 0.35 ? 0xff4d6d : 0x06d6a0, 1).fillRoundedRect(18, 36, Math.max(2, barW * hpRatio), 14, 4);
+
+    // Core HP bar
+    const coreRatio = Phaser.Math.Clamp(s.coreHp / Math.max(1, s.coreMaxHp), 0, 1);
+    g.fillStyle(0x1b122b, 1).fillRoundedRect(18, 54, barW, 14, 4);
+    g.fillStyle(0x9d4edd, 1).fillRoundedRect(18, 54, Math.max(2, barW * coreRatio), 14, 4);
+
+    // XP bar
+    const nextXp = Math.max(1, xpToNext(s.player.level));
+    const xpRatio = Phaser.Math.Clamp(s.player.xp / nextXp, 0, 1);
+    g.fillStyle(0x102136, 1).fillRoundedRect(18, 73, barW, 7, 3);
+    g.fillStyle(0x4cc9f0, 1).fillRoundedRect(18, 73, Math.max(2, barW * xpRatio), 7, 3);
+
     const left = phaseRemaining(s);
     const time = Number.isFinite(left) ? `${Math.ceil(left)} วิ` : 'จันทร์เลือด';
-    const skills = s.skills
+    this.hudTitle.setText(`วันที่ ${s.day}/7 · ${PHASE_LABEL[s.phase]} · ${time}`);
+    this.hudHpText.setText(`เลือด ${Math.ceil(s.player.hp)}/${s.player.maxHp}`);
+    this.hudCoreText.setText(`แกนฐาน ${Math.ceil(s.coreHp)}/${s.coreMaxHp}`);
+    const fpsText = fpsSnap
+      ? ` · FPS ${Math.round(fpsSnap.averageFps)}${fpsSnap.lowEndFallbackActive ? ' (30fps)' : ''}`
+      : '';
+    this.hudMetaText.setText(`Lv${s.player.level} · ปราบ ${s.kills} · มอน ${s.monsters.length}${fpsText}`);
+
+    this.recallBtn.setVisible(s.phase === 'day' && s.status === 'playing' && !s.pendingDraft);
+    this.muteBtn.setText(`[M] ${this.sfx.isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด'}`);
+    if (isPlayerDown(s)) {
+      this.downBanner.setText(`ล้มลง! ฟื้นที่ฐานใน ${Math.ceil(s.respawnIn)} วิ`).setVisible(true);
+    } else {
+      this.downBanner.setVisible(false);
+    }
+
+    this.syncSkillDock();
+  }
+
+  private syncSkillDock(): void {
+    const key = this.state.skills
       .map((o) => {
         const def = this.data_.skills.find((d) => d.id === o.id);
         const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
-        return `${this.skillName(o.id)} Lv${lv}`;
+        return `${o.id}:${lv}`;
       })
-      .join(' · ');
-    const fpsText = fpsSnap
-      ? ` · FPS ${Math.round(fpsSnap.averageFps)}${fpsSnap.lowEndFallbackActive ? ' · โหมดประหยัด 30fps' : ''}`
-      : '';
-    const down = isPlayerDown(s) ? `\nล้มลง! ฟื้นที่ฐานใน ${Math.ceil(s.respawnIn)} วิ` : '';
-    this.hud.setText(
-      `วันที่ ${s.day}/7 · ${PHASE_LABEL[s.phase]} · ${time}\n` +
-        `เลือด ${Math.ceil(s.player.hp)}/${s.player.maxHp} · แกนฐาน ${Math.ceil(s.coreHp)}/${s.coreMaxHp}\n` +
-        `เลเวล ${s.player.level} (${Math.floor(s.player.xp)}/${xpToNext(s.player.level)}) · ปราบ ${s.kills} · มอน ${s.monsters.length}${fpsText}\n` +
-        (skills ? `${skills}\n` : '') +
-        (s.phase === 'day' ? '[R] เรียกคืนเร็ว  ' : '') +
-        '[N] รอบใหม่' +
-        down,
-    );
-  }
+      .join(',');
+    if (key === this.skillDockKey) return;
+    this.skillDockKey = key;
+    this.skillDock?.destroy();
+    this.skillDock = undefined;
+    if (this.state.skills.length === 0) return;
 
-  private skillName(id: string): string {
-    return this.data_.skills.find((d) => d.id === id)?.name.th ?? id;
+    const dock = this.add.container(10, 116).setScrollFactor(0).setDepth(900);
+    this.state.skills.forEach((o, i) => {
+      const def = this.data_.skills.find((d) => d.id === o.id);
+      const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
+      const x = i * 42;
+      const borderColor = def ? RARITY_COLOR[def.rarity] : 0x9b4dca;
+      const slot = this.add.rectangle(x, 0, 36, 36, 0x120a24, 0.9).setOrigin(0).setStrokeStyle(2, borderColor);
+      dock.add(slot);
+      if (this.textures.exists(`icon_${o.id}`)) {
+        dock.add(this.add.image(x + 18, 18, `icon_${o.id}`).setDisplaySize(28, 28));
+      }
+      dock.add(
+        this.add
+          .text(x + 34, 34, `${lv}`, {
+            fontFamily: 'monospace',
+            fontSize: '10px',
+            fontStyle: 'bold',
+            color: '#ffd166',
+            backgroundColor: '#0d0614cc',
+            padding: { x: 2, y: 0 },
+          })
+          .setOrigin(1, 1),
+      );
+    });
+    dock.each((child: Phaser.GameObjects.GameObject) => {
+      (child as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
+    });
+    this.skillDock = dock;
   }
 
   // ---- Draft and end-of-run overlays -----------------------------------------------------
@@ -546,12 +735,17 @@ export class GameScene extends Phaser.Scene {
     const stats = `รอดถึงวันที่ ${s.day} · เลเวล ${s.player.level} · ปราบมอน ${s.kills} ตัว`;
     const share = buildShareCardSummary(s, this.data_.skills);
     const topSkillsText = share.topSkillsTh.length > 0 ? `สกิลเด่น: ${share.topSkillsTh.join(' · ')}` : `Seed: ${share.seed}`;
+    const cardW = Math.min(420, w - 24);
+    const cardBg = this.add
+      .rectangle(w / 2, h / 2 + 12, cardW, 384, 0x120a24, 0.94)
+      .setStrokeStyle(2.5, won ? 0xffd166 : 0xff2a55);
     box.add([
-      this.add.text(w / 2, h / 2 - 138, title, { fontFamily: 'sans-serif', fontSize: '28px', color: won ? '#ffd166' : '#ff6b6b', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 - 74, line, { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 - 30, stats, { fontFamily: 'sans-serif', fontSize: '16px', color: '#cfd2ff', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+      cardBg,
+      this.add.text(w / 2, h / 2 - 138, title, { fontFamily: 'sans-serif', fontSize: '28px', fontStyle: 'bold', color: won ? '#ffd166' : '#ff6b6b', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 - 74, line, { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 - 30, stats, { fontFamily: 'sans-serif', fontSize: '16px', color: '#cfd2ff', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
       this.add.text(w / 2, h / 2 + 6, share.nightTrackEmojis, { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffd166', align: 'center' }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 + 38, topSkillsText, { fontFamily: 'sans-serif', fontSize: '14px', color: '#a8dadc', align: 'center', wordWrap: { width: w - 32 } }).setOrigin(0.5),
+      this.add.text(w / 2, h / 2 + 38, topSkillsText, { fontFamily: 'sans-serif', fontSize: '14px', color: '#a8dadc', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
     ]);
     const shareBtn = this.add
       .rectangle(w / 2, h / 2 + 86, 248, 44, 0x2a9d8f)
@@ -587,7 +781,10 @@ export class GameScene extends Phaser.Scene {
       const fusion = findAvailableFusions(this.state, this.data_.skills, FUSION_RECIPES)[0];
       if (!fusion) return;
       const out = pickFusionCard(this.state, fusion.recipe.id, this.data_.skills, FUSION_RECIPES);
-      if (out) this.bus.emit('draft:pick', { card: `fuse:${fusion.recipe.id}` });
+      if (out) {
+        this.sfx.playFuse();
+        this.bus.emit('draft:pick', { card: `fuse:${fusion.recipe.id}` });
+      }
     }
   }
 
@@ -597,11 +794,6 @@ export class GameScene extends Phaser.Scene {
   private syncAndGetState(): GameState {
     this.state.rng = this.rng.snapshot();
     return this.state;
-  }
-
-  private hudWrapWidth(width = this.scale.width): number {
-    // Keep clear of the top-right DebugOverlay in dev builds and screen edges on narrow mobile viewports.
-    return Math.max(180, width - (import.meta.env.DEV ? 160 : 24));
   }
 
   /** A saved run that is still in progress, unless a ?seed= link or menu selection asks for a new one. */
