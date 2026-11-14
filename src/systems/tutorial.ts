@@ -5,8 +5,8 @@
  * player fuses them into R01a (Self-Inflicted Meteor, Lv1, locked level). The gift skills
  * leave at dawn of day 2 whether or not they were fused. Daily runs get no gift.
  *
- * Not built yet: the forced-fusion card and the system message. The fusion runs
- * automatically on the first evening, so the rule is in place before the UI.
+ * The fusion happens when the player presses the forced fusion card (GDD §3, R5). With no
+ * screen (the sim), stepRun fuses the gift on its first night tick.
  */
 
 import type { GameState, OwnedSkill } from '../core/state';

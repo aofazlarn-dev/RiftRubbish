@@ -22,6 +22,7 @@ import type { Vec2 } from '../systems/movement';
 import { attachMissionTracker } from '../systems/missionTracker';
 import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
 import { recallToEvening, startRun, stepRun, submitEvening, type RunData } from '../systems/run';
+import { forceTutorialFusion } from '../systems/tutorial';
 import { attachShardLedger } from '../systems/shards';
 import { boostedRarity, coreBoostMult, damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
 import { canBoostWithCore } from '../systems/fusion';
@@ -260,8 +261,9 @@ export class GameScene extends Phaser.Scene {
     this.eveningPending = this.state.phase === 'evening' && this.state.eveningResolved === false;
     this.eveningMealId = this.eveningPending ? autoMealId(this.state.inventory ?? {}) : null;
     this.eveningChoiceId = 'trap';
-    this.tutorialPending = false;
-    this.tutorialShown = this.state.tutorial === 'fused' || this.state.tutorial === 'done';
+    // A save made while the forced fusion screen was open reopens it (R5).
+    this.tutorialPending = this.state.mode === 'casual' && this.state.tutorial === 'gift' && this.state.phase === 'night';
+    this.tutorialShown = this.tutorialPending || this.state.tutorial === 'fused' || this.state.tutorial === 'done';
     this.tutorialExpireShown = this.state.tutorial === 'done';
     this.systemToast = this.add
       .text(this.scale.width / 2, 16, '', {
@@ -1602,6 +1604,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private confirmTutorialFusion(): void {
+    // The player's press is what fuses the gift (GDD §3 "กดผสมเท่านั้น", R5).
+    forceTutorialFusion(this.state);
     this.tutorialPending = false;
     this.sfx.playFuse();
     this.showSystemToast('ระบบ: "รับอุกกาบาตตกใส่ตัวเอง Lv1 (ทดลองใช้คืนแรก)!"', 4);
