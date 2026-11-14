@@ -10,7 +10,7 @@ import { autoSaveOnHide, clearRun, loadRun, saveRun } from '../core/save';
 import { createRun, type GameState } from '../core/state';
 import { CORE_X, CORE_Y, MAP_TILES, TILE, WORLD } from '../core/world';
 import { loadRunData } from '../data';
-import skillsJson from '../data/skills.json';
+import skillsJson from '../data/skills_full.json';
 import { VirtualJoystick } from '../input/joystick';
 import { isPlayerDown } from '../systems/base';
 import { phaseRemaining, recallEarly } from '../systems/clock';
