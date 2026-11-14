@@ -48,6 +48,8 @@
 8. (จากผล QA & Review ล่าสุด) เชื่อม `TitleScene.ts` เข้า `src/main.ts` (เมนู Casual / Daily Seed / Hardcore 🔒) และเพิ่ม `wordWrap: { width: this.scale.width - 24 }` ให้ `this.hud` ใน `src/scenes/GameScene.ts` เพื่อไม่ให้บรรทัดสถานะ/รายชื่อสกิลบนจอมือถือ 390px ยาวชน `DebugOverlay` หรือล้นขอบขวา
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
+- **Gemini → Claude & ผู้สร้าง (2026-11-14 16:41) — เชื่อม `TitleScene` และแก้ HUD มือถือแล้ว (`gemini/title-and-hud-polish`):**
+  - ลงทะเบียน `[TitleScene, GameScene]` ใน `src/main.ts`, รองรับ `?seed=` ข้ามเข้าเกมตรง + ปุ่ม `เล่นรอบเดิมต่อ` ใน `TitleScene.ts`, รับ `{mode, seed}` ใน `GameScene.init()`, และเพิ่ม `wordWrap` ให้ `this.hud` กันซ้อน `DebugOverlay` บนจอมือถือ 390px
 - **Gemini → Claude & ผู้สร้าง (2026-11-14 16:38) — ผล Code Review & ทดสอบเกมทั้งหมด (`main` @ `946fe55`):**
   - **ผลเทสต์ทั้งหมด:** `npm test` ผ่าน **11 ไฟล์ / 103 เทสต์**, `npm run build` (`tsc --noEmit && vite build`, 33 modules) ผ่าน, `npx vitest run --config sim/vitest.report.config.ts` บอทยังแพ้คืน 3–4 ทั้ง 6 seed (`a`–`f`, `t=366s..499s`, `core 0`), และทดสอบเล่นจริงในเบราว์เซอร์ (`?renderer=canvas`, เดสก์ท็อป + มือถือ 390×844) พบ **0 console/page errors** · กดเลือกการ์ด `1`, เดิน `W`/`D`, ต่อสู้/อัปเลเวล และกด `R` เรียกคืนเร็วเปลี่ยน `กลางวัน → เย็น` ทำงานถูกต้อง
   - **สิ่งที่ยังขาด/ยังไม่เชื่อม:** (1) `src/main.ts` ยังไม่ลงทะเบียน `TitleScene` (เข้า `GameScene` ทันที), (2) `src/data/index.ts` ยังโหลด `skills.json` แทน `skills_full.json` (18 สกิล + 10 สูตร), (3) `GameScene.ts` (`drawActors`/`drawWorld`) ยังใช้วงกลม/สี่เหลี่ยมแทน PNG ชุดที่ 1–4 ใน `public/assets/`, (4) `src/systems/evening.ts` ยังไม่ต่อเข้า `state.ts`/`run.ts`/`GameScene.ts`, (5) ระบบ slice ที่ตัดไว้ใน `combat.ts` (DoT, กระสุนบินจริง, โบนัสต่อเลเวล, Meta/Shard, เสียง)
@@ -97,6 +99,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-14 16:41 | Gemini | เชื่อม `TitleScene` เข้า `src/main.ts` (เมนู Casual / Daily Seed / Hardcore 🔒 / เล่นต่อ + รองรับ `?seed=`), ส่ง `{mode, seed}` เข้า `GameScene.init()`, และเพิ่ม `wordWrap` ให้ `this.hud` กันชน `DebugOverlay` บนมือถือ (`npm test` 103/103 & `npm run build` ผ่าน) | `gemini/title-and-hud-polish` |
 | 2026-11-14 16:38 | Gemini | บันทึกผล Code Review และ QA เกมทั้งหมดลง `HANDOFF.md` (`npm test` 103/103, `npm run build`, sim report 6 seed, Live Browser QA เดสก์ท็อป + มือถือ 390×844 พบ 0 errors, อัปเดต `Next up` & `Messages`) | `gemini/handoff-qa-review` |
 | 2026-11-14 16:26 | Claude | merge PR #20 เข้า `main` ตามที่ผู้สร้างอนุมัติ (CI `test-build` ผ่าน, merge commit `d5a79e6`) · merge PR #19 (UI การ์ดผสมใบที่ 4) เมื่อ 16:22 ตามคำสั่งผู้สร้าง (merge commit `d022bbf`) | `main` (PR #19, PR #20) |
 | 2026-11-14 16:30 | Gemini | เชื่อม `buildShareCardSummary` (§11) และ `MobileFpsMonitor` เข้า `src/scenes/GameScene.ts` (แสดง FPS + `โหมดประหยัด 30fps` ใน `drawHud()`, สรุป Share Card + ปุ่ม `คัดลอกลิงก์ท้าดวล (?seed=)` ใน `buildEndOverlay()`; เทสต์ 103/103 & build ผ่าน) | `gemini/sharecard-and-fps-ui` |
