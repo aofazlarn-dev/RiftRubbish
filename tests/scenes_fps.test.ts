@@ -7,15 +7,19 @@ import { countGraphemes, MobileFpsMonitor } from '../src/scenes/MobileFpsMonitor
 
 describe('MobileFpsMonitor & countGraphemes (D23)', () => {
   it('switches to 30fps low-power mode after sustained low FPS (< 42 fps for >= 1.5s)', () => {
-    const monitor = new MobileFpsMonitor({ lowFpsThreshold: 42, triggerDurationSec: 1.5 });
-    expect(monitor.targetFps).toBe(60);
+    const monitor = new MobileFpsMonitor(10);
+    const first = monitor.recordFrame(16.6, 20);
+    expect(first.targetFps).toBe(60);
+    expect(monitor.isLowEndFallbackActive()).toBe(false);
 
-    // 4 frames of 0.5s each with 33ms frame delta (~30 fps) => 2.0s total below threshold
-    for (let i = 0; i < 4; i++) {
-      monitor.recordFrame(33.3, 0.5);
+    // 45 frames at 40ms (~25 fps, 1.8s total) with 40 monsters on screen
+    let last = first;
+    for (let i = 0; i < 45; i++) {
+      last = monitor.recordFrame(40, 40);
     }
-    expect(monitor.isLowPower30Fps).toBe(true);
-    expect(monitor.targetFps).toBe(30);
+    expect(monitor.isLowEndFallbackActive()).toBe(true);
+    expect(last.lowEndFallbackActive).toBe(true);
+    expect(last.targetFps).toBe(30);
   });
 
   it('counts Thai graphemes accurately using Intl.Segmenter for the <= 70 grapheme rule (D23)', () => {
