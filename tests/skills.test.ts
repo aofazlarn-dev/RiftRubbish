@@ -23,7 +23,7 @@ const base: SkillDef = {
 describe('skills data', () => {
   it('shipped skills.json passes validation', () => {
     const skills = validateSkills(skillsData);
-    expect(skills.filter((s) => !s.fusedOnly)).toHaveLength(6); // starting skills; fused results are separate
+    expect(skills.filter((s) => !s.fusedOnly)).toHaveLength(11); // starting skills (6 + 5 junk); fused results are separate
     expect(new Set(skills.map((s) => s.id)).size).toBe(skills.length);
   });
 

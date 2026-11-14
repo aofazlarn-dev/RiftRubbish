@@ -29,6 +29,8 @@ export interface PlayerState {
   xp: number;
   /** Share of incoming damage removed by passives (0–1), recomputed by applyPassives. */
   damageReduction?: number;
+  /** Seconds left of a trap stun (1.5 s, balance §6.3). Movement is blocked while > 0. */
+  stunLeft?: number;
 }
 
 export interface OwnedSkill {
@@ -37,6 +39,8 @@ export interface OwnedSkill {
   xp: number;
   /** Seconds until an Active can cast again. Unused for Passives. */
   cooldownLeft: number;
+  /** Welcome gift (tutorial): outside the slots, never levels up, leaves at dawn of day 2. */
+  gift?: boolean;
 }
 
 export interface MonsterInstance {
@@ -52,6 +56,8 @@ export interface MonsterInstance {
   coreTimer: number;
   /** Seconds of slow remaining. */
   slowLeft: number;
+  /** Seconds left of a trap stun (2 s, balance §6.3). Does not move or attack while > 0. */
+  stunLeft?: number;
   affix: boolean;
   /** Which affix (balance §4), if any. `affix` is true for every affixed monster. */
   affixId?: AffixId;
@@ -64,6 +70,10 @@ export interface MonsterInstance {
   resistTag?: string | null;
   /** Daytime patrol: idles until the player comes close, never attacks the core. */
   patrol: boolean;
+  /** Patrol home point (where it spawned) and whether it is currently chasing the player. */
+  homeX?: number;
+  homeY?: number;
+  aggro?: boolean;
 }
 
 /** A burst from a dead "exploding" affix monster, resolved when its timer runs out. */
@@ -96,11 +106,28 @@ export interface GameState {
   rng: RngState;
   status: RunStatus;
   skills: OwnedSkill[];
+  /** Welcome gift state (Casual only): 'gift' → 'fused' → 'done'. Undefined = no gift. */
+  tutorial?: 'gift' | 'fused' | 'done';
+  /** Fusion Cores held (D14, D17). Used by the fusion UI later. */
+  cores?: number;
+  /** Today's daytime chests (2 per day, D17). Cleared at dusk. */
+  chests?: { x: number; y: number; opened: boolean }[];
+  /** The one chest Core per run has been rolled (D17). */
+  chestCoreGiven?: boolean;
   monsters: MonsterInstance[];
   /** Optional so saves made before affixes existed still load. Use `?? []`. */
   bursts?: PendingBurst[];
   /** Gathered ingredients (balance §6.2). Optional so older saves still load. Use `?? {}`. */
   inventory?: Inventory;
+  /** Evening choice (balance §6.3). `requestedChoice` is set by the UI; the game falls back to trap. */
+  requestedChoice?: 'fence' | 'trap' | 'overtime';
+  /** Core shield left from the fence choice; lasts until dawn. */
+  coreShield?: number;
+  /** Traps around the base (6 at 4 tiles, 3 uses each). Cleared at dawn. */
+  traps?: { x: number; y: number; uses: number }[];
+  /** Overtime: once per run, from day 4. `overtimeChosen` is for the run-end Soul Shard bonus (not built yet). */
+  overtimeUsed?: boolean;
+  overtimeChosen?: boolean;
   /** Buff from tonight's evening meal, or the hungry debuff. Cleared at dawn. Undefined = no effect. */
   nightBuff?: MealBuff;
   nextUid: number;
