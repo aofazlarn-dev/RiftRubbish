@@ -114,6 +114,10 @@ export interface GameState {
   chests?: { x: number; y: number; opened: boolean }[];
   /** The one chest Core per run has been rolled (D17). */
   chestCoreGiven?: boolean;
+  /** Seconds since the run started (for line cooldowns). */
+  runTime?: number;
+  /** Last time each limited System line was said (run seconds). */
+  lineLastAt?: Record<string, number>;
   monsters: MonsterInstance[];
   /** Optional so saves made before affixes existed still load. Use `?? []`. */
   bursts?: PendingBurst[];

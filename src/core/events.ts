@@ -16,6 +16,8 @@ export interface GameEvents {
   'draft:pick': { card: string };
   'skill:fused': { a: string; b: string; result: string };
   'disaster:warn': { id: string; inSeconds: number };
+  /** A line from the "System" (system_lines.md). `id` is the line id; the scene shows th or en. */
+  'system:say': { id: string; th: string; en: string };
 }
 
 type Handler<T> = (payload: T) => void;
