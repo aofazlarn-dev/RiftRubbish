@@ -26,6 +26,15 @@ import { attachShardLedger } from '../systems/shards';
 import { damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
 import { attachSystemVoice } from '../systems/systemVoice';
 import { DebugOverlay } from '../ui/DebugOverlay';
+import {
+  createRoButton,
+  drawRoGaugeBar,
+  drawRoIconSlot,
+  drawRoWindow,
+  formatExpPercent,
+  hotkeyLabelForSlot,
+  RO_PALETTE,
+} from '../ui/roTheme';
 import { buildEveningOffer, formatInventorySummary, formatSynergySummary, resolveEveningSelection } from './eveningUiModel';
 import { buildShareCardSummary, findAvailableFusions, pickFusionCard } from './HudOverlayScene';
 import { MobileFpsMonitor, type FpsMonitorSnapshot } from './MobileFpsMonitor';
@@ -64,7 +73,7 @@ const TAG_FX_COLOR: Record<string, number> = {
   junk: 0xadb5bd,
 };
 const FX_COLOR: Record<string, number> = { W01: 0xff7b00, E01: 0xff4d00, E02: 0x8ecae6, E03: 0xffe066, J03: 0xb0a090 };
-const FX_SECONDS = 0.18;
+const FX_SECONDS = 0.38;
 
 // Player-facing words: no dev terms such as Active/Passive (D24).
 const KIND_LABEL: Record<SkillDef['kind'], string> = { active: 'สกิลโจมตี', passive: 'สกิลติดตัว' };
@@ -87,6 +96,13 @@ interface LiveFx extends CombatFx {
   ttl: number;
 }
 
+interface CombatPopup {
+  text: Phaser.GameObjects.Text;
+  ttl: number;
+  maxTtl: number;
+  vy: number;
+}
+
 export class GameScene extends Phaser.Scene {
   state!: GameState;
   bus = new EventBus();
@@ -98,11 +114,16 @@ export class GameScene extends Phaser.Scene {
   private coreSprite!: Phaser.GameObjects.Sprite;
   private monsterSprites = new Map<number, Phaser.GameObjects.Sprite>();
   private spritePool: Phaser.GameObjects.Sprite[] = [];
+  private shadowGraphics!: Phaser.GameObjects.Graphics;
   private fxGraphics!: Phaser.GameObjects.Graphics;
   private fxPool: Phaser.GameObjects.Image[] = [];
   private activeFxSprites: Phaser.GameObjects.Image[] = [];
   private barGraphics!: Phaser.GameObjects.Graphics;
   private liveFx: LiveFx[] = [];
+  private combatPopups: CombatPopup[] = [];
+  private popupPool: Phaser.GameObjects.Text[] = [];
+  private animTime = 0;
+  private castPoseLeft = 0;
   private sfx = new SoundEffects();
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private joystick!: VirtualJoystick;
@@ -118,6 +139,7 @@ export class GameScene extends Phaser.Scene {
   private restartBtn!: Phaser.GameObjects.Text;
   private skillDock?: Phaser.GameObjects.Container;
   private skillDockKey = '';
+  private hudPanelH = 126;
   private phaseShade!: Phaser.GameObjects.Rectangle;
   private debug!: DebugOverlay;
   private fpsMonitor = new MobileFpsMonitor();
@@ -216,6 +238,10 @@ export class GameScene extends Phaser.Scene {
     this.fxPool = [];
     this.activeFxSprites = [];
     this.liveFx = [];
+    this.combatPopups = [];
+    this.popupPool = [];
+    this.animTime = 0;
+    this.castPoseLeft = 0;
     this.overlay = undefined;
     this.overlayKey = '';
     this.skillDock = undefined;
@@ -232,11 +258,13 @@ export class GameScene extends Phaser.Scene {
     this.systemToast = this.add
       .text(this.scale.width / 2, 16, '', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '15px',
+        fontSize: '14px',
         fontStyle: 'bold',
-        color: '#ffd166',
-        backgroundColor: '#1a0933ee',
-        padding: { x: 14, y: 8 },
+        color: '#fde68a',
+        backgroundColor: '#182238ee',
+        stroke: '#0b111e',
+        strokeThickness: 2,
+        padding: { x: 14, y: 7 },
         align: 'center',
         wordWrap: { width: Math.min(460, this.scale.width - 24) },
       })
@@ -260,10 +288,11 @@ export class GameScene extends Phaser.Scene {
     if (import.meta.env.DEV) (window as unknown as { __scene?: GameScene }).__scene = this;
 
     this.drawWorld();
+    this.shadowGraphics = this.add.graphics().setDepth(4);
     this.barGraphics = this.add.graphics().setDepth(20);
     this.fxGraphics = this.add.graphics().setDepth(15);
     this.bossSprite = this.add.sprite(0, 0, 'boss_bloodmoon_walk').setDepth(9).setVisible(false);
-    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'hero_idle').setScale(1.25).setDepth(10);
+    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'hero_idle').setScale(1.45).setDepth(10);
     this.cameras.main.setBounds(0, 0, WORLD, WORLD).startFollow(this.playerSprite, true, 0.15, 0.15);
 
     this.phaseShade = this.add
@@ -291,32 +320,67 @@ export class GameScene extends Phaser.Scene {
 
     this.hudGraphics = this.add.graphics().setScrollFactor(0).setDepth(890);
     this.hudTitle = this.add
-      .text(18, 16, '', { fontFamily: 'system-ui, sans-serif', fontSize: '14px', fontStyle: 'bold', color: '#ffd166' })
+      .text(31, 15, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#f8fafc',
+        stroke: '#0b111e',
+        strokeThickness: 2,
+      })
       .setScrollFactor(0)
       .setDepth(900);
     this.hudHpText = this.add
-      .text(22, 37, '', { fontFamily: 'system-ui, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#ffffff' })
+      .text(23, 40, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        stroke: '#0b111e',
+        strokeThickness: 2,
+      })
       .setScrollFactor(0)
       .setDepth(901);
     this.hudCoreText = this.add
-      .text(22, 55, '', { fontFamily: 'system-ui, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#ffffff' })
+      .text(23, 58, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        stroke: '#0b111e',
+        strokeThickness: 2,
+      })
       .setScrollFactor(0)
       .setDepth(901);
     this.hudMetaText = this.add
-      .text(18, 86, '', { fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#d8b4f8' })
+      .text(18, 86, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fef08a',
+        stroke: '#0b111e',
+        strokeThickness: 2,
+      })
       .setScrollFactor(0)
       .setDepth(900);
     this.hudInvText = this.add
-      .text(18, 102, '', { fontFamily: 'system-ui, sans-serif', fontSize: '11px', color: '#a8dadc', wordWrap: { width: 228 } })
+      .text(21, 105, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        color: '#bae6fd',
+        wordWrap: { width: 224 },
+      })
       .setScrollFactor(0)
       .setDepth(900);
     this.downBanner = this.add
-      .text(this.scale.width / 2, 130, '', {
+      .text(this.scale.width / 2, 200, '', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '16px',
+        fontSize: '15px',
         fontStyle: 'bold',
-        color: '#ff6b6b',
-        backgroundColor: '#1a0814dd',
+        color: '#fecdd3',
+        backgroundColor: '#4c1127ee',
+        stroke: '#0b111e',
+        strokeThickness: 2,
         padding: { x: 12, y: 6 },
       })
       .setOrigin(0.5, 0)
@@ -326,10 +390,13 @@ export class GameScene extends Phaser.Scene {
 
     const btnStyle = {
       fontFamily: 'system-ui, sans-serif',
-      fontSize: '13px',
-      color: '#ffffff',
-      backgroundColor: '#1b122bcc',
-      padding: { x: 8, y: 5 },
+      fontSize: '12px',
+      fontStyle: 'bold',
+      color: '#f8fafc',
+      backgroundColor: '#1d2b45ee',
+      stroke: '#0b111e',
+      strokeThickness: 2,
+      padding: { x: 9, y: 5 },
     };
     const btnY = this.scale.height - 34;
     this.recallBtn = this.add
@@ -362,7 +429,8 @@ export class GameScene extends Phaser.Scene {
       this.muteBtn.setY(y);
       this.restartBtn.setY(y);
       this.downBanner.setX(size.width / 2);
-      this.systemToast.setX(size.width / 2);
+      this.systemToast.setWordWrapWidth(Math.min(460, size.width - 24));
+      this.positionSystemToast();
     };
     this.scale.on('resize', onResize);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', onResize));
@@ -416,14 +484,22 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 0.1); // clamp long frames (tab switch, GC pause)
+    this.animTime += dt;
+    if (this.castPoseLeft > 0) this.castPoseLeft = Math.max(0, this.castPoseLeft - dt);
     if (!this.eveningPending && !this.tutorialPending) {
       const wasPhase = this.state.phase;
       if (wasPhase === 'day') {
         this.preEveningInv = { ...(this.state.inventory ?? {}) };
       }
       const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
-      if (fx.some((f) => !f.missed)) this.sfx.playCast();
-      for (const f of fx) this.liveFx.push({ ...f, ttl: FX_SECONDS });
+      if (fx.some((f) => !f.missed)) {
+        this.sfx.playCast();
+        this.castPoseLeft = 0.24;
+      }
+      for (const f of fx) {
+        this.liveFx.push({ ...f, ttl: FX_SECONDS });
+        this.spawnCombatPopup(f);
+      }
 
       // stepRun emits phase:change before onPhaseStart mutates inventory/tutorial state; sync UI after.
       if (wasPhase === 'day' && this.state.phase === 'evening' && this.eveningPending && this.preEveningInv) {
@@ -477,19 +553,39 @@ export class GameScene extends Phaser.Scene {
 
   private drawActors(): void {
     const s = this.state;
+    const sg = this.shadowGraphics.clear();
     const move = this.readInput();
-    this.playerSprite.setPosition(s.player.x, s.player.y);
-    if (move.x !== 0) this.playerSprite.setFlipX(move.x < 0);
+    const moving = move.x !== 0 || move.y !== 0;
+    const down = isPlayerDown(s);
 
-    if (isPlayerDown(s)) {
-      this.playerSprite.setAlpha(0.55).clearTint();
+    sg.fillStyle(0x090d16, 0.36).fillEllipse(CORE_X, CORE_Y + 26, 64, 18);
+    const corePulse = 0.22 + 0.1 * Math.sin(this.animTime * 3.2);
+    sg.lineStyle(2, 0xc084fc, corePulse).strokeCircle(CORE_X, CORE_Y + 6, 42 + Math.sin(this.animTime * 2.5) * 3);
+
+    if (move.x !== 0) this.playerSprite.setFlipX(move.x < 0);
+    const bob = !down && moving ? Math.abs(Math.sin(this.animTime * 14)) * 3 : 0;
+    this.playerSprite.setPosition(s.player.x, s.player.y - bob);
+    sg.fillStyle(0x090d16, down ? 0.22 : 0.38).fillEllipse(s.player.x, s.player.y + 15, 28, 10);
+
+    if (!down && this.castPoseLeft > 0) {
+      const auraAlpha = Math.min(1, this.castPoseLeft / 0.24) * 0.6;
+      sg.lineStyle(2.5, 0xfbbf24, auraAlpha).strokeEllipse(s.player.x, s.player.y + 13, 44, 18);
+      sg.fillStyle(0x38bdf8, auraAlpha * 0.25).fillEllipse(s.player.x, s.player.y + 13, 38, 14);
+    }
+
+    if (down) {
+      this.playerSprite.setAlpha(0.55).clearTint().setScale(1.45, 1.45).setRotation(0);
       if (this.playerSprite.anims.currentAnim?.key !== 'hero_death') this.playerSprite.play('hero_death', true);
     } else if (s.invulnLeft > 0) {
-      this.playerSprite.setAlpha(0.8).setTexture('hero_hit', 0).setTint(0xff8080);
+      this.playerSprite.setAlpha(0.85).setTexture('hero_hit', 0).setTint(0xff8080).setScale(1.52, 1.38).setRotation(0);
     } else {
       this.playerSprite.setAlpha(1).clearTint();
-      const moving = move.x !== 0 || move.y !== 0;
       this.playerSprite.play(moving ? 'hero_walk' : 'hero_idle', true);
+      const breath = moving ? Math.sin(this.animTime * 14) * 0.05 : Math.sin(this.animTime * 4.2) * 0.045;
+      const castPop = this.castPoseLeft > 0 ? 1.09 : 1;
+      this.playerSprite.setScale(1.45 * (1 - breath * 0.5) * castPop, 1.45 * (1 + breath) * castPop);
+      const tilt = moving ? Math.sin(this.animTime * 14) * 0.075 : this.castPoseLeft > 0 ? (this.playerSprite.flipX ? -0.1 : 0.1) : 0;
+      this.playerSprite.setRotation(tilt);
     }
 
     // Core visual reflects damage state (frame 0 healthy, 1 damaged, 2 broken).
@@ -512,12 +608,26 @@ export class GameScene extends Phaser.Scene {
       if (sprite.anims.currentAnim?.key !== texKey) sprite.play(texKey, true);
       const targetX = m.defId === 'bat' || m.defId === 'spirit' || m.defId === 'rift_wolf' ? s.player.x : CORE_X;
       sprite.setFlipX(m.x > targetX);
-      sprite.setScale(m.affix ? 1.25 : 1);
+
+      const airMob = m.defId === 'bat' || m.defId === 'spirit';
+      const phase = this.animTime * (airMob ? 14 : 9.5) + m.uid * 1.7;
+      const mobBob = airMob ? 4 + Math.sin(phase) * 4.5 : Math.abs(Math.sin(phase)) * 3;
+      const baseScale = m.affix ? 1.45 : 1.2;
+      const squash = Math.sin(phase * 2) * 0.06;
+      sprite.setScale(baseScale * (1 - squash * 0.5), baseScale * (1 + squash));
+      sprite.setRotation(Math.sin(phase) * 0.05);
+
       if (m.slowLeft > 0) sprite.setTint(0x80d8ff);
       else if (m.affix) sprite.setTint(0xe0aaff);
       else sprite.clearTint();
-      sprite.setPosition(m.x, m.y);
+      sprite.setPosition(m.x, m.y - mobBob);
       sprite.setAlpha(m.slowLeft > 0 ? 0.8 : 1);
+
+      const shadowW = m.affix ? 28 : 22;
+      sg.fillStyle(0x090d16, 0.34).fillEllipse(m.x, m.y + 12, shadowW, 8);
+      if (m.affix) {
+        sg.lineStyle(1.5, 0xc084fc, 0.55).strokeEllipse(m.x, m.y + 12, shadowW + 8, 12);
+      }
     }
     for (const [uid, sprite] of this.monsterSprites) {
       if (alive.has(uid)) continue;
@@ -530,10 +640,13 @@ export class GameScene extends Phaser.Scene {
     const bossAlive = !!boss && boss.rules.hp > 0;
     this.bossSprite.setVisible(bossAlive);
     if (boss && bossAlive) {
-      this.bossSprite.setPosition(boss.x, boss.y);
+      const bossBob = Math.sin(this.animTime * 5) * 4;
+      this.bossSprite.setPosition(boss.x, boss.y - bossBob);
       const bossAnim = boss.rules.enraged ? 'boss_bloodmoon_enrage_walk' : 'boss_bloodmoon_walk';
       if (this.bossSprite.anims.currentAnim?.key !== bossAnim) this.bossSprite.play(bossAnim, true);
       this.bossSprite.setFlipX(boss.x > s.player.x);
+      sg.fillStyle(0x090d16, 0.45).fillEllipse(boss.x, boss.y + 42, 86, 26);
+      sg.lineStyle(2.5, boss.rules.enraged ? 0xff2a55 : 0xe11d48, 0.55).strokeEllipse(boss.x, boss.y + 42, 96, 32);
     }
   }
 
@@ -544,7 +657,63 @@ export class GameScene extends Phaser.Scene {
     return (tag && TAG_FX_COLOR[tag]) || 0xffffff;
   }
 
+  private estimateFxDamage(skillId: string): number {
+    const def = this.data_.skills.find((d) => d.id === skillId);
+    if (!def) return 0;
+    const owned = this.state.skills.find((o) => o.id === skillId);
+    const lv = owned ? ownedLevel(def, owned.xp) : 1;
+    return Math.max(1, Math.round(damageAtLevel(def, lv)));
+  }
+
+  private spawnCombatPopup(fx: CombatFx): void {
+    if (this.combatPopups.length >= 20) return;
+    const dmg = this.estimateFxDamage(fx.skillId);
+    const label = fx.missed ? 'MISS' : dmg > 0 ? `${dmg}!` : 'HIT!';
+    const txt =
+      this.popupPool.pop() ??
+      this.add
+        .text(0, 0, '', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '15px',
+          fontStyle: 'bold',
+          color: '#fde047',
+          stroke: '#090d16',
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5)
+        .setDepth(25);
+    const jitter = (((Math.round(fx.x2) + Math.round(fx.y2)) % 17) - 8);
+    txt
+      .setText(label)
+      .setColor(fx.missed ? '#cbd5e1' : '#fde047')
+      .setPosition(fx.x2 + jitter, fx.y2 - 16)
+      .setScale(fx.missed ? 0.9 : 1.28)
+      .setAlpha(1)
+      .setVisible(true);
+    this.combatPopups.push({ text: txt, ttl: 0.55, maxTtl: 0.55, vy: 34 });
+  }
+
+  private updatePopups(dt: number): void {
+    const active: CombatPopup[] = [];
+    for (const p of this.combatPopups) {
+      p.ttl -= dt;
+      if (p.ttl <= 0) {
+        p.text.setVisible(false);
+        this.popupPool.push(p.text);
+        continue;
+      }
+      const ratio = p.ttl / p.maxTtl;
+      p.text.y -= p.vy * dt;
+      p.text.setAlpha(Math.min(1, ratio * 1.6));
+      const popScale = ratio > 0.72 ? 1 + (ratio - 0.72) * 1.1 : 1;
+      p.text.setScale(popScale);
+      active.push(p);
+    }
+    this.combatPopups = active;
+  }
+
   private drawFx(dt: number): void {
+    this.updatePopups(dt);
     const g = this.fxGraphics.clear();
     for (const img of this.activeFxSprites) {
       img.setVisible(false);
@@ -552,42 +721,137 @@ export class GameScene extends Phaser.Scene {
     }
     this.activeFxSprites.length = 0;
 
+    const acquireVfx = (key: string): Phaser.GameObjects.Image => {
+      const img = this.fxPool.pop() ?? this.add.image(0, 0, key).setDepth(16);
+      img.setTexture(key).setVisible(true);
+      this.activeFxSprites.push(img);
+      return img;
+    };
+
     this.liveFx = this.liveFx.filter((f) => (f.ttl -= dt) > 0);
     for (const f of this.liveFx) {
-      const alpha = f.ttl / FX_SECONDS;
-      const color = f.missed ? 0x777777 : this.fxColorForSkill(f.skillId);
+      const alpha = Phaser.Math.Clamp(f.ttl / FX_SECONDS, 0, 1);
+      const progress = 1 - alpha;
+      const color = f.missed ? 0x94a3b8 : this.fxColorForSkill(f.skillId);
       const facing = Math.atan2(f.y2 - f.y1, f.x2 - f.x1);
       const vfxKey = f.shape === 'cone' ? 'vfx_cone' : f.shape === 'line' ? 'vfx_line' : f.shape === 'ring' ? 'vfx_ring' : 'vfx_projectile';
 
-      if (this.textures.exists(vfxKey)) {
-        const img = this.fxPool.pop() ?? this.add.image(0, 0, vfxKey).setDepth(16);
-        img.setTexture(vfxKey).setVisible(true).setTint(color).setAlpha(0.85 * alpha);
-        if (f.shape === 'cone') {
-          const size = Math.max(48, (f.radius ?? 48) * 1.4);
-          img.setPosition(f.x1, f.y1).setOrigin(0.15, 0.5).setRotation(facing).setDisplaySize(size, size);
-        } else if (f.shape === 'line') {
-          const len = Math.max(32, Math.hypot(f.x2 - f.x1, f.y2 - f.y1));
-          img.setPosition(f.x1, f.y1).setOrigin(0, 0.5).setRotation(facing).setDisplaySize(len, 18);
-        } else if (f.shape === 'ring') {
-          const dia = Math.max(48, (f.radius ?? 48) * 2);
-          img.setPosition(f.x2, f.y2).setOrigin(0.5).setRotation(0).setDisplaySize(dia, dia);
-        } else {
-          const progress = 1 - alpha;
-          const px = f.x1 + (f.x2 - f.x1) * progress;
-          const py = f.y1 + (f.y2 - f.y1) * progress;
-          img.setPosition(px, py).setOrigin(0.5).setRotation(facing).setDisplaySize(26, 26);
-        }
-        this.activeFxSprites.push(img);
+      // Brief caster rune circle around the origin on initial cast.
+      if (!f.missed && progress < 0.5) {
+        const castAlpha = (1 - progress / 0.5) * 0.6;
+        const castR = 14 + progress * 22;
+        g.lineStyle(2, 0xfef08a, castAlpha).strokeCircle(f.x1, f.y1, castR);
+        g.lineStyle(1.5, color, castAlpha * 0.85).strokeCircle(f.x1, f.y1, castR * 0.65);
       }
 
-      if (f.shape === 'cone' && f.radius) {
-        g.fillStyle(color, 0.22 * alpha);
-        g.slice(f.x1, f.y1, f.radius, facing - 0.87, facing + 0.87, false).fillPath();
-        continue;
+      if (f.shape === 'cone') {
+        const radius = f.radius ?? 52;
+        if (this.textures.exists(vfxKey)) {
+          const size = Math.max(58, radius * 1.65);
+          acquireVfx(vfxKey)
+            .setTint(color)
+            .setAlpha(0.92 * alpha)
+            .setPosition(f.x1, f.y1)
+            .setOrigin(0.15, 0.5)
+            .setRotation(facing)
+            .setDisplaySize(size, size);
+        }
+        g.fillStyle(color, 0.28 * alpha);
+        g.slice(f.x1, f.y1, radius, facing - 0.87, facing + 0.87, false).fillPath();
+        g.fillStyle(0xffffff, 0.16 * alpha);
+        g.slice(f.x1, f.y1, radius * 0.68, facing - 0.72, facing + 0.72, false).fillPath();
+        g.lineStyle(3.5, 0xffffff, 0.85 * alpha);
+        g.beginPath().arc(f.x1, f.y1, radius, facing - 0.85, facing + 0.85, false).strokePath();
+        g.lineStyle(6, color, 0.65 * alpha);
+        g.beginPath().arc(f.x1, f.y1, radius * 0.78, facing - 0.78, facing + 0.78, false).strokePath();
+      } else if (f.shape === 'line') {
+        const len = Math.max(36, Math.hypot(f.x2 - f.x1, f.y2 - f.y1));
+        if (this.textures.exists(vfxKey)) {
+          acquireVfx(vfxKey)
+            .setTint(color)
+            .setAlpha(0.9 * alpha)
+            .setPosition(f.x1, f.y1)
+            .setOrigin(0, 0.5)
+            .setRotation(facing)
+            .setDisplaySize(len, 24);
+        }
+        const dx = f.x2 - f.x1;
+        const dy = f.y2 - f.y1;
+        const nx = len > 0 ? -dy / len : 0;
+        const ny = len > 0 ? dx / len : 0;
+        const drawBolt = (width: number, col: number, a: number) => {
+          g.lineStyle(width, col, a).beginPath().moveTo(f.x1, f.y1);
+          const segments = 5;
+          for (let i = 1; i < segments; i++) {
+            const t = i / segments;
+            const jag = Math.sin((i + 1) * 3.7 + this.animTime * 42) * 11 * alpha;
+            g.lineTo(f.x1 + dx * t + nx * jag, f.y1 + dy * t + ny * jag);
+          }
+          g.lineTo(f.x2, f.y2).strokePath();
+        };
+        drawBolt(5, color, 0.75 * alpha);
+        drawBolt(2, 0xffffff, 0.95 * alpha);
+        g.fillStyle(0xffffff, 0.85 * alpha).fillCircle(f.x2, f.y2, 7 * alpha + 3);
+      } else if (f.shape === 'ring') {
+        const radius = f.radius ?? 52;
+        const dia = Math.max(52, radius * 2);
+        if (this.textures.exists(vfxKey)) {
+          acquireVfx(vfxKey)
+            .setTint(color)
+            .setAlpha(0.9 * alpha)
+            .setPosition(f.x2, f.y2)
+            .setOrigin(0.5)
+            .setRotation(progress * 3.5)
+            .setDisplaySize(dia * (0.65 + 0.45 * progress), dia * (0.65 + 0.45 * progress));
+        }
+        const waveR = radius * (0.45 + 0.65 * progress);
+        g.fillStyle(color, 0.24 * alpha).fillCircle(f.x2, f.y2, waveR);
+        g.lineStyle(3.5, color, 0.85 * alpha).strokeCircle(f.x2, f.y2, waveR);
+        g.lineStyle(2, 0xffffff, 0.75 * alpha).strokeCircle(f.x2, f.y2, waveR * 0.72);
+        if (f.skillId === 'R01a' && progress < 0.75) {
+          const drop = 1 - progress / 0.75;
+          const mx = f.x2 - 80 * drop;
+          const my = f.y2 - 150 * drop;
+          g.lineStyle(9, 0xff5400, 0.85).lineBetween(mx, my, f.x2, f.y2);
+          g.lineStyle(3.5, 0xfef08a, 0.95).lineBetween(mx, my, f.x2, f.y2);
+          g.fillStyle(0xffffff, 0.9).fillCircle(f.x2, f.y2, 10 + 12 * (1 - drop));
+        }
+      } else {
+        const eased = Math.min(1, progress * 1.35);
+        const px = f.x1 + (f.x2 - f.x1) * eased;
+        const py = f.y1 + (f.y2 - f.y1) * eased;
+        for (let k = 3; k >= 1; k--) {
+          const bt = Math.max(0, eased - k * 0.09);
+          const bx = f.x1 + (f.x2 - f.x1) * bt;
+          const by = f.y1 + (f.y2 - f.y1) * bt;
+          g.fillStyle(color, (0.75 - k * 0.18) * alpha).fillCircle(bx, by, 6.5 - k * 1.2);
+        }
+        if (this.textures.exists(vfxKey)) {
+          acquireVfx(vfxKey)
+            .setTint(color)
+            .setAlpha(0.95 * alpha)
+            .setPosition(px, py)
+            .setOrigin(0.5)
+            .setRotation(facing + progress * 2.5)
+            .setDisplaySize(30, 30);
+        }
+        g.fillStyle(0xffffff, 0.92 * alpha).fillCircle(px, py, 4.5);
+        g.lineStyle(2, color, 0.55 * alpha).lineBetween(f.x1, f.y1, px, py);
+        if (progress > 0.55) {
+          const burst = (progress - 0.55) / 0.45;
+          const br = 8 + burst * 22;
+          g.lineStyle(2.5, 0xffffff, (1 - burst) * 0.9).strokeCircle(f.x2, f.y2, br);
+          for (let sIdx = 0; sIdx < 6; sIdx++) {
+            const ang = (sIdx * Math.PI) / 3 + facing;
+            g.lineStyle(2, color, (1 - burst) * 0.95).lineBetween(
+              f.x2 + Math.cos(ang) * (br * 0.45),
+              f.y2 + Math.sin(ang) * (br * 0.45),
+              f.x2 + Math.cos(ang) * (br * 1.15),
+              f.y2 + Math.sin(ang) * (br * 1.15),
+            );
+          }
+        }
       }
-      g.lineStyle(f.shape === 'line' ? 4 : 2, color, 0.65 * alpha);
-      g.lineBetween(f.x1, f.y1, f.x2, f.y2);
-      if (f.radius) g.fillStyle(color, 0.2 * alpha).fillCircle(f.x2, f.y2, f.radius);
     }
   }
 
@@ -598,68 +862,78 @@ export class GameScene extends Phaser.Scene {
       if (c.opened) {
         g.lineStyle(1.5, 0x6c757d, 0.6).strokeRect(c.x - 9, c.y - 7, 18, 14);
       } else {
-        g.fillStyle(0xffd166, 0.2).fillCircle(c.x, c.y, 18);
+        g.fillStyle(0xffd166, 0.24).fillCircle(c.x, c.y, 19);
         g.fillStyle(0xd97706, 1).fillRect(c.x - 9, c.y - 7, 18, 14);
         g.lineStyle(2, 0xffea00, 1).strokeRect(c.x - 9, c.y - 7, 18, 14);
+        g.fillStyle(0xfef08a, 1).fillRect(c.x - 2, c.y - 1, 4, 4);
       }
     }
     for (const t of s.traps ?? []) {
       if (t.uses <= 0) continue;
       g.lineStyle(2, 0xff9f1c, 0.85).strokeCircle(t.x, t.y, 14);
       g.fillStyle(0xff9f1c, 0.22).fillCircle(t.x, t.y, 14);
+      g.lineStyle(1.5, 0xfef08a, 0.75).lineBetween(t.x - 6, t.y, t.x + 6, t.y);
+      g.lineStyle(1.5, 0xfef08a, 0.75).lineBetween(t.x, t.y - 6, t.x, t.y + 6);
     }
     const bar = (x: number, y: number, w: number, ratio: number, color: number) => {
-      g.fillStyle(0x000000, 0.6).fillRect(x - w / 2, y, w, 6);
+      g.fillStyle(0x090d16, 0.8).fillRect(x - w / 2 - 1, y - 1, w + 2, 8);
       g.fillStyle(color, 1).fillRect(x - w / 2, y, w * Phaser.Math.Clamp(ratio, 0, 1), 6);
     };
     bar(CORE_X, CORE_Y - 40, 90, s.coreHp / s.coreMaxHp, 0xc77dff);
-    bar(s.player.x, s.player.y - 24, 36, s.player.hp / s.player.maxHp, 0x06d6a0);
-    if (s.boss && s.boss.rules.hp > 0) bar(s.boss.x, s.boss.y - 44, 120, s.boss.rules.hp / s.boss.rules.maxHp, 0xff4d6d);
+    bar(s.player.x, s.player.y - 26, 36, s.player.hp / s.player.maxHp, 0x06d6a0);
+    if (s.boss && s.boss.rules.hp > 0) bar(s.boss.x, s.boss.y - 46, 120, s.boss.rules.hp / s.boss.rules.maxHp, 0xff4d6d);
   }
 
   private drawHud(fpsSnap?: FpsMonitorSnapshot): void {
     const s = this.state;
-    const panelW = Math.min(248, Math.max(196, this.scale.width - (import.meta.env.DEV ? 154 : 20)));
+    const panelW = Math.min(266, Math.max(216, this.scale.width - (import.meta.env.DEV ? 148 : 20)));
     const barW = panelW - 16;
-    const g = this.hudGraphics.clear();
-
-    // Translucent dark RPG HUD panel
-    g.fillStyle(0x0d0614, 0.82).fillRoundedRect(10, 10, panelW, 118, 10);
-    g.lineStyle(1.5, 0x9b4dca, 0.9).strokeRoundedRect(10, 10, panelW, 118, 10);
-
-    // Player HP bar
-    const hpRatio = Phaser.Math.Clamp(s.player.hp / Math.max(1, s.player.maxHp), 0, 1);
-    g.fillStyle(0x2b121e, 1).fillRoundedRect(18, 36, barW, 14, 4);
-    g.fillStyle(hpRatio < 0.35 ? 0xff4d6d : 0x06d6a0, 1).fillRoundedRect(18, 36, Math.max(2, barW * hpRatio), 14, 4);
-
-    // Core HP bar
-    const coreRatio = Phaser.Math.Clamp(s.coreHp / Math.max(1, s.coreMaxHp), 0, 1);
-    g.fillStyle(0x1b122b, 1).fillRoundedRect(18, 54, barW, 14, 4);
-    g.fillStyle(0x9d4edd, 1).fillRoundedRect(18, 54, Math.max(2, barW * coreRatio), 14, 4);
-
-    // XP bar
-    const nextXp = Math.max(1, xpToNext(s.player.level));
-    const xpRatio = Phaser.Math.Clamp(s.player.xp / nextXp, 0, 1);
-    g.fillStyle(0x102136, 1).fillRoundedRect(18, 73, barW, 7, 3);
-    g.fillStyle(0x4cc9f0, 1).fillRoundedRect(18, 73, Math.max(2, barW * xpRatio), 7, 3);
 
     const left = phaseRemaining(s);
     const time = Number.isFinite(left) ? `${Math.ceil(left)} วิ` : 'จันทร์เลือด';
     this.hudTitle.setText(`วันที่ ${s.day}/7 · ${PHASE_LABEL[s.phase]} · ${time}`);
-    this.hudHpText.setText(`เลือด ${Math.ceil(s.player.hp)}/${s.player.maxHp}`);
+    this.hudHpText.setText(`HP ${Math.ceil(s.player.hp)}/${s.player.maxHp}`);
     const shieldTxt = (s.coreShield ?? 0) > 0 ? ` (+โล่ ${Math.ceil(s.coreShield!)})` : '';
     this.hudCoreText.setText(`แกนฐาน ${Math.ceil(s.coreHp)}/${s.coreMaxHp}${shieldTxt}`);
+
+    const nextXp = Math.max(1, xpToNext(s.player.level));
     const fpsText = fpsSnap
       ? ` · FPS ${Math.round(fpsSnap.averageFps)}${fpsSnap.lowEndFallbackActive ? ' (30fps)' : ''}`
       : '';
-    this.hudMetaText.setText(`Lv${s.player.level} · ปราบ ${s.kills} · มอน ${s.monsters.length}${fpsText}`);
+    this.hudMetaText.setText(`Lv.${s.player.level} (${formatExpPercent(s.player.xp, nextXp)}) · ปราบ ${s.kills} · มอน ${s.monsters.length}${fpsText}`);
+
     const invStr = formatInventorySummary(s.inventory ?? {});
     const coreStr = (s.cores ?? 0) > 0 ? ` · Core ×${s.cores}` : '';
     const synStr = formatSynergySummary(
       s.skills.map((o) => o.id),
       this.data_.skills,
     );
+    this.hudInvText.setWordWrapWidth(panelW - 22);
     this.hudInvText.setText(`ของ: ${invStr}${coreStr}${synStr ? ` · ${synStr}` : ''}`);
+
+    const panelH = Math.max(126, 106 + Math.ceil(this.hudInvText.height) + 8);
+    this.hudPanelH = panelH;
+    this.skillDock?.setY(10 + panelH + 6);
+    if (this.systemToast.visible) this.positionSystemToast();
+
+    const g = this.hudGraphics.clear();
+    // Classic RO Basic Info window frame
+    drawRoWindow(g, 10, 10, panelW, panelH, { headerHeight: 24, bodyAlpha: 0.92 });
+
+    // Segmented HP / CORE / EXP bars
+    const hpRatio = Phaser.Math.Clamp(s.player.hp / Math.max(1, s.player.maxHp), 0, 1);
+    drawRoGaugeBar(g, 18, 39, barW, 14, hpRatio, hpRatio < 0.35 ? RO_PALETTE.hpLowFill : RO_PALETTE.hpFill);
+
+    const coreRatio = Phaser.Math.Clamp(s.coreHp / Math.max(1, s.coreMaxHp), 0, 1);
+    drawRoGaugeBar(g, 18, 57, barW, 14, coreRatio, RO_PALETTE.spFill);
+
+    const xpRatio = Phaser.Math.Clamp(s.player.xp / nextXp, 0, 1);
+    drawRoGaugeBar(g, 18, 75, barW, 8, xpRatio, RO_PALETTE.expFill);
+
+    // Sunken status well for inventory + Synergy
+    const wellH = Math.max(22, panelH - 107);
+    g.fillStyle(RO_PALETTE.windowWell, 0.92).fillRoundedRect(16, 101, panelW - 12, wellH, 4);
+    g.lineStyle(1, RO_PALETTE.windowBevelDark, 0.95).strokeRoundedRect(16, 101, panelW - 12, wellH, 4);
 
     this.recallBtn.setVisible(s.phase === 'day' && s.status === 'playing' && !s.pendingDraft);
     this.muteBtn.setText(`[M] ${this.sfx.isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด'}`);
@@ -686,26 +960,53 @@ export class GameScene extends Phaser.Scene {
     this.skillDock = undefined;
     if (this.state.skills.length === 0) return;
 
-    const dock = this.add.container(10, 134).setScrollFactor(0).setDepth(900);
+    const count = this.state.skills.length;
+    const slotSize = 38;
+    const step = 42;
+    const padX = 6;
+    const padY = 5;
+    const dockW = count * step - 4 + padX * 2;
+    const dockH = slotSize + padY * 2;
+    const dock = this.add.container(10, 10 + this.hudPanelH + 6).setScrollFactor(0).setDepth(900);
+
+    const dockG = this.add.graphics();
+    dockG.fillStyle(RO_PALETTE.windowOuterBorder, 0.96).fillRoundedRect(-1, -1, dockW + 2, dockH + 2, 6);
+    dockG.fillStyle(RO_PALETTE.windowBody, 0.92).fillRoundedRect(0, 0, dockW, dockH, 5);
+    dockG.lineStyle(1.5, RO_PALETTE.windowBevelLight, 0.85).strokeRoundedRect(1, 1, dockW - 2, dockH - 2, 5);
+    dock.add(dockG);
+
     this.state.skills.forEach((o, i) => {
       const def = this.data_.skills.find((d) => d.id === o.id);
       const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
-      const x = i * 42;
-      const borderColor = o.gift ? 0xff9f1c : def ? RARITY_COLOR[def.rarity] : 0x9b4dca;
-      const slot = this.add.rectangle(x, 0, 36, 36, 0x120a24, 0.9).setOrigin(0).setStrokeStyle(2, borderColor);
-      dock.add(slot);
+      const sx = padX + i * step;
+      const sy = padY;
+      const borderColor = o.gift ? 0xff9f1c : def ? RARITY_COLOR[def.rarity] : RO_PALETTE.windowBevelLight;
+      drawRoIconSlot(dockG, sx, sy, slotSize, borderColor);
+
       if (this.textures.exists(`icon_${o.id}`)) {
-        dock.add(this.add.image(x + 18, 18, `icon_${o.id}`).setDisplaySize(28, 28));
+        dock.add(this.add.image(sx + slotSize / 2, sy + slotSize / 2 + 2, `icon_${o.id}`).setDisplaySize(24, 24));
       }
-      const badge = o.gift ? 'ฟรี' : `${lv}`;
+
+      dock.add(
+        this.add.text(sx + 2, sy + 2, hotkeyLabelForSlot(i), {
+          fontFamily: 'monospace',
+          fontSize: '9px',
+          fontStyle: 'bold',
+          color: '#93c5fd',
+          backgroundColor: '#0b111ee0',
+          padding: { x: 2, y: 0 },
+        }),
+      );
+
+      const badge = o.gift ? 'ฟรี' : `Lv${lv}`;
       dock.add(
         this.add
-          .text(x + 34, 34, badge, {
+          .text(sx + slotSize - 2, sy + slotSize - 2, badge, {
             fontFamily: 'monospace',
-            fontSize: '10px',
+            fontSize: '9px',
             fontStyle: 'bold',
-            color: '#ffd166',
-            backgroundColor: '#0d0614cc',
+            color: o.gift ? '#fde047' : '#ffffff',
+            backgroundColor: '#0b111ed9',
             padding: { x: 2, y: 0 },
           })
           .setOrigin(1, 1),
@@ -747,6 +1048,7 @@ export class GameScene extends Phaser.Scene {
     this.overlay?.each((child: Phaser.GameObjects.GameObject) => {
       (child as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
     });
+    if (this.systemToast.visible) this.positionSystemToast();
   }
 
   private overlayBase(): { box: Phaser.GameObjects.Container; w: number; h: number } {
@@ -762,89 +1064,155 @@ export class GameScene extends Phaser.Scene {
     const { box, w, h } = this.overlayBase();
     const availFusions = findAvailableFusions(this.state, this.data_.skills, FUSION_RECIPES);
     const fusion = availFusions[0];
-    const totalCards = cards.length + (fusion ? 1 : 0);
-    const cardW = Math.min(420, w - 32);
-    const cardH = 92;
-    const gap = 14;
-    const top = Math.max(84, h / 2 - (totalCards * (cardH + gap)) / 2);
+    const showIntro = this.state.skills.length === 0 && this.state.day === 1;
+    const cardW = Math.min(432, w - 36);
+    const cardH = 88;
+    const fusionCardH = 100;
+    const gap = 10;
+    const winW = cardW + 24;
+    const headerH = 28;
+    const introH = showIntro ? 38 : 0;
+    const cardsH = cards.length * cardH + Math.max(0, cards.length - 1) * gap + (fusion ? gap + fusionCardH : 0);
+    const winH = headerH + 14 + 32 + introH + cardsH + 14;
+    const winX = Math.round((w - winW) / 2);
+    const winY = Math.max(54, Math.round((h - winH) / 2));
+
+    const winG = this.add.graphics();
+    drawRoWindow(winG, winX, winY, winW, winH, { headerHeight: headerH, bodyAlpha: 0.96 });
+    box.add(winG);
+
+    box.add(
+      this.add
+        .text(winX + 24, winY + headerH / 2 + 1, 'SKILL SELECT · เลือกสกิล', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '12px',
+          fontStyle: 'bold',
+          color: '#f8fafc',
+          stroke: '#0b111e',
+          strokeThickness: 2,
+        })
+        .setOrigin(0, 0.5),
+    );
+
     const title = this.state.skills.length === 0 ? 'เลือกสกิลแรกของคุณ' : `เลเวล ${this.state.player.level}! เลือก 1 ใบ`;
-    if (this.state.skills.length === 0 && this.state.day === 1) {
+    box.add(
+      this.add
+        .text(w / 2, winY + headerH + 22, title, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '21px',
+          fontStyle: 'bold',
+          color: '#fde68a',
+          stroke: '#0b111e',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5),
+    );
+
+    if (showIntro) {
       box.add(
         this.add
-          .text(w / 2, top - 78, '🚚 ตู้ม!! รถบรรทุกพุ่งชนคุณกระเด็นข้ามมิติ... ระบบกำลังติดตั้งสกิลเริ่มต้น', {
-            fontFamily: 'sans-serif',
-            fontSize: '14px',
+          .text(w / 2, winY + headerH + 54, '🚚 ตู้ม!! รถบรรทุกพุ่งชนคุณกระเด็นข้ามมิติ... ระบบกำลังติดตั้งสกิลเริ่มต้น', {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '12px',
             fontStyle: 'bold',
             color: '#ff9f1c',
             align: 'center',
-            wordWrap: { width: Math.min(440, w - 24) },
+            wordWrap: { width: winW - 28 },
           })
           .setOrigin(0.5),
       );
     }
-    box.add(this.add.text(w / 2, top - 44, title, { fontFamily: 'sans-serif', fontSize: '24px', color: '#ffffff' }).setOrigin(0.5));
+
+    const cardsTop = winY + headerH + 42 + introH;
+    const slotG = this.add.graphics();
+    box.add(slotG);
 
     cards.forEach((card, i) => {
       const [type, id] = card.split(':');
       const def = this.data_.skills.find((d) => d.id === id);
       if (!def) return;
-      const y = top + i * (cardH + gap);
+      const y = cardsTop + i * (cardH + gap);
+      const cardLeft = w / 2 - cardW / 2;
       const frame = this.add
-        .rectangle(w / 2, y, cardW, cardH, 0x1b1b2f, 1)
+        .rectangle(w / 2, y, cardW, cardH, RO_PALETTE.rowBg, 1)
         .setOrigin(0.5, 0)
-        .setStrokeStyle(3, RARITY_COLOR[def.rarity])
+        .setStrokeStyle(2.5, RARITY_COLOR[def.rarity])
         .setInteractive({ useHandCursor: true });
-      frame.on('pointerover', () => frame.setFillStyle(0x2b2b4a));
-      frame.on('pointerout', () => frame.setFillStyle(0x1b1b2f));
+      frame.on('pointerover', () => frame.setFillStyle(RO_PALETTE.rowHoverBg));
+      frame.on('pointerout', () => frame.setFillStyle(RO_PALETTE.rowBg));
       frame.on('pointerup', () => this.choose(i));
+
       const owned = this.state.skills.find((o) => o.id === id);
       const head =
         type === 'skill'
-          ? `${i + 1}. ${def.name.th}  ·  ${RARITY_LABEL[def.rarity]}`
-          : `${i + 1}. ฝึก ${def.name.th} (ตอนนี้ Lv${levelForXp(owned?.xp ?? 0)})`;
+          ? `${i + 1}. ${def.name.th} · ${RARITY_LABEL[def.rarity]}`
+          : `${i + 1}. ฝึก ${def.name.th} (Lv${levelForXp(owned?.xp ?? 0)})`;
       const body =
         type === 'skill'
           ? def.kind === 'active'
             ? `${KIND_LABEL.active} · พลัง ${damageAtLevel(def, 1)} · ทุก ${def.cooldown} วิ · ระยะ ${def.range} ช่อง`
             : `${KIND_LABEL.passive} · ถึกขึ้น: รับดาเมจน้อยลงและเลือดสูงสุดเพิ่ม`
           : `ได้ค่าฝึกสกิล +${upgradeXp(levelForXp(owned?.xp ?? 0))} ทันที`;
+
       const hasIcon = this.textures.exists(`icon_${id}`);
-      const textX = w / 2 - cardW / 2 + (hasIcon ? 82 : 16);
-      const wrapW = cardW - (hasIcon ? 98 : 32);
+      const slotX = cardLeft + 12;
+      const slotY = y + Math.round((cardH - 58) / 2);
+      drawRoIconSlot(slotG, slotX, slotY, 58, RARITY_COLOR[def.rarity]);
+
+      const textX = cardLeft + 82;
+      const wrapW = cardW - 122;
       const cardItems: Phaser.GameObjects.GameObject[] = [frame];
       if (this.textures.exists(`card_frame_${def.rarity}`)) {
-        cardItems.push(this.add.image(w / 2 - cardW / 2 + 44, y + cardH / 2, `card_frame_${def.rarity}`).setDisplaySize(54, 72));
+        cardItems.push(this.add.image(slotX + 29, slotY + 29, `card_frame_${def.rarity}`).setDisplaySize(50, 56));
       }
       if (hasIcon) {
-        cardItems.push(this.add.image(w / 2 - cardW / 2 + 44, y + cardH / 2, `icon_${id}`).setDisplaySize(44, 44));
+        cardItems.push(this.add.image(slotX + 29, slotY + 29, `icon_${id}`).setDisplaySize(42, 42));
       }
       cardItems.push(
-        this.add.text(textX, y + 14, head, {
-          fontFamily: 'sans-serif',
-          fontSize: '19px',
-          color: '#ffffff',
+        this.add
+          .text(cardLeft + cardW - 10, y + 10, `[${i + 1}]`, {
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            fontStyle: 'bold',
+            color: '#93c5fd',
+            backgroundColor: '#0b111ecc',
+            padding: { x: 5, y: 2 },
+          })
+          .setOrigin(1, 0),
+        this.add.text(textX, y + 12, head, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '17px',
+          fontStyle: 'bold',
+          color: '#f8fafc',
           wordWrap: { width: wrapW },
         }),
-        this.add.text(textX, y + 48, body, {
-          fontFamily: 'sans-serif',
-          fontSize: '14px',
-          color: '#cfd2ff',
+        this.add.text(textX, y + 44, body, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '13px',
+          color: '#cbd5e1',
           wordWrap: { width: wrapW },
         }),
       );
       box.add(cardItems);
     });
+    // Ensure sunken icon slots sit above card background fills
+    box.bringToTop(slotG);
+    box.each((child: Phaser.GameObjects.GameObject) => {
+      if (child instanceof Phaser.GameObjects.Image || child instanceof Phaser.GameObjects.Text) {
+        box.bringToTop(child);
+      }
+    });
 
     if (fusion) {
-      const fusionCardH = 104;
-      const y = top + cards.length * (cardH + gap);
+      const y = cardsTop + cards.length * (cardH + gap);
+      const cardLeft = w / 2 - cardW / 2;
       const frame = this.add
-        .rectangle(w / 2, y, cardW, fusionCardH, 0x2a1233, 1)
+        .rectangle(w / 2, y, cardW, fusionCardH, 0x2d1b4e, 1)
         .setOrigin(0.5, 0)
         .setStrokeStyle(3, RARITY_COLOR[fusion.resultSkill.rarity])
         .setInteractive({ useHandCursor: true });
-      frame.on('pointerover', () => frame.setFillStyle(0x3c1b4a));
-      frame.on('pointerout', () => frame.setFillStyle(0x2a1233));
+      frame.on('pointerover', () => frame.setFillStyle(0x3b2560));
+      frame.on('pointerout', () => frame.setFillStyle(0x2d1b4e));
       frame.on('pointerup', () => this.choose(cards.length));
 
       const srcA = this.state.skills.find((s) => s.id === fusion.recipe.a);
@@ -852,29 +1220,45 @@ export class GameScene extends Phaser.Scene {
       const inheritedXp = Math.max(srcA?.xp ?? 0, srcB?.xp ?? 0);
       const inheritedLv = ownedLevel(fusion.resultSkill, inheritedXp);
 
-      const head = `${cards.length + 1}. ผสมสกิล: ${fusion.resultSkill.name.th} (Lv${inheritedLv} · ${RARITY_LABEL[fusion.resultSkill.rarity]})`;
+      const head = `${cards.length + 1}. ⚗️ ผสมสกิล: ${fusion.resultSkill.name.th} (Lv${inheritedLv} · ${RARITY_LABEL[fusion.resultSkill.rarity]})`;
       const previewLine =
         fusion.resultSkill.kind === 'active'
           ? `${KIND_LABEL.active} · พลัง ${damageAtLevel(fusion.resultSkill, inheritedLv)} · ทุก ${fusion.resultSkill.cooldown} วิ · ระยะ ${fusion.resultSkill.range} ช่อง`
           : `${KIND_LABEL.passive} · ถึกขึ้น: รับดาเมจน้อยลงและเลือดสูงสุดเพิ่ม`;
       const hintLine = `อีกผล: "${fusion.alternateSkill.name.th}" (ดัน ${fusion.skillToRaiseForAlternate.name.th} ให้สูงกว่าก่อนผสม)`;
 
-      const previewText = this.add.text(w / 2 - cardW / 2 + 16, y + 40, previewLine, {
-        fontFamily: 'sans-serif',
-        fontSize: '14px',
-        color: '#cfd2ff',
-        wordWrap: { width: cardW - 32 },
-      });
-      const hintText = this.add.text(w / 2 - cardW / 2 + 16, y + 40 + previewText.height + 4, hintLine, {
-        fontFamily: 'sans-serif',
+      const previewText = this.add.text(cardLeft + 14, y + 38, previewLine, {
+        fontFamily: 'system-ui, sans-serif',
         fontSize: '13px',
-        color: '#ffd166',
-        wordWrap: { width: cardW - 32 },
+        color: '#e2e8f0',
+        wordWrap: { width: cardW - 28 },
+      });
+      const hintText = this.add.text(cardLeft + 14, y + 38 + previewText.height + 4, hintLine, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '12px',
+        color: '#fde047',
+        wordWrap: { width: cardW - 28 },
       });
 
       box.add([
         frame,
-        this.add.text(w / 2 - cardW / 2 + 16, y + 12, head, { fontFamily: 'sans-serif', fontSize: '18px', color: '#ffffff' }),
+        this.add
+          .text(cardLeft + cardW - 10, y + 10, `[${cards.length + 1}]`, {
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            fontStyle: 'bold',
+            color: '#fde047',
+            backgroundColor: '#0b111ecc',
+            padding: { x: 5, y: 2 },
+          })
+          .setOrigin(1, 0),
+        this.add.text(cardLeft + 14, y + 10, head, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '16px',
+          fontStyle: 'bold',
+          color: '#ffffff',
+          wordWrap: { width: cardW - 60 },
+        }),
         previewText,
         hintText,
       ]);
@@ -887,61 +1271,69 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const inv = s.inventory ?? {};
     const offer = buildEveningOffer(inv, s.day, s.coreMaxHp, s.overtimeUsed ?? this.overtimeUsed, this.eveningMealId, s.mode);
-    const cardW = Math.min(440, w - 20);
-    const leftX = w / 2 - cardW / 2;
-    const panelH = Math.min(h - 24, 590);
-    const topY = Math.max(12, (h - panelH) / 2);
+    const cardW = Math.min(444, w - 20);
+    const leftX = Math.round(w / 2 - cardW / 2);
+    const panelH = Math.min(h - 24, 598);
+    const topY = Math.max(12, Math.round((h - panelH) / 2));
 
-    const panel = this.add
-      .rectangle(w / 2, topY, cardW, panelH, 0x110b22, 0.96)
-      .setOrigin(0.5, 0)
-      .setStrokeStyle(2, 0xff9f1c);
-    box.add(panel);
+    const winG = this.add.graphics();
+    drawRoWindow(winG, leftX, topY, cardW, panelH, { headerHeight: 28, bodyAlpha: 0.97 });
+    box.add(winG);
 
-    let y = topY + 14;
     box.add(
       this.add
-        .text(w / 2, y, `เย็นวันที่ ${s.day} — เตรียมรับมือคืนนี้`, {
-          fontFamily: 'sans-serif',
-          fontSize: '20px',
+        .text(leftX + 24, topY + 15, `CAMP & DEFENSE · เย็นวันที่ ${s.day}`, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '13px',
           fontStyle: 'bold',
-          color: '#ffd166',
+          color: '#f8fafc',
+          stroke: '#0b111e',
+          strokeThickness: 2,
         })
-        .setOrigin(0.5, 0),
+        .setOrigin(0, 0.5),
     );
-    y += 28;
+
+    let y = topY + 34;
+    winG.fillStyle(RO_PALETTE.windowWell, 0.95).fillRoundedRect(leftX + 12, y, cardW - 24, 24, 4);
+    winG.lineStyle(1, RO_PALETTE.windowBevelDark, 1).strokeRoundedRect(leftX + 12, y, cardW - 24, 24, 4);
     box.add(
       this.add
-        .text(w / 2, y, `กระเป๋า: ${offer.inventorySummary}`, {
-          fontFamily: 'sans-serif',
+        .text(w / 2, y + 12, `กระเป๋า: ${offer.inventorySummary}`, {
+          fontFamily: 'system-ui, sans-serif',
           fontSize: '12px',
-          color: '#a8dadc',
-          wordWrap: { width: cardW - 24 },
+          color: '#93c5fd',
+          wordWrap: { width: cardW - 34 },
         })
-        .setOrigin(0.5, 0),
+        .setOrigin(0.5),
     );
-    y += 22;
+    y += 30;
 
     box.add(
       this.add.text(leftX + 14, y, '1. เลือกมื้อเย็น', {
-        fontFamily: 'sans-serif',
-        fontSize: '14px',
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '13px',
         fontStyle: 'bold',
-        color: '#ffffff',
+        color: '#fde68a',
       }),
     );
-    y += 20;
+    y += 19;
 
     const overtimeSelected = this.eveningChoiceId === 'overtime';
     for (const opt of offer.meals) {
       const selected = !overtimeSelected && this.eveningMealId === opt.meal.id;
       const rowH = 38;
       const bg = this.add
-        .rectangle(w / 2, y, cardW - 24, rowH, selected ? 0x264653 : 0x1c1833, 1)
+        .rectangle(w / 2, y, cardW - 24, rowH, selected ? RO_PALETTE.rowSelectedBg : RO_PALETTE.rowBg, 1)
         .setOrigin(0.5, 0)
-        .setStrokeStyle(selected ? 2 : 1, selected ? 0x2ec4b6 : opt.affordable ? 0x5c5470 : 0x332e47);
+        .setStrokeStyle(selected ? 2 : 1, selected ? 0x38bdf8 : opt.affordable ? 0x475569 : 0x2c3e5e);
       if (opt.affordable && !overtimeSelected) {
         bg.setInteractive({ useHandCursor: true });
+        bg.on('pointerover', () => {
+          if (!selected) bg.setFillStyle(RO_PALETTE.rowHoverBg);
+        });
+        bg.on('pointerout', () => {
+          bg.setFillStyle(selected ? RO_PALETTE.rowSelectedBg : RO_PALETTE.rowBg);
+        });
         bg.on('pointerup', () => {
           this.eveningMealId = opt.meal.id;
           // If fence becomes unaffordable after picking a meal, fallback to trap.
@@ -951,17 +1343,18 @@ export class GameScene extends Phaser.Scene {
           }
         });
       }
-      const titleColor = overtimeSelected ? '#6c757d' : opt.affordable ? '#ffffff' : '#7a758c';
-      const subColor = overtimeSelected ? '#6c757d' : opt.affordable ? '#cfd2ff' : '#5e5970';
+      const titleColor = overtimeSelected ? '#64748b' : opt.affordable ? '#f8fafc' : '#64748b';
+      const subColor = overtimeSelected ? '#64748b' : opt.affordable ? '#bae6fd' : '#475569';
       box.add([
         bg,
         this.add.text(leftX + 22, y + 4, `${opt.meal.name} (${opt.recipeText})`, {
-          fontFamily: 'sans-serif',
+          fontFamily: 'system-ui, sans-serif',
           fontSize: '13px',
+          fontStyle: 'bold',
           color: titleColor,
         }),
         this.add.text(leftX + 22, y + 20, opt.buffText, {
-          fontFamily: 'sans-serif',
+          fontFamily: 'system-ui, sans-serif',
           fontSize: '11px',
           color: subColor,
         }),
@@ -972,9 +1365,9 @@ export class GameScene extends Phaser.Scene {
     // Skip meal option
     const skipSelected = !overtimeSelected && this.eveningMealId === null;
     const skipBg = this.add
-      .rectangle(w / 2, y, cardW - 24, 30, skipSelected ? 0x3d1e26 : 0x1c1833, 1)
+      .rectangle(w / 2, y, cardW - 24, 30, skipSelected ? 0x4c1127 : RO_PALETTE.rowBg, 1)
       .setOrigin(0.5, 0)
-      .setStrokeStyle(skipSelected ? 2 : 1, skipSelected ? 0xff6b6b : 0x5c5470);
+      .setStrokeStyle(skipSelected ? 2 : 1, skipSelected ? 0xfb7185 : 0x475569);
     if (!overtimeSelected) {
       skipBg.setInteractive({ useHandCursor: true });
       skipBg.on('pointerup', () => {
@@ -984,32 +1377,38 @@ export class GameScene extends Phaser.Scene {
     box.add([
       skipBg,
       this.add.text(leftX + 22, y + 7, `ไม่กินมื้อเย็น (${offer.hungryBuffText})`, {
-        fontFamily: 'sans-serif',
+        fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
-        color: overtimeSelected ? '#6c757d' : '#ff9e9e',
+        color: overtimeSelected ? '#64748b' : '#fda4af',
       }),
     ]);
-    y += 38;
+    y += 37;
 
     box.add(
       this.add.text(leftX + 14, y, '2. ทางเลือกเย็นนี้ (1 จาก 3)', {
-        fontFamily: 'sans-serif',
-        fontSize: '14px',
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '13px',
         fontStyle: 'bold',
-        color: '#ffffff',
+        color: '#fde68a',
       }),
     );
-    y += 20;
+    y += 19;
 
     for (const choice of offer.choices) {
       const selected = this.eveningChoiceId === choice.id;
       const rowH = 48;
       const bg = this.add
-        .rectangle(w / 2, y, cardW - 24, rowH, selected ? 0x2b2d42 : 0x18132c, 1)
+        .rectangle(w / 2, y, cardW - 24, rowH, selected ? RO_PALETTE.rowSelectedBg : RO_PALETTE.rowBg, 1)
         .setOrigin(0.5, 0)
-        .setStrokeStyle(selected ? 2 : 1, selected ? 0xffd166 : choice.enabled ? 0x5c5470 : 0x332e47);
+        .setStrokeStyle(selected ? 2 : 1, selected ? RO_PALETTE.windowGoldAccent : choice.enabled ? 0x475569 : 0x2c3e5e);
       if (choice.enabled) {
         bg.setInteractive({ useHandCursor: true });
+        bg.on('pointerover', () => {
+          if (!selected) bg.setFillStyle(RO_PALETTE.rowHoverBg);
+        });
+        bg.on('pointerout', () => {
+          bg.setFillStyle(selected ? RO_PALETTE.rowSelectedBg : RO_PALETTE.rowBg);
+        });
         bg.on('pointerup', () => {
           this.eveningChoiceId = choice.id;
         });
@@ -1019,39 +1418,30 @@ export class GameScene extends Phaser.Scene {
       box.add([
         bg,
         this.add.text(leftX + 22, y + 5, line1, {
-          fontFamily: 'sans-serif',
+          fontFamily: 'system-ui, sans-serif',
           fontSize: '13px',
           fontStyle: 'bold',
-          color: choice.enabled ? '#ffd166' : '#6c757d',
+          color: choice.enabled ? '#fde047' : '#64748b',
           wordWrap: { width: cardW - 48 },
         }),
         this.add.text(leftX + 22, y + 24, line2, {
-          fontFamily: 'sans-serif',
+          fontFamily: 'system-ui, sans-serif',
           fontSize: '11px',
-          color: choice.enabled ? '#e0e1dd' : '#7a758c',
+          color: choice.enabled ? '#e2e8f0' : '#64748b',
           wordWrap: { width: cardW - 48 },
         }),
       ]);
       y += rowH + 5;
     }
 
-    const confirmBtn = this.add
-      .rectangle(w / 2, topY + panelH - 52, cardW - 40, 40, 0x2ec4b6)
-      .setOrigin(0.5, 0)
-      .setStrokeStyle(2, 0xffffff)
-      .setInteractive({ useHandCursor: true });
-    confirmBtn.on('pointerup', () => this.confirmEvening());
-    box.add([
-      confirmBtn,
-      this.add
-        .text(w / 2, topY + panelH - 32, 'ยืนยันและเริ่มค่ำคืน', {
-          fontFamily: 'sans-serif',
-          fontSize: '16px',
-          fontStyle: 'bold',
-          color: '#0b132b',
-        })
-        .setOrigin(0.5),
-    ]);
+    box.add(
+      createRoButton(this, w / 2, topY + panelH - 32, cardW - 40, 40, '✔ ยืนยันและเริ่มค่ำคืน', {
+        tone: 'teal',
+        fontSize: '16px',
+        scrollFactor: 0,
+        onClick: () => this.confirmEvening(),
+      }),
+    );
 
     return box;
   }
@@ -1076,55 +1466,68 @@ export class GameScene extends Phaser.Scene {
   private buildTutorialOverlay(): Phaser.GameObjects.Container {
     const { box, w, h } = this.overlayBase();
     const card = buildTutorialFusionCardView();
-    const cardW = Math.min(420, w - 24);
-    const panelH = 310;
-    const topY = Math.max(24, (h - panelH) / 2);
+    const cardW = Math.min(432, w - 24);
+    const panelH = 330;
+    const leftX = Math.round(w / 2 - cardW / 2);
+    const topY = Math.max(24, Math.round((h - panelH) / 2));
 
-    const panel = this.add
-      .rectangle(w / 2, topY, cardW, panelH, 0x160a2a, 0.97)
-      .setOrigin(0.5, 0)
-      .setStrokeStyle(3, 0xff9f1c);
-    box.add(panel);
+    const winG = this.add.graphics();
+    drawRoWindow(winG, leftX, topY, cardW, panelH, { headerHeight: 28, bodyAlpha: 0.97 });
+    box.add(winG);
 
     box.add([
       this.add
-        .text(w / 2, topY + 20, TUTORIAL_WELCOME_TITLE, {
-          fontFamily: 'sans-serif',
-          fontSize: '19px',
+        .text(leftX + 24, topY + 15, 'SYSTEM GIFT · ของขวัญต้อนรับ (Night 1)', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '12px',
           fontStyle: 'bold',
-          color: '#ffd166',
+          color: '#f8fafc',
+          stroke: '#0b111e',
+          strokeThickness: 2,
+        })
+        .setOrigin(0, 0.5),
+      this.add
+        .text(w / 2, topY + 42, TUTORIAL_WELCOME_TITLE, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '18px',
+          fontStyle: 'bold',
+          color: '#fde047',
           align: 'center',
           wordWrap: { width: cardW - 28 },
         })
         .setOrigin(0.5, 0),
       this.add
-        .text(w / 2, topY + 52, TUTORIAL_WELCOME_LINE, {
-          fontFamily: 'sans-serif',
+        .text(w / 2, topY + 72, TUTORIAL_WELCOME_LINE, {
+          fontFamily: 'system-ui, sans-serif',
           fontSize: '13px',
-          color: '#cfd2ff',
+          color: '#cbd5e1',
           align: 'center',
           wordWrap: { width: cardW - 28 },
         })
         .setOrigin(0.5, 0),
     ]);
 
-    const iconY = topY + 114;
+    const iconY = topY + 132;
+    drawRoIconSlot(winG, w / 2 - 120, iconY - 24, 48, RO_PALETTE.windowBevelLight);
+    drawRoIconSlot(winG, w / 2 - 44, iconY - 24, 48, RO_PALETTE.windowBevelLight);
+    drawRoIconSlot(winG, w / 2 + 49, iconY - 29, 58, RO_PALETTE.windowGoldAccent);
+
     if (this.textures.exists(`icon_${card.sourceIds[0]}`)) {
-      box.add(this.add.image(w / 2 - 96, iconY, `icon_${card.sourceIds[0]}`).setDisplaySize(44, 44));
+      box.add(this.add.image(w / 2 - 96, iconY, `icon_${card.sourceIds[0]}`).setDisplaySize(38, 38));
     }
-    box.add(this.add.text(w / 2 - 58, iconY, '+', { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffffff' }).setOrigin(0.5));
+    box.add(this.add.text(w / 2 - 58, iconY, '+', { fontFamily: 'system-ui, sans-serif', fontSize: '20px', fontStyle: 'bold', color: '#f8fafc' }).setOrigin(0.5));
     if (this.textures.exists(`icon_${card.sourceIds[1]}`)) {
-      box.add(this.add.image(w / 2 - 20, iconY, `icon_${card.sourceIds[1]}`).setDisplaySize(44, 44));
+      box.add(this.add.image(w / 2 - 20, iconY, `icon_${card.sourceIds[1]}`).setDisplaySize(38, 38));
     }
-    box.add(this.add.text(w / 2 + 24, iconY, '→', { fontFamily: 'sans-serif', fontSize: '22px', color: '#ffd166' }).setOrigin(0.5));
+    box.add(this.add.text(w / 2 + 24, iconY, '→', { fontFamily: 'system-ui, sans-serif', fontSize: '22px', fontStyle: 'bold', color: '#fde047' }).setOrigin(0.5));
     if (this.textures.exists(`icon_${card.resultId}`)) {
-      box.add(this.add.image(w / 2 + 78, iconY, `icon_${card.resultId}`).setDisplaySize(54, 54));
+      box.add(this.add.image(w / 2 + 78, iconY, `icon_${card.resultId}`).setDisplaySize(46, 46));
     }
 
     box.add([
       this.add
-        .text(w / 2, topY + 156, card.recipeTitleTh, {
-          fontFamily: 'sans-serif',
+        .text(w / 2, topY + 174, card.recipeTitleTh, {
+          fontFamily: 'system-ui, sans-serif',
           fontSize: '15px',
           fontStyle: 'bold',
           color: '#ff9f1c',
@@ -1133,32 +1536,20 @@ export class GameScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0),
       this.add
-        .text(w / 2, topY + 184, card.descTh, {
-          fontFamily: 'sans-serif',
+        .text(w / 2, topY + 202, card.descTh, {
+          fontFamily: 'system-ui, sans-serif',
           fontSize: '12px',
-          color: '#e0e1dd',
+          color: '#e2e8f0',
           align: 'center',
           wordWrap: { width: cardW - 32 },
         })
         .setOrigin(0.5, 0),
-    ]);
-
-    const btn = this.add
-      .rectangle(w / 2, topY + panelH - 58, cardW - 44, 44, 0xff9f1c)
-      .setOrigin(0.5, 0)
-      .setStrokeStyle(2, 0xffffff)
-      .setInteractive({ useHandCursor: true });
-    btn.on('pointerup', () => this.confirmTutorialFusion());
-    box.add([
-      btn,
-      this.add
-        .text(w / 2, topY + panelH - 36, card.buttonLabelTh, {
-          fontFamily: 'sans-serif',
-          fontSize: '17px',
-          fontStyle: 'bold',
-          color: '#0b132b',
-        })
-        .setOrigin(0.5),
+      createRoButton(this, w / 2, topY + panelH - 34, cardW - 44, 42, card.buttonLabelTh, {
+        tone: 'gold',
+        fontSize: '16px',
+        scrollFactor: 0,
+        onClick: () => this.confirmTutorialFusion(),
+      }),
     ]);
 
     return box;
@@ -1173,7 +1564,28 @@ export class GameScene extends Phaser.Scene {
 
   private showSystemToast(message: string, seconds = 5): void {
     this.systemToast.setText(message).setVisible(true);
+    this.positionSystemToast();
     this.systemToastLeft = seconds;
+  }
+
+  private positionSystemToast(): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    this.systemToast.setX(w / 2);
+    if (w >= 760) {
+      this.systemToast.setOrigin(0.5, 0).setY(16);
+      return;
+    }
+    if (this.overlay) {
+      if (this.state.skills.length === 0 && this.state.pendingDraft) {
+        this.systemToast.setOrigin(0.5, 0).setY(144);
+      } else {
+        this.systemToast.setOrigin(0.5, 1).setY(h - 72);
+      }
+    } else {
+      const dockOffset = this.state.skills.length > 0 ? 58 : 8;
+      this.systemToast.setOrigin(0.5, 0).setY(10 + this.hudPanelH + dockOffset);
+    }
   }
 
   private buildEndOverlay(): Phaser.GameObjects.Container {
@@ -1189,40 +1601,94 @@ export class GameScene extends Phaser.Scene {
     const stats = `รอดถึงวันที่ ${s.day} · เลเวล ${s.player.level} · ปราบมอน ${s.kills} ตัว${shardLine}`;
     const share = buildShareCardSummary(s, this.data_.skills);
     const topSkillsText = share.topSkillsTh.length > 0 ? `สกิลเด่น: ${share.topSkillsTh.join(' · ')}` : `Seed: ${share.seed}`;
-    const cardW = Math.min(420, w - 24);
-    const cardBg = this.add
-      .rectangle(w / 2, h / 2 + 12, cardW, 384, 0x120a24, 0.94)
-      .setStrokeStyle(2.5, won ? 0xffd166 : 0xff2a55);
-    box.add([
-      cardBg,
-      this.add.text(w / 2, h / 2 - 138, title, { fontFamily: 'sans-serif', fontSize: '28px', fontStyle: 'bold', color: won ? '#ffd166' : '#ff6b6b', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 - 74, line, { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 - 30, stats, { fontFamily: 'sans-serif', fontSize: '16px', color: '#cfd2ff', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 + 6, share.nightTrackEmojis, { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffd166', align: 'center' }).setOrigin(0.5),
-      this.add.text(w / 2, h / 2 + 38, topSkillsText, { fontFamily: 'sans-serif', fontSize: '14px', color: '#a8dadc', align: 'center', wordWrap: { width: cardW - 28 } }).setOrigin(0.5),
-    ]);
-    const shareBtn = this.add
-      .rectangle(w / 2, h / 2 + 86, 248, 44, 0x2a9d8f)
-      .setStrokeStyle(2, 0xffffff)
-      .setInteractive({ useHandCursor: true });
-    const shareLabel = this.add
-      .text(w / 2, h / 2 + 86, 'คัดลอกลิงก์ท้าดวล (?seed=)', { fontFamily: 'sans-serif', fontSize: '16px', color: '#ffffff' })
-      .setOrigin(0.5);
-    shareBtn.on('pointerup', () => {
-      const shareText = `${share.titleTh}\n${share.nightTrackEmojis}\n${share.shareUrl}`;
-      void navigator.clipboard?.writeText(shareText)?.catch(() => undefined);
-      shareLabel.setText('คัดลอกแล้ว!');
+    const cardW = Math.min(436, w - 20);
+    const cardH = 408;
+    const leftX = Math.round(w / 2 - cardW / 2);
+    const topY = Math.max(12, Math.round(h / 2 - cardH / 2 + 8));
+
+    const winG = this.add.graphics();
+    drawRoWindow(winG, leftX, topY, cardW, cardH, { headerHeight: 30, crimsonHeader: !won, bodyAlpha: 0.97 });
+    winG.fillStyle(RO_PALETTE.windowWell, 0.94).fillRoundedRect(leftX + 14, topY + 86, cardW - 28, 178, 6);
+    winG.lineStyle(1, RO_PALETTE.windowBevelDark, 1).strokeRoundedRect(leftX + 14, topY + 86, cardW - 28, 178, 6);
+    box.add(winG);
+
+    const shareBtnW = Math.min(280, cardW - 40);
+    const shareBtn = createRoButton(this, w / 2, topY + 302, shareBtnW, 40, 'คัดลอกลิงก์ท้าดวล (?seed=)', {
+      tone: 'teal',
+      fontSize: '15px',
+      scrollFactor: 0,
+      onClick: () => {
+        const shareText = `${share.titleTh}\n${share.nightTrackEmojis}\n${share.shareUrl}`;
+        void navigator.clipboard?.writeText(shareText)?.catch(() => undefined);
+        const lbl = shareBtn.getAt(1);
+        if (lbl && 'setText' in lbl) (lbl as Phaser.GameObjects.Text).setText('✔ คัดลอกแล้ว!');
+      },
     });
-    const button = this.add
-      .rectangle(w / 2, h / 2 + 144, 248, 50, 0x3a86ff)
-      .setStrokeStyle(2, 0xffffff)
-      .setInteractive({ useHandCursor: true });
-    button.on('pointerup', () => this.newRun());
+    const restartBtn = createRoButton(this, w / 2, topY + 358, shareBtnW, 44, '▶ เริ่มรอบใหม่ [N]', {
+      tone: 'blue',
+      fontSize: '18px',
+      scrollFactor: 0,
+      onClick: () => this.newRun(),
+    });
+
     box.add([
+      this.add
+        .text(leftX + 24, topY + 16, won ? 'MVP VICTORY · ชนะศึกจันทร์เลือด' : 'BATTLE REPORT · แกนฐานพัง', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '12px',
+          fontStyle: 'bold',
+          color: '#f8fafc',
+          stroke: '#0b111e',
+          strokeThickness: 2,
+        })
+        .setOrigin(0, 0.5),
+      this.add
+        .text(w / 2, topY + 58, title, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '23px',
+          fontStyle: 'bold',
+          color: won ? '#fde047' : '#fda4af',
+          align: 'center',
+          wordWrap: { width: cardW - 28 },
+        })
+        .setOrigin(0.5),
+      this.add
+        .text(w / 2, topY + 114, line, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '15px',
+          color: '#f8fafc',
+          align: 'center',
+          wordWrap: { width: cardW - 44 },
+        })
+        .setOrigin(0.5),
+      this.add
+        .text(w / 2, topY + 162, stats, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '15px',
+          color: '#bae6fd',
+          align: 'center',
+          wordWrap: { width: cardW - 44 },
+        })
+        .setOrigin(0.5),
+      this.add
+        .text(w / 2, topY + 206, share.nightTrackEmojis, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '20px',
+          color: '#fde047',
+          align: 'center',
+        })
+        .setOrigin(0.5),
+      this.add
+        .text(w / 2, topY + 240, topSkillsText, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '13px',
+          color: '#93c5fd',
+          align: 'center',
+          wordWrap: { width: cardW - 44 },
+        })
+        .setOrigin(0.5),
       shareBtn,
-      shareLabel,
-      button,
-      this.add.text(w / 2, h / 2 + 144, 'เริ่มรอบใหม่ [N]', { fontFamily: 'sans-serif', fontSize: '20px', color: '#ffffff' }).setOrigin(0.5),
+      restartBtn,
     ]);
     return box;
   }
@@ -1304,15 +1770,87 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Scatter deterministic resource nodes from the map stream.
-    const g = this.add.graphics().setDepth(1);
-    for (let i = 0; i < 80; i++) {
+    // Sanctuary Plaza around the Core (stone flagstones, rune circles, corner braziers).
+    const gPlaza = this.add.graphics().setDepth(1);
+    gPlaza.fillStyle(0x1e293b, 0.45).fillCircle(CORE_X, CORE_Y, 170);
+    gPlaza.fillStyle(0x475569, 0.92).fillCircle(CORE_X, CORE_Y, 146);
+    gPlaza.fillStyle(0x64748b, 0.9).fillCircle(CORE_X, CORE_Y, 134);
+    gPlaza.lineStyle(3, 0x334155, 0.95).strokeCircle(CORE_X, CORE_Y, 146);
+    gPlaza.lineStyle(2, 0x94a3b8, 0.65).strokeCircle(CORE_X, CORE_Y, 132);
+    for (let i = 0; i < 8; i++) {
+      const ang = (i * Math.PI) / 4;
+      gPlaza.lineStyle(2, 0x334155, 0.65).lineBetween(
+        CORE_X + Math.cos(ang) * 44,
+        CORE_Y + Math.sin(ang) * 44,
+        CORE_X + Math.cos(ang) * 144,
+        CORE_Y + Math.sin(ang) * 144,
+      );
+      gPlaza.lineStyle(1.5, 0x7dd3fc, 0.45).lineBetween(
+        CORE_X + Math.cos(ang + Math.PI / 8) * 62,
+        CORE_Y + Math.sin(ang + Math.PI / 8) * 62,
+        CORE_X + Math.cos(ang + Math.PI / 8) * 96,
+        CORE_Y + Math.sin(ang + Math.PI / 8) * 96,
+      );
+    }
+    gPlaza.lineStyle(2.5, 0x38bdf8, 0.55).strokeCircle(CORE_X, CORE_Y, 96);
+    gPlaza.lineStyle(2, 0xc084fc, 0.6).strokeCircle(CORE_X, CORE_Y, 62);
+    for (const [bx, by] of [
+      [-98, -98],
+      [98, -98],
+      [-98, 98],
+      [98, 98],
+    ]) {
+      const px = CORE_X + bx;
+      const py = CORE_Y + by;
+      gPlaza.fillStyle(0x090d16, 0.35).fillEllipse(px, py + 7, 26, 10);
+      gPlaza.fillStyle(0x334155, 1).fillRect(px - 8, py - 8, 16, 16);
+      gPlaza.lineStyle(1.5, 0x94a3b8, 0.9).strokeRect(px - 8, py - 8, 16, 16);
+      gPlaza.fillStyle(0xf97316, 0.35).fillCircle(px, py - 2, 16);
+      gPlaza.fillStyle(0xfbbf24, 0.95).fillCircle(px, py - 2, 5);
+    }
+
+    // Scatter deterministic layered RPG props from the map stream (outside Sanctuary Plaza).
+    const gProps = this.add.graphics().setDepth(2);
+    for (let i = 0; i < 84; i++) {
       const x = map.int(1, MAP_TILES - 2) * TILE + TILE / 2;
       const y = map.int(1, MAP_TILES - 2) * TILE + TILE / 2;
-      g.fillStyle(map.pick([0x4f772d, 0x7f7f7f, 0x3a86ff]), 0.9).fillCircle(x, y, 8);
+      const kind = map.int(0, 2);
+      if (Math.hypot(x - CORE_X, y - CORE_Y) < 176) continue;
+      if (kind === 0) {
+        // Herb bush with wildflowers
+        gProps.fillStyle(0x090d16, 0.28).fillEllipse(x, y + 6, 22, 9);
+        gProps.fillStyle(0x1b4332, 0.95).fillCircle(x - 4, y, 7).fillCircle(x + 4, y + 1, 7);
+        gProps.fillStyle(0x2d6a4f, 0.95).fillCircle(x, y - 3, 7);
+        gProps.fillStyle(0x52b788, 0.9).fillCircle(x - 2, y - 4, 4);
+        gProps.fillStyle(i % 2 === 0 ? 0xfef08a : 0xf9a8d4, 0.95).fillCircle(x + 3, y - 3, 2).fillCircle(x - 4, y + 1, 2);
+      } else if (kind === 1) {
+        // Faceted rock outcrop + crystal ore vein
+        gProps.fillStyle(0x090d16, 0.3).fillEllipse(x, y + 6, 22, 8);
+        gProps.fillStyle(0x475569, 0.95).fillRect(x - 8, y - 5, 16, 11);
+        gProps.fillStyle(0x64748b, 0.95).fillRect(x - 6, y - 7, 11, 9);
+        gProps.fillStyle(0x94a3b8, 0.85).fillRect(x - 5, y - 7, 5, 3);
+        gProps.fillStyle(i % 3 === 0 ? 0xfbbf24 : 0x38bdf8, 0.95).fillRect(x + 1, y - 4, 4, 5).fillRect(x - 4, y - 1, 3, 4);
+      } else {
+        // Mana dew spring puddle
+        gProps.fillStyle(0x3f6212, 0.8).fillEllipse(x, y, 22, 14);
+        gProps.fillStyle(0x0284c7, 0.88).fillEllipse(x, y, 17, 10);
+        gProps.fillStyle(0x7dd3fc, 0.7).fillEllipse(x - 2, y - 1, 9, 5);
+        gProps.fillStyle(0xe0f2fe, 0.95).fillCircle(x - 3, y - 2, 2);
+      }
     }
+
     // Base core in the centre (GDD §5).
-    this.coreSprite = this.add.sprite(CORE_X, CORE_Y, 'base_core', 0).setDepth(5);
-    this.add.text(CORE_X, CORE_Y + 42, 'แกนฐาน', { fontSize: '14px', color: '#e0aaff' }).setOrigin(0.5).setDepth(6);
+    this.coreSprite = this.add.sprite(CORE_X, CORE_Y, 'base_core', 0).setScale(1.15).setDepth(5);
+    this.add
+      .text(CORE_X, CORE_Y + 46, 'แกนฐาน', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: '#f3e8ff',
+        stroke: '#090d16',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(6);
   }
 }

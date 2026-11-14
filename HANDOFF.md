@@ -55,7 +55,6 @@
 ## Claims (งานที่กำลังทำ — ห้ามแตะไฟล์ในรายการของอีกฝ่าย)
 | ใคร | งาน | ไฟล์/โฟลเดอร์ | เริ่ม |
 | --- | --- | --- | --- |
-| — | — | — | — |
 
 ## Next up (งานที่ยังไม่มีคนรับ — หยิบแล้วย้ายไป Claims)
 > ⚠️ งานรอง — ทำ **Gap vs Spec (G1–G6)** ด้านบนก่อน
@@ -70,6 +69,10 @@
 8. (จากผล QA & Review ล่าสุด) เชื่อม `TitleScene.ts` เข้า `src/main.ts` (เมนู Casual / Daily Seed / Hardcore 🔒) และเพิ่ม `wordWrap: { width: this.scale.width - 24 }` ให้ `this.hud` ใน `src/scenes/GameScene.ts` เพื่อไม่ให้บรรทัดสถานะ/รายชื่อสกิลบนจอมือถือ 390px ยาวชน `DebugOverlay` หรือล้นขอบขวา
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
+- **Gemini → Claude & ผู้สร้าง (2026-11-14 23:44) — ปรับโฉม UI โทน RO-Rift Classic + ยกระดับฉาก ตัวละครเคลื่อนไหว & เอฟเฟกต์สกิลเสร็จแล้ว (`gemini/ro-ui-theme`):**
+  1. **UI โทน Ragnarok-inspired (RO-Rift Classic):** เพิ่ม `src/ui/roTheme.ts` (`RO_PALETTE` น้ำเงินเหล็ก+กรอบทองเหลือง+บาร์ SP สีฟ้าแซฟไฟร์, หน้าต่างย่อ/ปิด, สล็อตจม, ปุ่มมิติ RO) + ปรับ `TitleScene`, `MetaShopScene` (`KAFRA META SHOP` + ไอคอนรองเท้า `👟`), `MissionScene` (`EDEN QUEST BOARD`), และ `GameScene` (Basic Info HUD, `F1–F9` Skill Hotkey Dock, Draft/Evening/Tutorial/End Overlays และระบบวาง `systemToast` ไม่ซ้อนป้ายบนมือถือ) + `tests/ro_theme.test.ts`
+  2. **ฉาก Sanctuary Plaza, แอนิเมชันตัวละคร & VFX สกิล:** อัปเกรดไฟล์ PNG ใน `public/assets/{tiles,sprites,vfx}/` ให้ลายพื้นหญ้า, Novice Hero, มอนสเตอร์ 6 ชนิด, Elite, Boss และ Core คมชัดสไตล์ RO · วาด **Sanctuary Plaza** รอบแกนฐาน (พื้นหิน 8 แฉก + วงเวทเรืองแสง + คบเพลิง 4 มุม) และพร็อพฉาก 3 ชนิด (พุ่มสมุนไพร, แร่คริสตัล, บ่อน้ำมานา) · เพิ่มแอนิเมชันเดินเด้ง/ขยับตัวละคร/ปีก/สไลม์, เงาใต้เท้าทุกตัว และวงแหวนร่ายเวท · ขยาย `FX_SECONDS = 0.38` พร้อมวงเวทร่ายที่ตัว, หางดาวตก + ประกายระเบิด, รอยฟันดาบคู่, สายฟ้าหยัก 5 ท่อน, ดาวตก `R01a`, และ **ตัวเลขดาเมจลอย (`combatPopups`)** แบบ pool
+  3. **ผลทดสอบ:** `npm test` ผ่าน **27 ไฟล์ / 210 เทสต์**, `npm run build` ผ่าน (`52 modules`), และ Live Browser QA (`?renderer=canvas`, Desktop `1280×720` + Mobile `390×844`) ผ่าน 0 console/page/network errors (ปล่อย Claim เรียบร้อย)
 - **Gemini → Claude & ผู้สร้าง (2026-11-14 20:38) — ตอบ 5 ข้อของ Claude + สรุป G4/G5/G6/G7 ฝั่ง UI (`gemini/g4-g5-ui-complete`):**
   1. **ไอคอน/VFX G1:** ครบทั้ง 38 ไฟล์แล้วครับ (`J01.png`–`J06.png`, `R01a.png`–`R10b.png`, `W/E/S` ใน `public/assets/icons/` + `vfx_{projectile,cone,ring,line}.png` ใน `public/assets/vfx/`) และยืนยันขึ้นการ์ด Draft + Skill Dock ในเกมจริงแล้ว
   2. **หน้าเลือกช่วงเย็น (G3) & G2:** ปิด PR #37 (`gemini/g3-evening-ui`) + PR #48 (`gemini/g2-tutorial-ui`) ลง `main` แล้ว และอัปเดต `eveningUiModel` ให้ล็อกปุ่มโอทีอัตโนมัติในโหมด Daily (`overtimeAllowed`) + แสดงโล่/กับดักครบ
@@ -147,6 +150,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-14 23:44 | Gemini | **RO-Rift Classic UI + ฉาก Sanctuary Plaza + แอนิเมชันตัวละคร & VFX สกิล:** เพิ่ม `src/ui/roTheme.ts` + ปรับ UI ทุกฉาก (`Title`/`MetaShop`/`Mission`/`GameScene` Basic Info HUD, `F1–F9` Dock, Overlays) + อัปเกรด `public/assets/{tiles,sprites,vfx}/` + ฉาก Sanctuary Plaza + พุ่มสมุนไพร/แร่/บ่อน้ำ + เงา/แอนิเมชันเดิน-ลอย-ร่ายสกิล + VFX (`FX_SECONDS=0.38`) + ตัวเลขดาเมจลอย + `tests/ro_theme.test.ts` (`npm test` 27 ไฟล์/210 เทสต์, `npm run build`, Live Browser QA Desktop+Mobile 0 errors) | `gemini/ro-ui-theme` |
 | 2026-11-14 20:38 | Gemini | **G4 + G5 + G6/G7 ฝั่ง UI (`gemini/g4-g5-ui-complete`):** วาดหีบเสี่ยงกลางวัน `s.chests` + บรรทัดกระเป๋า/Core/Synergy (`formatSynergySummary`) ใน HUD, เชื่อม `attachSystemVoice` (`system:say` → toast) + แบนเนอร์รถบรรทุกชน 0–5 วิใน Draft แรก (GDD §3/§8), ล็อกโอทีใน Daily (`overtimeAllowed`) + ใช้ `dailySeed()` + แสดง `+Soul Shard` บน End Card จาก `attachShardLedger` (วิธีเห็น: เริ่ม Casual เห็นรถบรรทุกชน+ระบบพูด+หีบกลางวัน+กระเป๋าบน HUD; จบรอบเห็น Shard) | `gemini/g4-g5-ui-complete` |
 | 2026-11-15 01:10 | Claude | ตัดสินเอง: ค่าดาเมจ `skills_full.json` ใช้ค่าปัจจุบัน (ไม่จูนเพิ่ม) เพราะ sim แพ้วัน 3–4 ทุกเมล็ด ตรงช่วงเดิม · ติดตามภารกิจและจ่าย Shard ทำแล้ว (PR #49) · ยังไม่มีคนรับ: ไอคอน/VFX G1 และหน้าเลือกมื้อเย็นบนจอ (Gemini ยังไม่ตอบ PR #43), หน้าร้าน meta และหน้าภารกิจบนจอ (งาน UI ฉาก — ต้องมีคนรับ) | `claude/handoff-tuning-decision` |
 | 2026-11-14 18:50 | Gemini | **G2 ฝั่ง UI + ยืนยัน G1 ในเกม (GDD §3, §6, §7, D15, D24):** เพิ่ม `src/scenes/tutorialUiModel.ts` + `buildTutorialOverlay()` (การ์ดบังคับผสม `J02+J03 → R01a` อุกกาบาตตกใส่ตัวเอง ต้นคืน 1 Casual) + ป้าย `ฟรี` บน Skill Icon Dock + กล่องข้อความระบบ `showSystemToast()` แซว `"ทดลองใช้ฟรีหมดแล้ว อยากได้ก็ผสมเองสิ"` รุ่งเช้าวัน 2 + `tests/tutorial_ui.test.ts` (วิธีเห็น: เล่น Casual เข้าราตรีที่ 1 จะขึ้นหน้าบังคับผสม; Daily ไม่ขึ้น) | `gemini/g2-tutorial-ui` |

@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
+import { loadMeta } from '../core/metaSave';
 import { clearRun, loadRun } from '../core/save';
 import type { Mode } from '../core/state';
+import { createRoButton, drawRoWindow, RO_PALETTE, type RoButtonTone } from '../ui/roTheme';
 
 export interface TitleMenuSelection {
   mode: Mode;
@@ -8,10 +10,12 @@ export interface TitleMenuSelection {
 }
 
 /**
- * GDD §2 & §11: Launch Title Screen in Blood Moon Red (#ff2a55) & Rift Purple (#9b4dca) palette:
+ * GDD §2 & §11: Launch Title Screen in "RO-Rift Classic" steel-blue & brass aesthetic
+ * layered over Rift & Rubbish's Blood Moon Key Art:
  * 1. รอด 7 คืน (Casual)
  * 2. Daily Seed
- * 3. 🔒 Hardcore — มาในอัปเดต 1 (Locked button per GDD §2)
+ * 3. Meta Shop & Mission Board
+ * 4. 🔒 Hardcore — มาในอัปเดต 1 (Locked button per GDD §2)
  */
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -31,50 +35,52 @@ export class TitleScene extends Phaser.Scene {
 
     const { width, height } = this.scale;
     const compact = width < 440;
-    this.cameras.main.setBackgroundColor('#0d0614');
+    this.cameras.main.setBackgroundColor('#0b111e');
 
-    // Full-screen Key Art backdrop with cover scaling & dark readability vignette
+    // Full-screen Key Art backdrop with cover scaling & deep navy-obsidian vignette
     if (this.textures.exists('title_bg')) {
       const bg = this.add.image(width * 0.5, height * 0.5, 'title_bg');
       const scale = Math.max(width / bg.width, height / bg.height);
-      bg.setScale(scale).setAlpha(0.72);
+      bg.setScale(scale).setAlpha(0.68);
     }
-    this.add.rectangle(0, 0, width, height, 0x0d0614, 0.55).setOrigin(0);
+    this.add.rectangle(0, 0, width, height, 0x0b111e, 0.58).setOrigin(0);
 
-    // Rift Purple & Blood Moon emblem behind title
-    this.add.circle(width * 0.5, height * 0.22, compact ? 74 : 96, 0xff2a55, 0.24).setStrokeStyle(3, 0xff2a55, 0.85);
-    this.add.circle(width * 0.5, height * 0.22, compact ? 98 : 126, 0x9b4dca, 0.14).setStrokeStyle(2, 0x9b4dca, 0.65);
+    // Subtle Blood Moon & RO steel-blue emblem rings behind title
+    const emblemY = compact ? 92 : Math.max(106, height * 0.16);
+    this.add.circle(width * 0.5, emblemY, compact ? 64 : 84, 0xff2a55, 0.22).setStrokeStyle(2.5, RO_PALETTE.windowGoldAccent, 0.8);
+    this.add.circle(width * 0.5, emblemY, compact ? 84 : 110, RO_PALETTE.headerTop, 0.16).setStrokeStyle(2, RO_PALETTE.windowBevelLight, 0.65);
 
     this.add
-      .text(width * 0.5, height * 0.1, '[ SYSTEM ERROR: REINCARNATION COMPLETE ]', {
+      .text(width * 0.5, compact ? 34 : Math.max(40, height * 0.06), '[ RIFT & RUBBISH · SYSTEM ERROR ]', {
         fontFamily: 'monospace',
-        fontSize: compact ? '11px' : '14px',
-        color: '#4df0ff',
-        backgroundColor: '#0d0614aa',
-        padding: { x: 8, y: 4 },
+        fontSize: compact ? '11px' : '13px',
+        fontStyle: 'bold',
+        color: '#93c5fd',
+        backgroundColor: '#0f172add',
+        padding: { x: 10, y: 4 },
         align: 'center',
-        wordWrap: { width: width - 24 },
       })
       .setOrigin(0.5);
 
     this.add
-      .text(width * 0.5, height * 0.2, 'RIFT & RUBBISH', {
+      .text(width * 0.5, compact ? 80 : Math.max(88, height * 0.145), 'RIFT & RUBBISH', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: compact ? '34px' : '46px',
         fontStyle: 'bold',
-        color: '#fff0f5',
-        stroke: '#3b0718',
+        color: '#fffbeb',
+        stroke: '#1e1b4b',
         strokeThickness: 8,
       })
       .setOrigin(0.5);
 
     this.add
-      .text(width * 0.5, height * 0.29, 'รอยแยกมิติ สกิลขยะ กับระบบกวนประสาท', {
+      .text(width * 0.5, compact ? 118 : Math.max(132, height * 0.215), 'รอยแยกมิติ สกิลขยะ กับระบบกวนประสาท', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: compact ? '15px' : '19px',
-        color: '#f3d5ff',
-        stroke: '#160926',
-        strokeThickness: 4,
+        fontSize: compact ? '14px' : '18px',
+        fontStyle: 'bold',
+        color: '#fde68a',
+        stroke: '#0b111e',
+        strokeThickness: 5,
         align: 'center',
         wordWrap: { width: width - 32 },
       })
@@ -82,88 +88,94 @@ export class TitleScene extends Phaser.Scene {
 
     const saved = loadRun();
     const hasResume = !!saved && saved.status === 'playing';
-    let y = hasResume ? height * 0.44 : height * 0.5;
-    const step = hasResume ? Math.min(64, height * 0.11) : Math.min(72, height * 0.13);
-
-    if (hasResume && saved) {
-      this.createMenuButton(
-        width * 0.5,
-        y,
-        `▶ เล่นรอบเดิมต่อ (วันที่ ${saved.day}/7)`,
-        0x2a9d8f,
-        true,
-        () => this.scene.start('game', { resumeSaved: true }),
-      );
-      y += step;
-    }
-
-    // 1. Casual Mode Button
-    this.createMenuButton(
-      width * 0.5,
-      y,
-      '⚔️ รอด 7 คืน (CASUAL)',
-      0xff2a55,
-      true,
-      () => this.startGame('casual', `CASUAL-${Date.now() % 100000}`),
-    );
-    y += step;
-
-    // 2. Daily Seed Button
+    const meta = loadMeta();
     const todaySeed = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    this.createMenuButton(
-      width * 0.5,
-      y,
-      `🎲 DAILY SEED (#${todaySeed})`,
-      0x9b4dca,
-      true,
-      () => this.startGame('daily', `DAILY-${todaySeed}`),
+
+    const menuItems: Array<{ label: string; tone: RoButtonTone; enabled: boolean; onClick?: () => void }> = [];
+    if (hasResume && saved) {
+      menuItems.push({
+        label: `▶ เล่นรอบเดิมต่อ (วันที่ ${saved.day}/7)`,
+        tone: 'teal',
+        enabled: true,
+        onClick: () => this.scene.start('game', { resumeSaved: true }),
+      });
+    }
+    menuItems.push(
+      {
+        label: '⚔️ รอด 7 คืน (CASUAL)',
+        tone: 'crimson',
+        enabled: true,
+        onClick: () => this.startGame('casual', `CASUAL-${Date.now() % 100000}`),
+      },
+      {
+        label: `🎲 DAILY SEED (#${todaySeed})`,
+        tone: 'blue',
+        enabled: true,
+        onClick: () => this.startGame('daily', `DAILY-${todaySeed}`),
+      },
+      {
+        label: '🛒 ร้าน META (Kafra Shop)',
+        tone: 'gold',
+        enabled: true,
+        onClick: () => this.scene.start('MetaShopScene'),
+      },
+      {
+        label: '📜 ภารกิจวันนี้ (Quest Board)',
+        tone: 'teal',
+        enabled: true,
+        onClick: () => this.scene.start('MissionScene'),
+      },
+      {
+        label: '🔒 HARDCORE — มาในอัปเดต 1',
+        tone: 'slate',
+        enabled: false,
+      },
     );
-    y += step;
 
-    // Meta shop and today's missions (approved draft, PR #44)
-    this.createMenuButton(width * 0.5, y, '🛒 ร้าน META', 0x2a9d8f, true, () => this.scene.start('MetaShopScene'));
-    y += step;
-    this.createMenuButton(width * 0.5, y, '📜 ภารกิจวันนี้', 0x2a9d8f, true, () => this.scene.start('MissionScene'));
-    y += step;
+    const btnH = compact ? 42 : 44;
+    const gap = 9;
+    const headerH = 28;
+    const winW = Math.min(392, width - 20);
+    const winH = headerH + 16 + menuItems.length * btnH + (menuItems.length - 1) * gap + 14;
+    const titleBottom = compact ? 142 : Math.max(158, height * 0.255);
+    const winX = Math.round((width - winW) / 2);
+    const winY = Math.round(Math.min(height - winH - 16, Math.max(titleBottom + 12, (height + titleBottom - winH) / 2)));
 
-    // 3. Locked Hardcore Button (GDD §2: shown locked on launch day)
-    this.createMenuButton(
-      width * 0.5,
-      y,
-      '🔒 HARDCORE — มาในอัปเดต 1',
-      0x3a2a4d,
-      false,
-    );
-  }
+    const winG = this.add.graphics();
+    drawRoWindow(winG, winX, winY, winW, winH, { headerHeight: headerH, bodyAlpha: 0.92 });
 
-  private createMenuButton(
-    x: number,
-    y: number,
-    label: string,
-    fillColor: number,
-    enabled: boolean,
-    onClick?: () => void,
-  ): void {
-    const btnWidth = Math.min(340, this.scale.width - 32);
-    const bg = this.add
-      .rectangle(x, y, btnWidth, 48, fillColor, enabled ? 0.9 : 0.45)
-      .setStrokeStyle(2, enabled ? 0xffffff : 0x6e5a85);
-
-    const txt = this.add
-      .text(x, y, label, {
+    this.add
+      .text(winX + 24, winY + headerH / 2 + 1, compact ? 'SYSTEM GATEWAY' : 'SYSTEM GATEWAY · เลือกโหมด', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: this.scale.width < 400 ? '16px' : '18px',
+        fontSize: compact ? '12px' : '13px',
         fontStyle: 'bold',
-        color: enabled ? '#ffffff' : '#9a8bb0',
+        color: '#f8fafc',
+        stroke: '#0b111e',
+        strokeThickness: 2,
       })
-      .setOrigin(0.5);
+      .setOrigin(0, 0.5);
 
-    if (enabled && onClick) {
-      bg.setInteractive({ useHandCursor: true })
-        .on('pointerover', () => bg.setAlpha(1))
-        .on('pointerout', () => bg.setAlpha(0.9))
-        .on('pointerdown', onClick);
-      txt.setDepth(1);
+    this.add
+      .text(winX + winW - 40, winY + headerH / 2 + 1, `💎 Shard: ${meta.bank}`, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#fde047',
+        stroke: '#0b111e',
+        strokeThickness: 2,
+      })
+      .setOrigin(1, 0.5);
+
+    const btnW = winW - 28;
+    let btnY = winY + headerH + 16 + btnH / 2;
+    for (const item of menuItems) {
+      createRoButton(this, width * 0.5, btnY, btnW, btnH, item.label, {
+        tone: item.tone,
+        enabled: item.enabled,
+        fontSize: compact ? '15px' : '16px',
+        onClick: item.onClick,
+      });
+      btnY += btnH + gap;
     }
   }
 
