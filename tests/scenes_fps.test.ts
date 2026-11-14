@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRun } from '../src/core/state';
 import skillsData from '../src/data/skills.json';
 import { validateSkills, type FusionRecipe } from '../src/systems/skills';
-import { buildShareCardSummary, findAvailableFusions, formatDraftCardsForUI } from '../src/scenes/HudOverlayScene';
+import { buildShareCardSummary, findAvailableFusions, formatDraftCardsForUI, pickFusionCard } from '../src/scenes/HudOverlayScene';
 import { countGraphemes, MobileFpsMonitor } from '../src/scenes/MobileFpsMonitor';
 
 describe('MobileFpsMonitor & countGraphemes (D23)', () => {
@@ -66,5 +66,35 @@ describe('HudOverlayScene (Draft 4th Fusion card preview & Share Card §11)', ()
     expect(summary.nightTrackEmojis).toBe('🟩🟩🟩🐺💀⬛⬛');
     expect(summary.shareUrl).toContain('?seed=RIFT-777');
     expect(summary.topSkillsTh[0]).toContain('ฟันลาวา Lv3');
+  });
+
+  it('pickFusionCard fuses two Lv3+ skills via src/systems/fusion.ts, respects tie-breaking by order, and clears pendingDraft', () => {
+    // 1. Tie at Lv3: E02 taken first before E01 => F05 picks R05b (from E02)
+    const tiedState = createRun({ seed: 'fuse-tie' });
+    tiedState.skills.push(
+      { id: 'E02', xp: 180, cooldownLeft: 0 },
+      { id: 'E01', xp: 180, cooldownLeft: 0 },
+    );
+    tiedState.pendingDraft = ['skill:W01', 'up:E01', 'up:E02'];
+
+    const tieOutcome = pickFusionCard(tiedState, 'F05', skills, recipes);
+    expect(tieOutcome).toEqual({ resultId: 'R05b', fromId: 'E02' });
+    expect(tiedState.skills.map((s) => s.id)).toEqual(['R05b']);
+    expect(tiedState.skills[0].xp).toBe(180);
+    expect(tiedState.pendingDraft).toBeNull();
+
+    // 2. Higher level wins: E01 at Lv4 (420 xp) over E02 at Lv3 (180 xp) => R05a inheriting 420 xp
+    const highState = createRun({ seed: 'fuse-high' });
+    highState.skills.push(
+      { id: 'E02', xp: 180, cooldownLeft: 0 },
+      { id: 'E01', xp: 420, cooldownLeft: 0 },
+    );
+    highState.pendingDraft = ['skill:W01', 'up:E01', 'up:E02'];
+
+    const highOutcome = pickFusionCard(highState, 'F05', skills, recipes);
+    expect(highOutcome).toEqual({ resultId: 'R05a', fromId: 'E01' });
+    expect(highState.skills.map((s) => s.id)).toEqual(['R05a']);
+    expect(highState.skills[0].xp).toBe(420);
+    expect(highState.pendingDraft).toBeNull();
   });
 });

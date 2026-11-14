@@ -10,6 +10,7 @@ import { autoSaveOnHide, clearRun, loadRun, saveRun } from '../core/save';
 import { createRun, type GameState } from '../core/state';
 import { CORE_X, CORE_Y, MAP_TILES, TILE, WORLD } from '../core/world';
 import { loadRunData } from '../data';
+import skillsJson from '../data/skills.json';
 import { VirtualJoystick } from '../input/joystick';
 import { isPlayerDown } from '../systems/base';
 import { phaseRemaining, recallEarly } from '../systems/clock';
@@ -17,8 +18,11 @@ import type { CombatFx } from '../systems/combat';
 import type { Vec2 } from '../systems/movement';
 import { pickDraft, upgradeXp, xpToNext } from '../systems/progression';
 import { startRun, stepRun, type RunData } from '../systems/run';
-import { damageAtLevel, levelForXp, type Rarity, type SkillDef } from '../systems/skills';
+import { damageAtLevel, levelForXp, ownedLevel, type FusionRecipe, type Rarity, type SkillDef } from '../systems/skills';
 import { DebugOverlay } from '../ui/DebugOverlay';
+import { findAvailableFusions, pickFusionCard } from './HudOverlayScene';
+
+const FUSION_RECIPES: readonly FusionRecipe[] = skillsJson.fusions as FusionRecipe[];
 
 const PHASE_TINT = { day: 0x000000, evening: 0x3a1a00, night: 0x05001a } as const;
 const PHASE_ALPHA = { day: 0, evening: 0.25, night: 0.5 } as const;
@@ -124,7 +128,7 @@ export class GameScene extends Phaser.Scene {
       if (this.state.status === 'playing' && !this.state.pendingDraft) recallEarly(this.state, this.bus);
     });
     kb.on('keydown-N', () => this.newRun());
-    for (const [key, index] of [['ONE', 0], ['TWO', 1], ['THREE', 2]] as const) {
+    for (const [key, index] of [['ONE', 0], ['TWO', 1], ['THREE', 2], ['FOUR', 3]] as const) {
       kb.on(`keydown-${key}`, () => this.choose(index));
     }
     this.joystick = new VirtualJoystick(this);
@@ -249,7 +253,11 @@ export class GameScene extends Phaser.Scene {
     const left = phaseRemaining(s);
     const time = Number.isFinite(left) ? `${Math.ceil(left)} วิ` : 'จันทร์เลือด';
     const skills = s.skills
-      .map((o) => `${this.skillName(o.id)} Lv${levelForXp(o.xp)}`)
+      .map((o) => {
+        const def = this.data_.skills.find((d) => d.id === o.id);
+        const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
+        return `${this.skillName(o.id)} Lv${lv}`;
+      })
       .join(' · ');
     const down = isPlayerDown(s) ? `\nล้มลง! ฟื้นที่ฐานใน ${Math.ceil(s.respawnIn)} วิ` : '';
     this.hud.setText(
@@ -271,8 +279,15 @@ export class GameScene extends Phaser.Scene {
 
   private syncOverlay(): void {
     const s = this.state;
+    const fusionIds = s.pendingDraft
+      ? findAvailableFusions(s, this.data_.skills, FUSION_RECIPES).map((f) => f.recipe.id).join(',')
+      : '';
     const key =
-      s.status !== 'playing' ? `end:${s.status}` : s.pendingDraft ? `draft:${s.pendingDraft.join(',')}` : '';
+      s.status !== 'playing'
+        ? `end:${s.status}`
+        : s.pendingDraft
+          ? `draft:${s.pendingDraft.join(',')}|fuse:${fusionIds}`
+          : '';
     const size = `${this.scale.width}x${this.scale.height}`;
     if (`${key}|${size}` === this.overlayKey) return;
     this.overlayKey = `${key}|${size}`;
@@ -297,10 +312,13 @@ export class GameScene extends Phaser.Scene {
 
   private buildDraftOverlay(cards: string[]): Phaser.GameObjects.Container {
     const { box, w, h } = this.overlayBase();
+    const availFusions = findAvailableFusions(this.state, this.data_.skills, FUSION_RECIPES);
+    const fusion = availFusions[0];
+    const totalCards = cards.length + (fusion ? 1 : 0);
     const cardW = Math.min(420, w - 32);
     const cardH = 92;
     const gap = 14;
-    const top = Math.max(70, h / 2 - (cards.length * (cardH + gap)) / 2);
+    const top = Math.max(70, h / 2 - (totalCards * (cardH + gap)) / 2);
     const title = this.state.skills.length === 0 ? 'เลือกสกิลแรกของคุณ' : `เลเวล ${this.state.player.level}! เลือก 1 ใบ`;
     box.add(this.add.text(w / 2, top - 44, title, { fontFamily: 'sans-serif', fontSize: '24px', color: '#ffffff' }).setOrigin(0.5));
 
@@ -339,6 +357,51 @@ export class GameScene extends Phaser.Scene {
         }),
       ]);
     });
+
+    if (fusion) {
+      const fusionCardH = 104;
+      const y = top + cards.length * (cardH + gap);
+      const frame = this.add
+        .rectangle(w / 2, y, cardW, fusionCardH, 0x2a1233, 1)
+        .setOrigin(0.5, 0)
+        .setStrokeStyle(3, RARITY_COLOR[fusion.resultSkill.rarity])
+        .setInteractive({ useHandCursor: true });
+      frame.on('pointerover', () => frame.setFillStyle(0x3c1b4a));
+      frame.on('pointerout', () => frame.setFillStyle(0x2a1233));
+      frame.on('pointerup', () => this.choose(cards.length));
+
+      const srcA = this.state.skills.find((s) => s.id === fusion.recipe.a);
+      const srcB = this.state.skills.find((s) => s.id === fusion.recipe.b);
+      const inheritedXp = Math.max(srcA?.xp ?? 0, srcB?.xp ?? 0);
+      const inheritedLv = ownedLevel(fusion.resultSkill, inheritedXp);
+
+      const head = `${cards.length + 1}. ผสมสกิล: ${fusion.resultSkill.name.th} (Lv${inheritedLv} · ${RARITY_LABEL[fusion.resultSkill.rarity]})`;
+      const previewLine =
+        fusion.resultSkill.kind === 'active'
+          ? `${KIND_LABEL.active} · พลัง ${damageAtLevel(fusion.resultSkill, inheritedLv)} · ทุก ${fusion.resultSkill.cooldown} วิ · ระยะ ${fusion.resultSkill.range} ช่อง`
+          : `${KIND_LABEL.passive} · ถึกขึ้น: รับดาเมจน้อยลงและเลือดสูงสุดเพิ่ม`;
+      const hintLine = `อีกผล: "${fusion.alternateSkill.name.th}" (ดัน ${fusion.skillToRaiseForAlternate.name.th} ให้สูงกว่าก่อนผสม)`;
+
+      const previewText = this.add.text(w / 2 - cardW / 2 + 16, y + 40, previewLine, {
+        fontFamily: 'sans-serif',
+        fontSize: '14px',
+        color: '#cfd2ff',
+        wordWrap: { width: cardW - 32 },
+      });
+      const hintText = this.add.text(w / 2 - cardW / 2 + 16, y + 40 + previewText.height + 4, hintLine, {
+        fontFamily: 'sans-serif',
+        fontSize: '13px',
+        color: '#ffd166',
+        wordWrap: { width: cardW - 32 },
+      });
+
+      box.add([
+        frame,
+        this.add.text(w / 2 - cardW / 2 + 16, y + 12, head, { fontFamily: 'sans-serif', fontSize: '18px', color: '#ffffff' }),
+        previewText,
+        hintText,
+      ]);
+    }
     return box;
   }
 
@@ -367,7 +430,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private choose(index: number): void {
-    if (this.state.status === 'playing' && this.state.pendingDraft) pickDraft(this.state, index, this.data_.skills, this.bus);
+    if (this.state.status !== 'playing' || !this.state.pendingDraft) return;
+    if (index < this.state.pendingDraft.length) {
+      pickDraft(this.state, index, this.data_.skills, this.bus);
+    } else if (index === this.state.pendingDraft.length) {
+      const fusion = findAvailableFusions(this.state, this.data_.skills, FUSION_RECIPES)[0];
+      if (!fusion) return;
+      const out = pickFusionCard(this.state, fusion.recipe.id, this.data_.skills, FUSION_RECIPES);
+      if (out) this.bus.emit('draft:pick', { card: `fuse:${fusion.recipe.id}` });
+    }
   }
 
   // ---- run lifecycle ---------------------------------------------------------------------
