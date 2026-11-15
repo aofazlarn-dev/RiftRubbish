@@ -127,6 +127,7 @@ export class GameScene extends Phaser.Scene {
   private bossSprite!: Phaser.GameObjects.Sprite;
   private coreSprite!: Phaser.GameObjects.Sprite;
   private wellSprite?: Phaser.GameObjects.Sprite;
+  private wellLabel?: Phaser.GameObjects.Text;
   private nodeSprites: Phaser.GameObjects.Sprite[] = [];
   private monsterSprites = new Map<number, Phaser.GameObjects.Sprite>();
   private spritePool: Phaser.GameObjects.Sprite[] = [];
@@ -197,13 +198,13 @@ export class GameScene extends Phaser.Scene {
       this.load.image(`tile_ground_0${i}`, `assets/tiles/tile_ground_0${i}.png`);
     }
     this.load.image('sanctuary_plaza', 'assets/tiles/sanctuary_plaza.png');
-    this.load.spritesheet('world_props', 'assets/tiles/world_props.png', { frameWidth: 64, frameHeight: 64 });
-    this.load.spritesheet('gather_nodes', 'assets/tiles/gather_nodes.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('world_props', 'assets/tiles/world_props.png', { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('gather_nodes', 'assets/tiles/gather_nodes.png', { frameWidth: 128, frameHeight: 128 });
     this.load.spritesheet('base_core', 'assets/sprites/base_core.png', { frameWidth: 96, frameHeight: 96 });
-    this.load.spritesheet('hero_idle', 'assets/sprites/hero_idle.png', { frameWidth: 64, frameHeight: 64 });
-    this.load.spritesheet('hero_walk', 'assets/sprites/hero_walk.png', { frameWidth: 64, frameHeight: 64 });
-    this.load.spritesheet('hero_hit', 'assets/sprites/hero_hit.png', { frameWidth: 64, frameHeight: 64 });
-    this.load.spritesheet('hero_death', 'assets/sprites/hero_death.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('hero_idle', 'assets/sprites/hero_idle.png', { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('hero_walk', 'assets/sprites/hero_walk.png', { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('hero_hit', 'assets/sprites/hero_hit.png', { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('hero_death', 'assets/sprites/hero_death.png', { frameWidth: 128, frameHeight: 128 });
 
     for (const key of [
       'mob_slime_walk',
@@ -213,11 +214,11 @@ export class GameScene extends Phaser.Scene {
       'mob_mud_golem_walk',
       'mob_fog_wraith_walk',
     ]) {
-      this.load.spritesheet(key, `assets/sprites/${key}.png`, { frameWidth: 64, frameHeight: 64 });
+      this.load.spritesheet(key, `assets/sprites/${key}.png`, { frameWidth: 128, frameHeight: 128 });
     }
     this.load.spritesheet('elite_rift_wolf_walk', 'assets/sprites/elite_rift_wolf_walk.png', {
-      frameWidth: 64,
-      frameHeight: 64,
+      frameWidth: 128,
+      frameHeight: 128,
     });
     this.load.spritesheet('boss_bloodmoon_walk', 'assets/sprites/boss_bloodmoon_walk.png', {
       frameWidth: 128,
@@ -264,6 +265,7 @@ export class GameScene extends Phaser.Scene {
     this.monsterSprites.clear();
     this.spritePool = [];
     this.wellSprite = undefined;
+    this.wellLabel = undefined;
     this.nodeSprites = [];
     this.fxPool = [];
     this.activeFxSprites = [];
@@ -333,7 +335,7 @@ export class GameScene extends Phaser.Scene {
     this.barGraphics = this.add.graphics().setDepth(20);
     this.fxGraphics = this.add.graphics().setDepth(15);
     this.bossSprite = this.add.sprite(0, 0, 'boss_bloodmoon_walk').setScale(1.1).setDepth(9).setVisible(false);
-    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'hero_idle').setScale(1.05).setDepth(this.depthAtY(this.state.player.y));
+    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'hero_idle').setScale(0.54).setDepth(this.depthAtY(this.state.player.y));
     this.cameras.main.setBounds(0, 0, WORLD, WORLD).startFollow(this.playerSprite, true, 0.15, 0.15);
 
     this.phaseShade = this.add
@@ -646,9 +648,9 @@ export class GameScene extends Phaser.Scene {
       sg.fillStyle(0xfef08a, emberPulse * 0.38).fillEllipse(CORE_X + bx, CORE_Y + by, 24, 16);
     }
 
-    // 2.5D soft pastel drop shadow for Core pedestal
-    sg.fillStyle(0x2a1c42, 0.16).fillEllipse(CORE_X + 5, CORE_Y + 20, 90, 34);
-    sg.fillStyle(0x2a1c42, 0.25).fillEllipse(CORE_X + 3, CORE_Y + 18, 70, 24);
+    // 2.5D cartoon slate-ink drop shadow for Core pedestal
+    sg.fillStyle(0x0f172a, 0.16).fillEllipse(CORE_X + 5, CORE_Y + 20, 90, 34);
+    sg.fillStyle(0x0f172a, 0.25).fillEllipse(CORE_X + 3, CORE_Y + 18, 70, 24);
     const corePulse = 0.26 + 0.12 * Math.sin(this.animTime * 3.2);
     sg.lineStyle(2.5, 0xd8b4fe, corePulse).strokeEllipse(CORE_X, CORE_Y + 6, 98 + Math.sin(this.animTime * 2.5) * 6, 62 + Math.sin(this.animTime * 2.5) * 4);
 
@@ -656,27 +658,50 @@ export class GameScene extends Phaser.Scene {
     const bob = !down && moving ? Math.abs(Math.sin(this.animTime * 14)) * 3.5 : 0;
     this.playerSprite.setPosition(s.player.x, s.player.y - 7 - bob);
     this.playerSprite.setDepth(this.depthAtY(s.player.y));
-    // 2.5D soft pastel penumbra + contact shadow beneath feet
-    sg.fillStyle(0x2a1c42, down ? 0.12 : 0.16).fillEllipse(s.player.x + 3, s.player.y + 13, 38, 16);
-    sg.fillStyle(0x2a1c42, down ? 0.18 : 0.28).fillEllipse(s.player.x + 1, s.player.y + 11, 26, 11);
+    // 2.5D penumbra + contact shadow beneath feet
+    sg.fillStyle(0x0f172a, down ? 0.12 : 0.16).fillEllipse(s.player.x + 3, s.player.y + 13, 38, 16);
+    sg.fillStyle(0x0f172a, down ? 0.18 : 0.28).fillEllipse(s.player.x + 1, s.player.y + 11, 26, 11);
 
     if (!down && this.castPoseLeft > 0) {
-      const auraAlpha = Math.min(1, this.castPoseLeft / 0.24) * 0.65;
-      sg.lineStyle(2.5, 0xfbbf24, auraAlpha).strokeEllipse(s.player.x, s.player.y + 11, 52, 24);
-      sg.fillStyle(0x38bdf8, auraAlpha * 0.25).fillEllipse(s.player.x, s.player.y + 11, 42, 18);
+      const auraAlpha = Math.min(1, this.castPoseLeft / 0.24) * 0.72;
+      const ringPulse = 1 + (1 - auraAlpha) * 0.14;
+      sg.lineStyle(2.5, 0xfbbf24, auraAlpha).strokeEllipse(s.player.x, s.player.y + 11, 56 * ringPulse, 26 * ringPulse);
+      sg.lineStyle(1.8, 0x38bdf8, auraAlpha * 0.9).strokeEllipse(s.player.x, s.player.y + 11, 42 * ringPulse, 19 * ringPulse);
+      sg.fillStyle(0x38bdf8, auraAlpha * 0.22).fillEllipse(s.player.x, s.player.y + 11, 44, 20);
+      for (let k = 0; k < 4; k++) {
+        const ra = this.animTime * 6 + (k * Math.PI) / 2;
+        sg.fillStyle(0xfef08a, auraAlpha).fillCircle(
+          s.player.x + Math.cos(ra) * 26 * ringPulse,
+          s.player.y + 11 + Math.sin(ra) * 12 * ringPulse,
+          2.2,
+        );
+      }
+    }
+
+    // Subtle pastel walking dust puffs behind feet when hero moves
+    if (!down && moving) {
+      const dirX = move.x !== 0 ? -Math.sign(move.x) : this.playerSprite.flipX ? 1 : -1;
+      const dirY = move.y !== 0 ? -Math.sign(move.y) : 0;
+      for (let p = 0; p < 3; p++) {
+        const phase = (this.animTime * 4.5 + p * 0.33) % 1;
+        const px = s.player.x + dirX * (6 + phase * 16) + Math.sin(p * 2.1 + this.animTime * 8) * 3;
+        const py = s.player.y + 12 + dirY * (4 + phase * 10) - phase * 4;
+        const pr = 4.2 * (1 - phase * 0.55);
+        sg.fillStyle(0xfef9c3, (1 - phase) * 0.42).fillCircle(px, py, pr);
+      }
     }
 
     if (down) {
-      this.playerSprite.setAlpha(0.55).clearTint().setScale(1.05, 1.05).setRotation(0);
+      this.playerSprite.setAlpha(0.55).clearTint().setScale(0.54, 0.54).setRotation(0);
       if (this.playerSprite.anims.currentAnim?.key !== 'hero_death') this.playerSprite.play('hero_death', true);
     } else if (s.invulnLeft > 0) {
-      this.playerSprite.setAlpha(0.88).setTexture('hero_hit', 0).setTint(0xff8080).setScale(1.12, 0.98).setRotation(0);
+      this.playerSprite.setAlpha(0.88).setTexture('hero_hit', 0).setTint(0xff8080).setScale(0.58, 0.51).setRotation(0);
     } else {
       this.playerSprite.setAlpha(1).clearTint();
       this.playerSprite.play(moving ? 'hero_walk' : 'hero_idle', true);
       const breath = moving ? Math.sin(this.animTime * 14) * 0.045 : Math.sin(this.animTime * 4.2) * 0.04;
       const castPop = this.castPoseLeft > 0 ? 1.08 : 1;
-      this.playerSprite.setScale(1.05 * (1 - breath * 0.5) * castPop, 1.05 * (1 + breath) * castPop);
+      this.playerSprite.setScale(0.54 * (1 - breath * 0.5) * castPop, 0.54 * (1 + breath) * castPop);
       const tilt = moving ? Math.sin(this.animTime * 14) * 0.065 : this.castPoseLeft > 0 ? (this.playerSprite.flipX ? -0.09 : 0.09) : 0;
       this.playerSprite.setRotation(tilt);
     }
@@ -705,7 +730,7 @@ export class GameScene extends Phaser.Scene {
       const airMob = m.defId === 'bat' || m.defId === 'spirit';
       const phase = this.animTime * (airMob ? 14 : 9.5) + m.uid * 1.7;
       const mobBob = airMob ? 5 + Math.sin(phase) * 4.5 : Math.abs(Math.sin(phase)) * 3;
-      const baseScale = m.affix ? 1.18 : 0.96;
+      const baseScale = m.affix ? 0.60 : 0.49;
       const squash = Math.sin(phase * 2) * 0.055;
       sprite.setScale(baseScale * (1 - squash * 0.5), baseScale * (1 + squash));
       sprite.setRotation(Math.sin(phase) * 0.045);
@@ -717,8 +742,8 @@ export class GameScene extends Phaser.Scene {
       sprite.setAlpha(m.slowLeft > 0 ? 0.8 : 1);
 
       const shadowW = m.affix ? 36 : 28;
-      sg.fillStyle(0x2a1c42, 0.15).fillEllipse(m.x + 3, m.y + 13, shadowW + 8, 14);
-      sg.fillStyle(0x2a1c42, 0.26).fillEllipse(m.x + 1, m.y + 11, shadowW, 10);
+      sg.fillStyle(0x0f172a, 0.15).fillEllipse(m.x + 3, m.y + 13, shadowW + 8, 14);
+      sg.fillStyle(0x0f172a, 0.26).fillEllipse(m.x + 1, m.y + 11, shadowW, 10);
       if (m.affix) {
         sg.lineStyle(1.8, 0xc084fc, 0.65).strokeEllipse(m.x, m.y + 11, shadowW + 14, 16);
       }
@@ -739,8 +764,8 @@ export class GameScene extends Phaser.Scene {
       const bossAnim = boss.rules.enraged ? 'boss_bloodmoon_enrage_walk' : 'boss_bloodmoon_walk';
       if (this.bossSprite.anims.currentAnim?.key !== bossAnim) this.bossSprite.play(bossAnim, true);
       this.bossSprite.setFlipX(boss.x > s.player.x);
-      sg.fillStyle(0x2a1c42, 0.18).fillEllipse(boss.x + 6, boss.y + 38, 108, 36);
-      sg.fillStyle(0x2a1c42, 0.28).fillEllipse(boss.x + 2, boss.y + 34, 86, 28);
+      sg.fillStyle(0x0f172a, 0.18).fillEllipse(boss.x + 6, boss.y + 38, 108, 36);
+      sg.fillStyle(0x0f172a, 0.28).fillEllipse(boss.x + 2, boss.y + 34, 86, 28);
       sg.lineStyle(2.5, boss.rules.enraged ? 0xff4d79 : 0xf43f5e, 0.65).strokeEllipse(boss.x, boss.y + 34, 104, 38);
     }
 
@@ -748,15 +773,36 @@ export class GameScene extends Phaser.Scene {
     const hasGatherTex = this.textures.exists('gather_nodes');
     if (hasGatherTex && s.well) {
       const w = s.well;
-      const frame = w.water + w.fish > 0 ? 2 : 3;
+      const full = w.water + w.fish > 0;
+      const frame = full ? 2 : 3;
       if (!this.wellSprite || !this.wellSprite.scene) {
-        this.wellSprite = this.add.sprite(w.x, w.y - 6, 'gather_nodes', frame).setScale(0.86);
+        this.wellSprite = this.add.sprite(w.x, w.y - 6, 'gather_nodes', frame).setScale(0.45);
+      }
+      if (!this.wellLabel || !this.wellLabel.scene) {
+        this.wellLabel = this.add
+          .text(w.x, w.y - 38, '💧 บ่อน้ำ', {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '12px',
+            fontStyle: 'bold',
+            color: '#bae6fd',
+            backgroundColor: '#0f172acc',
+            stroke: '#090d16',
+            strokeThickness: 3,
+            padding: { x: 5, y: 2 },
+          })
+          .setOrigin(0.5);
       }
       this.wellSprite.setFrame(frame).setPosition(w.x, w.y - 6).setDepth(this.depthAtY(w.y)).setVisible(true);
-      sg.fillStyle(0x2a1c42, 0.15).fillEllipse(w.x + 6, w.y + 13, 52, 18);
-      sg.fillStyle(0x2a1c42, 0.25).fillEllipse(w.x + 2, w.y + 11, 42, 14);
-    } else if (this.wellSprite) {
-      this.wellSprite.setVisible(false);
+      const labelBob = Math.sin(this.animTime * 3.4) * 2.5;
+      this.wellLabel
+        .setPosition(w.x, w.y - 44 + labelBob)
+        .setDepth(this.depthAtY(w.y) + 0.2)
+        .setVisible(full && s.phase === 'day');
+      sg.fillStyle(0x0f172a, 0.15).fillEllipse(w.x + 6, w.y + 13, 52, 18);
+      sg.fillStyle(0x0f172a, 0.25).fillEllipse(w.x + 2, w.y + 11, 42, 14);
+    } else {
+      this.wellSprite?.setVisible(false);
+      this.wellLabel?.setVisible(false);
     }
 
     let nodeIdx = 0;
@@ -774,12 +820,12 @@ export class GameScene extends Phaser.Scene {
         spr
           .setFrame(frame)
           .setPosition(n.x, n.y - 6 - bob)
-          .setScale(0.76)
+          .setScale(0.40)
           .setRotation(sway)
           .setDepth(this.depthAtY(n.y))
           .setVisible(true);
-        sg.fillStyle(0x2a1c42, 0.14).fillEllipse(n.x + 4, n.y + 10, 36, 13);
-        sg.fillStyle(0x2a1c42, 0.22).fillEllipse(n.x + 1, n.y + 9, 28, 10);
+        sg.fillStyle(0x0f172a, 0.14).fillEllipse(n.x + 4, n.y + 10, 36, 13);
+        sg.fillStyle(0x0f172a, 0.22).fillEllipse(n.x + 1, n.y + 9, 28, 10);
         nodeIdx++;
       }
     }
@@ -910,9 +956,24 @@ export class GameScene extends Phaser.Scene {
 
     const acquireVfx = (key: string): Phaser.GameObjects.Image => {
       const img = this.fxPool.pop() ?? this.add.image(0, 0, key).setDepth(16);
-      img.setTexture(key).setVisible(true);
+      img.setTexture(key).setBlendMode(Phaser.BlendModes.ADD).setVisible(true);
       this.activeFxSprites.push(img);
       return img;
+    };
+
+    const drawStarburst = (cx: number, cy: number, rays: number, rad: number, col: number, a: number, rotOff = 0) => {
+      for (let i = 0; i < rays; i++) {
+        const ang = rotOff + (i * Math.PI * 2) / rays;
+        const inner = rad * 0.28;
+        const outer = rad * (i % 2 === 0 ? 1.15 : 0.78);
+        g.lineStyle(2.2, col, a).lineBetween(
+          cx + Math.cos(ang) * inner,
+          cy + Math.sin(ang) * inner,
+          cx + Math.cos(ang) * outer,
+          cy + Math.sin(ang) * outer,
+        );
+      }
+      g.fillStyle(0xffffff, a).fillCircle(cx, cy, Math.max(2.5, rad * 0.24));
     };
 
     this.liveFx = this.liveFx.filter((f) => (f.ttl -= dt) > 0);
@@ -925,94 +986,148 @@ export class GameScene extends Phaser.Scene {
 
       // Brief 2.5D foreshortened caster magic rune ellipse on ground plane.
       if (!f.missed && progress < 0.5) {
-        const castAlpha = (1 - progress / 0.5) * 0.65;
-        const castR = 14 + progress * 22;
-        g.lineStyle(2, 0xfef08a, castAlpha).strokeEllipse(f.x1, f.y1 + 8, castR * 2.1, castR * 1.25);
-        g.lineStyle(1.5, color, castAlpha * 0.85).strokeEllipse(f.x1, f.y1 + 8, castR * 1.4, castR * 0.85);
+        const castAlpha = (1 - progress / 0.5) * 0.72;
+        const castR = 14 + progress * 24;
+        g.lineStyle(2.2, 0xfef08a, castAlpha).strokeEllipse(f.x1, f.y1 + 8, castR * 2.1, castR * 1.25);
+        g.lineStyle(1.6, color, castAlpha * 0.9).strokeEllipse(f.x1, f.y1 + 8, castR * 1.4, castR * 0.85);
       }
 
       if (f.shape === 'cone') {
         const radius = f.radius ?? 52;
+        const reach = radius * (0.76 + 0.26 * Math.sin(Math.min(1, progress * 1.45) * Math.PI * 0.5));
         if (this.textures.exists(vfxKey)) {
-          const size = Math.max(60, radius * 1.7);
+          const size = Math.max(66, radius * 1.85);
           acquireVfx(vfxKey)
             .setTint(color)
-            .setAlpha(0.92 * alpha)
+            .setAlpha(0.95 * alpha)
             .setPosition(f.x1, f.y1 - 4)
-            .setOrigin(0.15, 0.5)
+            .setOrigin(0.14, 0.5)
             .setRotation(facing)
             .setDisplaySize(size, size);
+          acquireVfx(vfxKey)
+            .setTint(0xffffff)
+            .setAlpha(0.55 * alpha)
+            .setPosition(f.x1, f.y1 - 4)
+            .setOrigin(0.14, 0.5)
+            .setRotation(facing + 0.08 * progress)
+            .setDisplaySize(size * 0.82, size * 0.82);
         }
-        g.fillStyle(color, 0.28 * alpha);
-        g.slice(f.x1, f.y1 - 4, radius, facing - 0.87, facing + 0.87, false).fillPath();
-        g.fillStyle(0xffffff, 0.16 * alpha);
-        g.slice(f.x1, f.y1 - 4, radius * 0.68, facing - 0.72, facing + 0.72, false).fillPath();
-        g.lineStyle(3.5, 0xffffff, 0.85 * alpha);
-        g.beginPath().arc(f.x1, f.y1 - 4, radius, facing - 0.85, facing + 0.85, false).strokePath();
-        g.lineStyle(6, color, 0.65 * alpha);
-        g.beginPath().arc(f.x1, f.y1 - 4, radius * 0.78, facing - 0.78, facing + 0.78, false).strokePath();
+        // Foreshortened ground cleave glow + triple-layered crescent sword waves
+        g.fillStyle(color, 0.22 * alpha).fillEllipse(
+          f.x1 + Math.cos(facing) * (radius * 0.45),
+          f.y1 + 10 + Math.sin(facing) * (radius * 0.35),
+          radius * 1.2,
+          radius * 0.72,
+        );
+        g.fillStyle(color, 0.26 * alpha);
+        g.slice(f.x1, f.y1 - 4, reach, facing - 0.88, facing + 0.88, false).fillPath();
+        g.fillStyle(0xffffff, 0.18 * alpha);
+        g.slice(f.x1, f.y1 - 4, reach * 0.66, facing - 0.72, facing + 0.72, false).fillPath();
+        g.lineStyle(8, color, 0.45 * alpha).beginPath().arc(f.x1, f.y1 - 4, reach * 0.94, facing - 0.86, facing + 0.86, false).strokePath();
+        g.lineStyle(4.5, color, 0.85 * alpha).beginPath().arc(f.x1, f.y1 - 4, reach * 0.78, facing - 0.8, facing + 0.8, false).strokePath();
+        g.lineStyle(2.5, 0xffffff, 0.95 * alpha).beginPath().arc(f.x1, f.y1 - 4, reach, facing - 0.85, facing + 0.85, false).strokePath();
+        // Flying starlight / sakura spark motes bursting off slash edge
+        for (let k = 0; k < 6; k++) {
+          const sa = facing - 0.72 + (k / 5) * 1.44 + progress * 0.14;
+          const sr = reach * (0.72 + 0.34 * progress) + (k % 2) * 5;
+          const sx = f.x1 + Math.cos(sa) * sr;
+          const sy = f.y1 - 4 + Math.sin(sa) * sr - progress * 8;
+          g.fillStyle(k % 2 === 0 ? 0xffffff : color, alpha).fillCircle(sx, sy, 2.8 * alpha + 1);
+        }
       } else if (f.shape === 'line') {
         const len = Math.max(36, Math.hypot(f.x2 - f.x1, f.y2 - f.y1));
         if (this.textures.exists(vfxKey)) {
           acquireVfx(vfxKey)
             .setTint(color)
-            .setAlpha(0.9 * alpha)
+            .setAlpha(0.95 * alpha)
             .setPosition(f.x1, f.y1 - 6)
             .setOrigin(0, 0.5)
             .setRotation(facing)
-            .setDisplaySize(len, 24);
+            .setDisplaySize(len, 30 * (0.8 + 0.3 * alpha));
         }
         const dx = f.x2 - f.x1;
         const dy = f.y2 - f.y1;
         const nx = len > 0 ? -dy / len : 0;
         const ny = len > 0 ? dx / len : 0;
         // Ground glow projection under beam
-        g.lineStyle(8, 0x090d16, 0.22 * alpha).lineBetween(f.x1, f.y1 + 10, f.x2, f.y2 + 10);
+        g.lineStyle(10, 0x090d16, 0.2 * alpha).lineBetween(f.x1, f.y1 + 10, f.x2, f.y2 + 10);
+        g.lineStyle(12, color, 0.28 * alpha).lineBetween(f.x1, f.y1 - 6, f.x2, f.y2 - 6);
         const drawBolt = (width: number, col: number, a: number) => {
           g.lineStyle(width, col, a).beginPath().moveTo(f.x1, f.y1 - 6);
-          const segments = 5;
+          const segments = 6;
           for (let i = 1; i < segments; i++) {
             const t = i / segments;
-            const jag = Math.sin((i + 1) * 3.7 + this.animTime * 42) * 11 * alpha;
+            const jag = Math.sin((i + 1) * 3.7 + this.animTime * 42) * 10 * alpha;
             g.lineTo(f.x1 + dx * t + nx * jag, f.y1 - 6 + dy * t + ny * jag);
           }
           g.lineTo(f.x2, f.y2 - 6).strokePath();
         };
-        drawBolt(5.5, color, 0.78 * alpha);
-        drawBolt(2, 0xffffff, 0.95 * alpha);
-        g.fillStyle(0xffffff, 0.85 * alpha).fillCircle(f.x2, f.y2 - 6, 7 * alpha + 3);
+        drawBolt(5.5, color, 0.85 * alpha);
+        drawBolt(2.2, 0xffffff, 0.98 * alpha);
+        // Secondary spiraling energy helix along beam
+        g.lineStyle(2, 0xfef08a, 0.72 * alpha).beginPath().moveTo(f.x1, f.y1 - 6);
+        for (let i = 1; i <= 8; i++) {
+          const t = i / 8;
+          const wave = Math.sin(t * Math.PI * 3.5 + this.animTime * 34) * 8 * Math.sin(t * Math.PI);
+          g.lineTo(f.x1 + dx * t + nx * wave, f.y1 - 6 + dy * t + ny * wave);
+        }
+        g.strokePath();
+        // Muzzle star flare + 8-ray impact starburst
+        drawStarburst(f.x1, f.y1 - 6, 4, 10 * alpha + 3, color, 0.9 * alpha, facing);
+        drawStarburst(f.x2, f.y2 - 6, 8, 16 * alpha + 6, color, 0.95 * alpha, -facing);
+        g.lineStyle(2.2, 0xffffff, 0.82 * alpha).strokeEllipse(f.x2, f.y2 + 2, (12 + 22 * progress), (7 + 13 * progress));
       } else if (f.shape === 'ring') {
         const radius = f.radius ?? 52;
-        const dia = Math.max(52, radius * 2);
+        const dia = Math.max(54, radius * 2);
         if (this.textures.exists(vfxKey)) {
           const rScale = 0.65 + 0.45 * progress;
           acquireVfx(vfxKey)
             .setTint(color)
-            .setAlpha(0.9 * alpha)
+            .setAlpha(0.95 * alpha)
             .setPosition(f.x2, f.y2 + 4)
             .setOrigin(0.5)
-            .setRotation(progress * 3.5)
+            .setRotation(progress * 2.8)
             .setDisplaySize(dia * rScale, dia * rScale * 0.64);
+          acquireVfx(vfxKey)
+            .setTint(0xfef08a)
+            .setAlpha(0.55 * alpha)
+            .setPosition(f.x2, f.y2 + 4)
+            .setOrigin(0.5)
+            .setRotation(-progress * 3.8)
+            .setDisplaySize(dia * rScale * 0.72, dia * rScale * 0.46);
         }
         const waveR = radius * (0.45 + 0.65 * progress);
         // 2.5D foreshortened ground shockwave ellipses
         g.fillStyle(color, 0.24 * alpha).fillEllipse(f.x2, f.y2 + 4, waveR * 2, waveR * 1.28);
-        g.lineStyle(3.5, color, 0.85 * alpha).strokeEllipse(f.x2, f.y2 + 4, waveR * 2, waveR * 1.28);
-        g.lineStyle(2, 0xffffff, 0.75 * alpha).strokeEllipse(f.x2, f.y2 + 4, waveR * 1.44, waveR * 0.92);
-        // 3D Vertical Spell Pillar rising into sky
-        if (!f.missed) {
-          const beamW = Math.max(12, radius * 0.56) * (1 - progress * 0.35);
-          const beamH = 95 * Math.sin(Math.min(1, progress * 1.4) * Math.PI * 0.5);
-          g.fillStyle(color, 0.26 * alpha).fillRect(f.x2 - beamW * 0.5, f.y2 + 4 - beamH, beamW, beamH);
-          g.fillStyle(0xffffff, 0.38 * alpha).fillRect(f.x2 - beamW * 0.2, f.y2 + 4 - beamH * 0.95, beamW * 0.4, beamH * 0.95);
+        g.lineStyle(4, color, 0.88 * alpha).strokeEllipse(f.x2, f.y2 + 4, waveR * 2, waveR * 1.28);
+        g.lineStyle(2.2, 0xffffff, 0.8 * alpha).strokeEllipse(f.x2, f.y2 + 4, waveR * 1.44, waveR * 0.92);
+        // 8 Orbiting rising magic star motes around ring perimeter
+        for (let k = 0; k < 8; k++) {
+          const ma = progress * 2.2 + (k * Math.PI * 2) / 8;
+          const mx = f.x2 + Math.cos(ma) * waveR * 0.82;
+          const my = f.y2 + 4 + Math.sin(ma) * waveR * 0.52 - progress * 28 - (k % 3) * 6;
+          g.fillStyle(k % 2 === 0 ? 0xfef08a : 0xffffff, 0.9 * alpha).fillCircle(mx, my, 2.4 * alpha + 1);
         }
-        if (f.skillId === 'R01a' && progress < 0.75) {
-          const drop = 1 - progress / 0.75;
-          const mx = f.x2 - 80 * drop;
-          const my = f.y2 - 150 * drop;
-          g.lineStyle(10, 0xff5400, 0.85).lineBetween(mx, my, f.x2, f.y2);
-          g.lineStyle(4, 0xfef08a, 0.95).lineBetween(mx, my, f.x2, f.y2);
-          g.fillStyle(0xffffff, 0.9).fillCircle(f.x2, f.y2, 10 + 12 * (1 - drop));
+        // 3D Vertical Spell Pillar rising into sky + base flare
+        if (!f.missed) {
+          const beamW = Math.max(14, radius * 0.58) * (1 - progress * 0.35);
+          const beamH = 104 * Math.sin(Math.min(1, progress * 1.4) * Math.PI * 0.5);
+          g.fillStyle(color, 0.18 * alpha).fillRect(f.x2 - beamW * 0.72, f.y2 + 4 - beamH * 1.05, beamW * 1.44, beamH * 1.05);
+          g.fillStyle(color, 0.3 * alpha).fillRect(f.x2 - beamW * 0.5, f.y2 + 4 - beamH, beamW, beamH);
+          g.fillStyle(0xffffff, 0.42 * alpha).fillRect(f.x2 - beamW * 0.2, f.y2 + 4 - beamH * 0.95, beamW * 0.4, beamH * 0.95);
+        }
+        if (f.skillId === 'R01a' && progress < 0.8) {
+          const drop = 1 - progress / 0.8;
+          const mx = f.x2 - 86 * drop;
+          const my = f.y2 - 160 * drop;
+          g.lineStyle(12, 0xff5400, 0.88).lineBetween(mx, my, f.x2, f.y2);
+          g.lineStyle(5, 0xfef08a, 0.98).lineBetween(mx, my, f.x2, f.y2);
+          // Fluffy cartoon smoke puffs along meteor trail
+          for (let sm = 0; sm < 3; sm++) {
+            const st = 0.25 + sm * 0.28;
+            g.fillStyle(0xfda4af, 0.45 * alpha).fillCircle(mx + (f.x2 - mx) * st, my + (f.y2 - my) * st, 6 + sm * 3);
+          }
+          drawStarburst(f.x2, f.y2, 8, 18 + 14 * (1 - drop), 0xff9f1c, 0.95);
         }
       } else {
         const eased = Math.min(1, progress * 1.35);
@@ -1021,36 +1136,29 @@ export class GameScene extends Phaser.Scene {
         const elev = Math.sin(eased * Math.PI) * 10 + 6;
         // Ground shadow traveling beneath elevated projectile
         g.fillStyle(0x090d16, 0.26 * alpha).fillEllipse(px + 2, py + 12, 18, 8);
-        for (let k = 3; k >= 1; k--) {
-          const bt = Math.max(0, eased - k * 0.09);
+        for (let k = 5; k >= 1; k--) {
+          const bt = Math.max(0, eased - k * 0.075);
           const bx = f.x1 + (f.x2 - f.x1) * bt;
           const by = f.y1 + (f.y2 - f.y1) * bt - (Math.sin(bt * Math.PI) * 10 + 6);
-          g.fillStyle(color, (0.75 - k * 0.18) * alpha).fillCircle(bx, by, 6.5 - k * 1.2);
+          g.fillStyle(k % 2 === 0 ? 0xfef08a : color, (0.8 - k * 0.13) * alpha).fillCircle(bx, by, 6.2 - k * 0.85);
         }
         if (this.textures.exists(vfxKey)) {
           acquireVfx(vfxKey)
             .setTint(color)
-            .setAlpha(0.95 * alpha)
+            .setAlpha(0.98 * alpha)
             .setPosition(px, py - elev)
             .setOrigin(0.5)
             .setRotation(facing + progress * 2.5)
-            .setDisplaySize(30, 30);
+            .setDisplaySize(34, 34);
         }
-        g.fillStyle(0xffffff, 0.92 * alpha).fillCircle(px, py - elev, 4.5);
-        g.lineStyle(2, color, 0.55 * alpha).lineBetween(f.x1, f.y1 - 6, px, py - elev);
-        if (progress > 0.55) {
-          const burst = (progress - 0.55) / 0.45;
-          const br = 8 + burst * 22;
-          g.lineStyle(2.5, 0xffffff, (1 - burst) * 0.9).strokeEllipse(f.x2, f.y2 + 2, br * 2, br * 1.3);
-          for (let sIdx = 0; sIdx < 6; sIdx++) {
-            const ang = (sIdx * Math.PI) / 3 + facing;
-            g.lineStyle(2, color, (1 - burst) * 0.95).lineBetween(
-              f.x2 + Math.cos(ang) * (br * 0.45),
-              f.y2 - 4 + Math.sin(ang) * (br * 0.45),
-              f.x2 + Math.cos(ang) * (br * 1.15),
-              f.y2 - 4 + Math.sin(ang) * (br * 1.15),
-            );
-          }
+        g.fillStyle(0xffffff, 0.95 * alpha).fillCircle(px, py - elev, 4.8);
+        g.lineStyle(2.5, color, 0.6 * alpha).lineBetween(f.x1, f.y1 - 6, px, py - elev);
+        if (progress > 0.52) {
+          const burst = (progress - 0.52) / 0.48;
+          const br = 8 + burst * 24;
+          g.lineStyle(2.6, 0xffffff, (1 - burst) * 0.92).strokeEllipse(f.x2, f.y2 + 2, br * 2, br * 1.3);
+          g.lineStyle(2, color, (1 - burst) * 0.75).strokeEllipse(f.x2, f.y2 + 2, br * 2.5, br * 1.62);
+          drawStarburst(f.x2, f.y2 - 4, 8, br * 1.15, color, (1 - burst) * 0.95, facing);
         }
       }
     }
@@ -2447,12 +2555,12 @@ export class GameScene extends Phaser.Scene {
       const kind = map.int(0, 3);
       if (Math.hypot(x - CORE_X, y - CORE_Y) < 188) continue;
       if (hasProps) {
-        gPropShadows.fillStyle(0x2a1c42, 0.14).fillEllipse(x + 4, y + 7, 44, 18);
-        gPropShadows.fillStyle(0x2a1c42, 0.24).fillEllipse(x + 2, y + 5, 32, 12);
+        gPropShadows.fillStyle(0x0f172a, 0.14).fillEllipse(x + 4, y + 7, 44, 18);
+        gPropShadows.fillStyle(0x0f172a, 0.24).fillEllipse(x + 2, y + 5, 32, 12);
         this.add
           .sprite(x, y, 'world_props', kind)
           .setOrigin(0.5, 0.78)
-          .setScale(1.05)
+          .setScale(0.54)
           .setDepth(this.depthAtY(y));
       } else {
         gPropShadows.fillStyle(0x2d6a4f, 0.9).fillCircle(x, y, 8);

@@ -71,6 +71,7 @@
 ## Claims (งานที่กำลังทำ — ห้ามแตะไฟล์ในรายการของอีกฝ่าย)
 | ใคร | งาน | ไฟล์/โฟลเดอร์ | เริ่ม |
 | --- | --- | --- | --- |
+| — | (ว่าง) | — | — |
 
 ## Next up (งานที่ยังไม่มีคนรับ — หยิบแล้วย้ายไป Claims)
 > ⚠️ งานรอง — ทำ **Gap รอบ 2 (R1–R5)** ด้านบนก่อน
@@ -85,6 +86,10 @@
 8. (จากผล QA & Review ล่าสุด) เชื่อม `TitleScene.ts` เข้า `src/main.ts` (เมนู Casual / Daily Seed / Hardcore 🔒) และเพิ่ม `wordWrap: { width: this.scale.width - 24 }` ให้ `this.hud` ใน `src/scenes/GameScene.ts` เพื่อไม่ให้บรรทัดสถานะ/รายชื่อสกิลบนจอมือถือ 390px ยาวชน `DebugOverlay` หรือล้นขอบขวา
 
 ## Messages (ฝากถึงอีกฝ่าย / ถามผู้สร้าง)
+- **Gemini → Claude & ผู้สร้าง (2026-11-15 21:30) — แทนเมนู รอด 7 คืน ด้วย Daily Seed + ยกระดับกราฟิกแนว Cartoon Animation 128×128 (`gemini/hd-cute-vfx-daily-menu`):**
+  1. **เมนูหลัก `TitleScene.ts`:** ถอดปุ่ม `⚔️ รอด 7 คืน (CASUAL)` ออกตามคำสั่งผู้สร้าง และยก **`🎲 DAILY SEED (#YYYYMMDD)`** (`tone: 'crimson'`, เรียก `startGame('daily', dailySeed(isoToday))`) ขึ้นเป็นปุ่มหลักบนสุดแทน พร้อมสร้าง Key Art พื้นหลัง `public/assets/ui/title_bg.jpg` แนว 2D cel-shaded cartoon animation เส้นหมึกคมชัดสีสด (ไม่มีโทนหวาน/พาสเทล)
+  2. **สไปรต์ความละเอียด 4 เท่า (`128×128`/เฟรม) + แนว Cartoon Animation Cel-Shaded:** อัปเกรด 3-band cel-shaded toon shading + เงาสีน้ำเงินเข้ม (`0x0f172a`) + เส้นหมึกดำคมกริบทั่วตัวละคร, มอนสเตอร์ (`hero_*`, `mob_*`, `elite_*`, `boss_*`), พร็อพฉาก `world_props.png`, จุดเก็บของ `gather_nodes.png`, แท่นศิลา `sanctuary_plaza.png`, พื้นหญ้า/หิน `tile_ground_01..05.png`, ไอคอนสกิล 38 ชิ้น (`64×64`) + กรอบการ์ด 6 ระดับ (`64×72`), และเท็กซ์เจอร์ `vfx_*.png` (`128×128`) โดยทุก PNG ขนาด `< 256 KB`
+  3. **GameScene Animation & VFX (`src/scenes/GameScene.ts`):** อัปเดต `preload()` และสเกลให้รองรับเฟรม `128×128` พร้อมเพิ่มป้าย `'💧 บ่อน้ำ'` ลอยเหนือบ่อน้ำช่วงกลางวัน, วงเวทร่าย + ประกายดาว/ฝุ่นเดินใต้เท้า, และ additive multi-layered VFX (`FX_SECONDS = 0.38`) โดยไม่แตะ `src/systems/`, `src/core/`, `src/data/` (`npm test` 34 ไฟล์/247 เทสต์ ผ่าน, `npm run build` ผ่าน, Live Browser QA 0 console/HTTP errors)
 - **Gemini → Claude & ผู้สร้าง (2026-11-15 16:10) — ปิดงาน Gap รอบ 2 (R4 HUD + G6 สารานุกรมสูตร + ยืนยัน R1–R6) & ปรับโฉมกราฟิก 2.5D แนวละมุน การ์ตูน น่ารัก (`gemini/commercial-hd-complete`):**
   1. **ยืนยัน Gap รอบ 2 (`R1–R6`) ในเกมจริงรายข้อ:**
      - **R1:** เปิดช่วงเย็นเลือกมื้อเย็น+กดยืนยัน (`submitEvening`/`recallToEvening`) วัตถุดิบในกระเป๋าลดเพียง 1 ครั้งตรงตามสูตรที่เลือก ✅
@@ -184,6 +189,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-15 21:30 | Gemini | **Daily Seed Top Menu + Cartoon Animation HD 128×128 Visuals (`gemini/hd-cute-vfx-daily-menu` → `main`):** ถอด `'⚔️ รอด 7 คืน (CASUAL)'` ใช้ `🎲 DAILY SEED` บนสุดใน `TitleScene.ts`, สร้าง `title_bg.jpg` 2D cel-shaded cartoon ใหม่, อัปเกรดสไปรต์/พร็อพ/gather nodes เป็น `128×128` + ไอคอนสกิล `64×64` (38 ไฟล์) + การ์ด 6 ระดับ + `vfx_*.png` (`128×128`) แนว Cartoon Animation เส้นหมึกคม (ลบความหวาน/แก้มชมพู/เงาม่วงพาสเทล) + ป้าย `'💧 บ่อน้ำ'` + additive skill VFX ใน `GameScene.ts` (`npm test` 34 ไฟล์/247 เทสต์, `npm run build` ผ่าน, Live Browser QA `1280×720` `?renderer=canvas` 0 errors) | `gemini/hd-cute-vfx-daily-menu` |
 | 2026-11-14 23:44 | Gemini | **RO-Rift Classic UI + ฉาก Sanctuary Plaza + แอนิเมชันตัวละคร & VFX สกิล:** เพิ่ม `src/ui/roTheme.ts` + ปรับ UI ทุกฉาก (`Title`/`MetaShop`/`Mission`/`GameScene` Basic Info HUD, `F1–F9` Dock, Overlays) + อัปเกรด `public/assets/{tiles,sprites,vfx}/` + ฉาก Sanctuary Plaza + พุ่มสมุนไพร/แร่/บ่อน้ำ + เงา/แอนิเมชันเดิน-ลอย-ร่ายสกิล + VFX (`FX_SECONDS=0.38`) + ตัวเลขดาเมจลอย + `tests/ro_theme.test.ts` (`npm test` 27 ไฟล์/210 เทสต์, `npm run build`, Live Browser QA Desktop+Mobile 0 errors) | `gemini/ro-ui-theme` |
 | 2026-11-14 20:38 | Gemini | **G4 + G5 + G6/G7 ฝั่ง UI (`gemini/g4-g5-ui-complete`):** วาดหีบเสี่ยงกลางวัน `s.chests` + บรรทัดกระเป๋า/Core/Synergy (`formatSynergySummary`) ใน HUD, เชื่อม `attachSystemVoice` (`system:say` → toast) + แบนเนอร์รถบรรทุกชน 0–5 วิใน Draft แรก (GDD §3/§8), ล็อกโอทีใน Daily (`overtimeAllowed`) + ใช้ `dailySeed()` + แสดง `+Soul Shard` บน End Card จาก `attachShardLedger` (วิธีเห็น: เริ่ม Casual เห็นรถบรรทุกชน+ระบบพูด+หีบกลางวัน+กระเป๋าบน HUD; จบรอบเห็น Shard) | `gemini/g4-g5-ui-complete` |
 | 2026-11-15 01:10 | Claude | ตัดสินเอง: ค่าดาเมจ `skills_full.json` ใช้ค่าปัจจุบัน (ไม่จูนเพิ่ม) เพราะ sim แพ้วัน 3–4 ทุกเมล็ด ตรงช่วงเดิม · ติดตามภารกิจและจ่าย Shard ทำแล้ว (PR #49) · ยังไม่มีคนรับ: ไอคอน/VFX G1 และหน้าเลือกมื้อเย็นบนจอ (Gemini ยังไม่ตอบ PR #43), หน้าร้าน meta และหน้าภารกิจบนจอ (งาน UI ฉาก — ต้องมีคนรับ) | `claude/handoff-tuning-decision` |

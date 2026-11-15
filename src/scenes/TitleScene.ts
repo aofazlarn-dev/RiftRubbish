@@ -4,6 +4,7 @@ import { clearRun, loadRun } from '../core/save';
 import type { Mode } from '../core/state';
 import skillsFullJson from '../data/skills_full.json';
 import type { FusionRecipe, SkillDef } from '../systems/skills';
+import { dailySeed } from '../systems/daily';
 import { createRoButton, drawRoWindow, RO_PALETTE, type RoButtonTone } from '../ui/roTheme';
 import { buildCodexEntries } from './codexUiModel';
 
@@ -18,9 +19,9 @@ export interface TitleMenuSelection {
 /**
  * GDD §2 & §11: Launch Title Screen in "RO-Rift Classic" steel-blue & brass aesthetic
  * layered over Rift & Rubbish's Blood Moon Key Art:
- * 1. รอด 7 คืน (Casual)
- * 2. Daily Seed
- * 3. Meta Shop & Mission Board
+ * 1. Daily Seed (โหมดเล่นหลักประจำวัน)
+ * 2. Meta Shop & Mission Board
+ * 3. Codex (สารานุกรมสูตร & Synergy)
  * 4. 🔒 Hardcore — มาในอัปเดต 1 (Locked button per GDD §2)
  */
 export class TitleScene extends Phaser.Scene {
@@ -106,7 +107,8 @@ export class TitleScene extends Phaser.Scene {
     const saved = loadRun();
     const hasResume = !!saved && saved.status === 'playing';
     const meta = loadMeta();
-    const todaySeed = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const isoToday = new Date().toISOString().slice(0, 10);
+    const todaySeed = isoToday.replace(/-/g, '');
 
     const menuItems: Array<{ label: string; tone: RoButtonTone; enabled: boolean; onClick?: () => void }> = [];
     if (hasResume && saved) {
@@ -119,16 +121,10 @@ export class TitleScene extends Phaser.Scene {
     }
     menuItems.push(
       {
-        label: '⚔️ รอด 7 คืน (CASUAL)',
+        label: `🎲 DAILY SEED (#${todaySeed})`,
         tone: 'crimson',
         enabled: true,
-        onClick: () => this.startGame('casual', `CASUAL-${Date.now() % 100000}`),
-      },
-      {
-        label: `🎲 DAILY SEED (#${todaySeed})`,
-        tone: 'blue',
-        enabled: true,
-        onClick: () => this.startGame('daily', `DAILY-${todaySeed}`),
+        onClick: () => this.startGame('daily', dailySeed(isoToday)),
       },
       {
         label: '🛒 ร้าน META (Kafra Shop)',
