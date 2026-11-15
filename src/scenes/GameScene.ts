@@ -37,7 +37,14 @@ import {
   hotkeyLabelForSlot,
   RO_PALETTE,
 } from '../ui/roTheme';
-import { buildEveningOffer, formatInventorySummary, formatSynergySummary } from './eveningUiModel';
+import {
+  buildDraftCardHint,
+  buildSynergyHudBadges,
+  buildCodexEntries,
+  formatSynergyHudLine,
+  SYNERGY_META_TH,
+} from './codexUiModel';
+import { buildEveningOffer, formatInventorySummary, formatMealBuff } from './eveningUiModel';
 import { buildShareCardSummary, findAvailableFusions, pickFusionCard } from './HudOverlayScene';
 import { MobileFpsMonitor, type FpsMonitorSnapshot } from './MobileFpsMonitor';
 import {
@@ -49,8 +56,8 @@ import {
 
 const FUSION_RECIPES: readonly FusionRecipe[] = skillsFullJson.fusions as FusionRecipe[];
 
-const PHASE_TINT = { day: 0x000000, evening: 0x3a1a00, night: 0x05001a } as const;
-const PHASE_ALPHA = { day: 0, evening: 0.25, night: 0.5 } as const;
+const PHASE_TINT = { day: 0x000000, evening: 0xffa670, night: 0x1e1b4b } as const;
+const PHASE_ALPHA = { day: 0, evening: 0.14, night: 0.34 } as const;
 /** Player-facing names for picked-up ingredients (R2). */
 const ITEM_LABEL: Record<string, string> = { grain: '🌾 ธัญพืช', mushroom: '🍄 เห็ด', water: '💧 น้ำ', fish: '🐟 ปลา', meat: '🍖 เนื้อสด' };
 
@@ -119,6 +126,8 @@ export class GameScene extends Phaser.Scene {
   private playerSprite!: Phaser.GameObjects.Sprite;
   private bossSprite!: Phaser.GameObjects.Sprite;
   private coreSprite!: Phaser.GameObjects.Sprite;
+  private wellSprite?: Phaser.GameObjects.Sprite;
+  private nodeSprites: Phaser.GameObjects.Sprite[] = [];
   private monsterSprites = new Map<number, Phaser.GameObjects.Sprite>();
   private spritePool: Phaser.GameObjects.Sprite[] = [];
   private shadowGraphics!: Phaser.GameObjects.Graphics;
@@ -140,12 +149,15 @@ export class GameScene extends Phaser.Scene {
   private hudCoreText!: Phaser.GameObjects.Text;
   private hudMetaText!: Phaser.GameObjects.Text;
   private hudInvText!: Phaser.GameObjects.Text;
+  private radarLabel!: Phaser.GameObjects.Text;
   private downBanner!: Phaser.GameObjects.Text;
   private recallBtn!: Phaser.GameObjects.Text;
   private muteBtn!: Phaser.GameObjects.Text;
+  private codexBtn!: Phaser.GameObjects.Text;
   private restartBtn!: Phaser.GameObjects.Text;
   private skillDock?: Phaser.GameObjects.Container;
   private skillDockKey = '';
+  private dockTooltip?: Phaser.GameObjects.Container;
   private hudPanelH = 126;
   private phaseShade!: Phaser.GameObjects.Rectangle;
   private debug!: DebugOverlay;
@@ -162,6 +174,13 @@ export class GameScene extends Phaser.Scene {
   private tutorialPending = false;
   private tutorialShown = false;
   private tutorialExpireShown = false;
+  private codexOpen = false;
+  private codexTab: 'recipes' | 'synergy' = 'recipes';
+  private prevKills = 0;
+  private comboCount = 0;
+  private comboWindow = 0;
+  private bossWarnShown = false;
+  private seenElites = new Set<number>();
   private systemToast!: Phaser.GameObjects.Text;
   private systemToastLeft = 0;
 
@@ -179,6 +198,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.load.image('sanctuary_plaza', 'assets/tiles/sanctuary_plaza.png');
     this.load.spritesheet('world_props', 'assets/tiles/world_props.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('gather_nodes', 'assets/tiles/gather_nodes.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('base_core', 'assets/sprites/base_core.png', { frameWidth: 96, frameHeight: 96 });
     this.load.spritesheet('hero_idle', 'assets/sprites/hero_idle.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('hero_walk', 'assets/sprites/hero_walk.png', { frameWidth: 64, frameHeight: 64 });
@@ -243,6 +263,8 @@ export class GameScene extends Phaser.Scene {
     this.data_ = loadRunData();
     this.monsterSprites.clear();
     this.spritePool = [];
+    this.wellSprite = undefined;
+    this.nodeSprites = [];
     this.fxPool = [];
     this.activeFxSprites = [];
     this.liveFx = [];
@@ -254,6 +276,13 @@ export class GameScene extends Phaser.Scene {
     this.overlayKey = '';
     this.skillDock = undefined;
     this.skillDockKey = '';
+    this.dockTooltip = undefined;
+    this.codexOpen = false;
+    this.codexTab = 'recipes';
+    this.comboCount = 0;
+    this.comboWindow = 0;
+    this.bossWarnShown = false;
+    this.seenElites.clear();
     this.bus.clear();
     this.ensureAnimations();
 
@@ -322,6 +351,15 @@ export class GameScene extends Phaser.Scene {
       if (this.state.status === 'playing' && !this.state.pendingDraft) recallToEvening(this.state, this.rng, this.data_, this.bus);
     });
     kb.on('keydown-N', () => this.newRun());
+    kb.on('keydown-B', () => {
+      if (this.state.status === 'playing') {
+        this.codexOpen = !this.codexOpen;
+      }
+    });
+    kb.on('keydown-ESC', () => {
+      if (this.codexOpen) this.codexOpen = false;
+      this.hideDockTooltip();
+    });
     kb.on('keydown-C', () => this.chooseFusion(true)); // fuse with a Fusion Core (R3)
     kb.on('keydown-M', () => {
       this.sfx.toggleMute();
@@ -401,19 +439,20 @@ export class GameScene extends Phaser.Scene {
       .setDepth(905)
       .setVisible(false);
 
+    const compactHud = this.scale.width < 440;
     const btnStyle = {
       fontFamily: 'system-ui, sans-serif',
-      fontSize: '12px',
+      fontSize: compactHud ? '11px' : '12px',
       fontStyle: 'bold',
       color: '#f8fafc',
       backgroundColor: '#1d2b45ee',
       stroke: '#0b111e',
       strokeThickness: 2,
-      padding: { x: 9, y: 5 },
+      padding: { x: compactHud ? 7 : 9, y: 5 },
     };
     const btnY = this.scale.height - 34;
     this.recallBtn = this.add
-      .text(10, btnY, '[R] เรียกคืนเร็ว', btnStyle)
+      .text(10, btnY, compactHud ? '[R] เรียกคืน' : '[R] เรียกคืนเร็ว', btnStyle)
       .setScrollFactor(0)
       .setDepth(900)
       .setInteractive({ useHandCursor: true })
@@ -421,26 +460,51 @@ export class GameScene extends Phaser.Scene {
         if (this.state.status === 'playing' && !this.state.pendingDraft) recallToEvening(this.state, this.rng, this.data_, this.bus);
       });
     this.muteBtn = this.add
-      .text(122, btnY, '[M] เสียง: เปิด', btnStyle)
+      .text(100, btnY, '[M] เสียง: เปิด', btnStyle)
       .setScrollFactor(0)
       .setDepth(900)
       .setInteractive({ useHandCursor: true })
       .on('pointerup', () => {
         this.sfx.toggleMute();
       });
+    this.codexBtn = this.add
+      .text(196, btnY, compactHud ? '[B] สูตร' : '[B] สูตรผสม', { ...btnStyle, color: '#fde68a' })
+      .setScrollFactor(0)
+      .setDepth(900)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => {
+        if (this.state.status === 'playing') this.codexOpen = !this.codexOpen;
+      });
     this.restartBtn = this.add
-      .text(226, btnY, '[N] รอบใหม่', btnStyle)
+      .text(274, btnY, '[N] รอบใหม่', btnStyle)
       .setScrollFactor(0)
       .setDepth(900)
       .setInteractive({ useHandCursor: true })
       .on('pointerup', () => this.newRun());
+
+    this.radarLabel = this.add
+      .text(this.scale.width - 96, this.scale.height - 148, '🧭 RADAR', {
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#fde68a',
+        stroke: '#0b111e',
+        strokeThickness: 3,
+      })
+      .setScrollFactor(0)
+      .setDepth(900);
+    this.prevKills = this.state.kills;
+    this.layoutBottomButtons();
 
     this.debug = new DebugOverlay(this);
     const onResize = (size: Phaser.Structs.Size) => {
       const y = size.height - 34;
       this.recallBtn.setY(y);
       this.muteBtn.setY(y);
+      this.codexBtn.setY(y);
       this.restartBtn.setY(y);
+      this.layoutBottomButtons();
+      this.radarLabel.setPosition(size.width - 96, size.height - 148);
       this.downBanner.setX(size.width / 2);
       this.systemToast.setWordWrapWidth(Math.min(460, size.width - 24));
       this.positionSystemToast();
@@ -486,7 +550,11 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(deltaMs / 1000, 0.1); // clamp long frames (tab switch, GC pause)
     this.animTime += dt;
     if (this.castPoseLeft > 0) this.castPoseLeft = Math.max(0, this.castPoseLeft - dt);
-    if (!this.eveningPending && !this.tutorialPending) {
+    if (this.comboWindow > 0) {
+      this.comboWindow = Math.max(0, this.comboWindow - dt);
+      if (this.comboWindow === 0) this.comboCount = 0;
+    }
+    if (!this.eveningPending && !this.tutorialPending && !this.codexOpen) {
       const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
       if (fx.some((f) => !f.missed)) {
         this.sfx.playCast();
@@ -495,6 +563,25 @@ export class GameScene extends Phaser.Scene {
       for (const f of fx) {
         this.liveFx.push({ ...f, ttl: FX_SECONDS });
         this.spawnCombatPopup(f);
+      }
+
+      if (this.state.kills > this.prevKills) {
+        const gained = this.state.kills - this.prevKills;
+        this.prevKills = this.state.kills;
+        this.comboCount = this.comboWindow > 0 ? this.comboCount + gained : gained;
+        this.comboWindow = 2.6;
+        if (this.comboCount >= 3) this.spawnComboPopup(this.comboCount);
+      }
+      for (const m of this.state.monsters) {
+        if (m.defId === 'rift_wolf' && !this.seenElites.has(m.uid)) {
+          this.seenElites.add(m.uid);
+          this.showSystemToast('🐺 Rift Wolf ปรากฏตัว! ปราบเพื่อรับ Fusion Core 💠', 5);
+        }
+      }
+      if (this.state.boss && this.state.boss.rules.hp > 0 && !this.bossWarnShown) {
+        this.bossWarnShown = true;
+        this.cameras.main.shake(320, 0.008);
+        this.showSystemToast('⚠️ ราชันจันทร์เลือดปรากฏตัว! ศึกชี้ชะตาคืนสุดท้าย!', 6);
       }
 
       if (this.state.mode === 'casual' && this.state.tutorial === 'fused' && !this.tutorialShown) {
@@ -529,6 +616,16 @@ export class GameScene extends Phaser.Scene {
     return this.joystick.vector;
   }
 
+  private layoutBottomButtons(): void {
+    let x = 10;
+    const gap = this.scale.width < 440 ? 5 : 8;
+    for (const btn of [this.recallBtn, this.muteBtn, this.codexBtn, this.restartBtn]) {
+      if (!btn || !btn.visible) continue;
+      btn.setX(x);
+      x += Math.ceil(btn.width) + gap;
+    }
+  }
+
   // ---- drawing -------------------------------------------------------------------------
 
   private depthAtY(y: number): number {
@@ -549,19 +646,19 @@ export class GameScene extends Phaser.Scene {
       sg.fillStyle(0xfef08a, emberPulse * 0.38).fillEllipse(CORE_X + bx, CORE_Y + by, 24, 16);
     }
 
-    // 2.5D directional soft drop shadow for Core pedestal
-    sg.fillStyle(0x090d16, 0.24).fillEllipse(CORE_X + 5, CORE_Y + 20, 90, 34);
-    sg.fillStyle(0x090d16, 0.36).fillEllipse(CORE_X + 3, CORE_Y + 18, 70, 24);
-    const corePulse = 0.24 + 0.12 * Math.sin(this.animTime * 3.2);
-    sg.lineStyle(2.5, 0xc084fc, corePulse).strokeEllipse(CORE_X, CORE_Y + 6, 98 + Math.sin(this.animTime * 2.5) * 6, 62 + Math.sin(this.animTime * 2.5) * 4);
+    // 2.5D soft pastel drop shadow for Core pedestal
+    sg.fillStyle(0x2a1c42, 0.16).fillEllipse(CORE_X + 5, CORE_Y + 20, 90, 34);
+    sg.fillStyle(0x2a1c42, 0.25).fillEllipse(CORE_X + 3, CORE_Y + 18, 70, 24);
+    const corePulse = 0.26 + 0.12 * Math.sin(this.animTime * 3.2);
+    sg.lineStyle(2.5, 0xd8b4fe, corePulse).strokeEllipse(CORE_X, CORE_Y + 6, 98 + Math.sin(this.animTime * 2.5) * 6, 62 + Math.sin(this.animTime * 2.5) * 4);
 
     if (move.x !== 0) this.playerSprite.setFlipX(move.x < 0);
     const bob = !down && moving ? Math.abs(Math.sin(this.animTime * 14)) * 3.5 : 0;
     this.playerSprite.setPosition(s.player.x, s.player.y - 7 - bob);
     this.playerSprite.setDepth(this.depthAtY(s.player.y));
-    // 2.5D 45-deg soft penumbra + dark contact shadow beneath feet
-    sg.fillStyle(0x090d16, down ? 0.16 : 0.24).fillEllipse(s.player.x + 3, s.player.y + 13, 38, 16);
-    sg.fillStyle(0x090d16, down ? 0.26 : 0.42).fillEllipse(s.player.x + 1, s.player.y + 11, 26, 11);
+    // 2.5D soft pastel penumbra + contact shadow beneath feet
+    sg.fillStyle(0x2a1c42, down ? 0.12 : 0.16).fillEllipse(s.player.x + 3, s.player.y + 13, 38, 16);
+    sg.fillStyle(0x2a1c42, down ? 0.18 : 0.28).fillEllipse(s.player.x + 1, s.player.y + 11, 26, 11);
 
     if (!down && this.castPoseLeft > 0) {
       const auraAlpha = Math.min(1, this.castPoseLeft / 0.24) * 0.65;
@@ -620,8 +717,8 @@ export class GameScene extends Phaser.Scene {
       sprite.setAlpha(m.slowLeft > 0 ? 0.8 : 1);
 
       const shadowW = m.affix ? 36 : 28;
-      sg.fillStyle(0x090d16, 0.22).fillEllipse(m.x + 3, m.y + 13, shadowW + 8, 14);
-      sg.fillStyle(0x090d16, 0.38).fillEllipse(m.x + 1, m.y + 11, shadowW, 10);
+      sg.fillStyle(0x2a1c42, 0.15).fillEllipse(m.x + 3, m.y + 13, shadowW + 8, 14);
+      sg.fillStyle(0x2a1c42, 0.26).fillEllipse(m.x + 1, m.y + 11, shadowW, 10);
       if (m.affix) {
         sg.lineStyle(1.8, 0xc084fc, 0.65).strokeEllipse(m.x, m.y + 11, shadowW + 14, 16);
       }
@@ -642,9 +739,52 @@ export class GameScene extends Phaser.Scene {
       const bossAnim = boss.rules.enraged ? 'boss_bloodmoon_enrage_walk' : 'boss_bloodmoon_walk';
       if (this.bossSprite.anims.currentAnim?.key !== bossAnim) this.bossSprite.play(bossAnim, true);
       this.bossSprite.setFlipX(boss.x > s.player.x);
-      sg.fillStyle(0x090d16, 0.28).fillEllipse(boss.x + 6, boss.y + 38, 108, 36);
-      sg.fillStyle(0x090d16, 0.45).fillEllipse(boss.x + 2, boss.y + 34, 86, 28);
-      sg.lineStyle(2.5, boss.rules.enraged ? 0xff2a55 : 0xe11d48, 0.65).strokeEllipse(boss.x, boss.y + 34, 104, 38);
+      sg.fillStyle(0x2a1c42, 0.18).fillEllipse(boss.x + 6, boss.y + 38, 108, 36);
+      sg.fillStyle(0x2a1c42, 0.28).fillEllipse(boss.x + 2, boss.y + 34, 86, 28);
+      sg.lineStyle(2.5, boss.rules.enraged ? 0xff4d79 : 0xf43f5e, 0.65).strokeEllipse(boss.x, boss.y + 34, 104, 38);
+    }
+
+    // HD 2.5D sprites for the base well and gatherable ingredient nodes (R2) with Y-depth sorting.
+    const hasGatherTex = this.textures.exists('gather_nodes');
+    if (hasGatherTex && s.well) {
+      const w = s.well;
+      const frame = w.water + w.fish > 0 ? 2 : 3;
+      if (!this.wellSprite || !this.wellSprite.scene) {
+        this.wellSprite = this.add.sprite(w.x, w.y - 6, 'gather_nodes', frame).setScale(0.86);
+      }
+      this.wellSprite.setFrame(frame).setPosition(w.x, w.y - 6).setDepth(this.depthAtY(w.y)).setVisible(true);
+      sg.fillStyle(0x2a1c42, 0.15).fillEllipse(w.x + 6, w.y + 13, 52, 18);
+      sg.fillStyle(0x2a1c42, 0.25).fillEllipse(w.x + 2, w.y + 11, 42, 14);
+    } else if (this.wellSprite) {
+      this.wellSprite.setVisible(false);
+    }
+
+    let nodeIdx = 0;
+    if (hasGatherTex) {
+      for (const n of s.resourceNodes ?? []) {
+        if (n.taken) continue;
+        let spr = this.nodeSprites[nodeIdx];
+        if (!spr || !spr.scene) {
+          spr = this.add.sprite(n.x, n.y, 'gather_nodes', 0);
+          this.nodeSprites[nodeIdx] = spr;
+        }
+        const frame = n.kind === 'grain' ? 0 : 1;
+        const bob = Math.sin(this.animTime * 2.8 + n.x * 0.05) * 1.4;
+        const sway = Math.sin(this.animTime * 3.1 + n.y * 0.05) * 0.045;
+        spr
+          .setFrame(frame)
+          .setPosition(n.x, n.y - 6 - bob)
+          .setScale(0.76)
+          .setRotation(sway)
+          .setDepth(this.depthAtY(n.y))
+          .setVisible(true);
+        sg.fillStyle(0x2a1c42, 0.14).fillEllipse(n.x + 4, n.y + 10, 36, 13);
+        sg.fillStyle(0x2a1c42, 0.22).fillEllipse(n.x + 1, n.y + 9, 28, 10);
+        nodeIdx++;
+      }
+    }
+    for (let i = nodeIdx; i < this.nodeSprites.length; i++) {
+      this.nodeSprites[i]?.setVisible(false);
     }
   }
 
@@ -712,6 +852,32 @@ export class GameScene extends Phaser.Scene {
     const stacked = this.combatPopups.filter((p) => p.itemAt === `${x},${y}` && p.ttl > p.maxTtl - 0.1).length;
     txt.setText(`+${count} ${label}`).setColor('#86efac').setPosition(x, y - 18 - stacked * 18).setScale(1).setAlpha(1).setVisible(true);
     this.combatPopups.push({ text: txt, ttl: 0.9, maxTtl: 0.9, vy: 28, itemAt: `${x},${y}` });
+  }
+
+  private spawnComboPopup(combo: number): void {
+    if (this.combatPopups.length >= 20) return;
+    const label = combo >= 10 ? `🔥 ${combo} COMBO! คลั่ง!` : `🔥 ${combo} COMBO!`;
+    const txt =
+      this.popupPool.pop() ??
+      this.add
+        .text(0, 0, '', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '15px',
+          fontStyle: 'bold',
+          color: '#fde047',
+          stroke: '#090d16',
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5)
+        .setDepth(26);
+    txt
+      .setText(label)
+      .setColor(combo >= 10 ? '#fb7185' : '#fdba74')
+      .setPosition(this.state.player.x, this.state.player.y - 46)
+      .setScale(1.15)
+      .setAlpha(1)
+      .setVisible(true);
+    this.combatPopups.push({ text: txt, ttl: 0.85, maxTtl: 0.85, vy: 36 });
   }
 
   private updatePopups(dt: number): void {
@@ -911,31 +1077,38 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0xfef08a, 1).fillRect(c.x - 2, c.y - 3, 4, 5); // gold lockplate
       }
     }
-    // Gatherable ingredients (R2): bright and pulsing so they read apart from the map props.
+    // Gatherable ingredients (R2): pulsing aura ring underneath the 2.5D gather_nodes sprites.
+    const hasGatherTex = this.textures.exists('gather_nodes');
     const pulse = 0.5 + 0.5 * Math.sin(this.animTime * 4);
     for (const n of s.resourceNodes ?? []) {
       if (n.taken) continue;
       const glow = n.kind === 'grain' ? 0xfde047 : 0xc084fc;
-      g.fillStyle(glow, 0.18 + 0.18 * pulse).fillCircle(n.x, n.y, 18);
-      g.lineStyle(2, glow, 0.9).strokeCircle(n.x, n.y, 13 + pulse * 2);
-      if (n.kind === 'grain') {
-        g.lineStyle(2, 0xa16207, 1).lineBetween(n.x, n.y + 8, n.x, n.y - 6);
-        g.lineBetween(n.x - 4, n.y + 8, n.x - 5, n.y - 3).lineBetween(n.x + 4, n.y + 8, n.x + 5, n.y - 3);
-        g.fillStyle(0xfacc15, 1).fillEllipse(n.x, n.y - 7, 5, 9).fillEllipse(n.x - 5, n.y - 4, 4, 8).fillEllipse(n.x + 5, n.y - 4, 4, 8);
-      } else {
-        g.fillStyle(0xf5f5f4, 1).fillRect(n.x - 2, n.y - 1, 4, 8);
-        g.fillStyle(0xa855f7, 1).fillEllipse(n.x, n.y - 3, 16, 9);
-        g.fillStyle(0xf0abfc, 1).fillCircle(n.x - 4, n.y - 4, 1.5).fillCircle(n.x + 3, n.y - 5, 1.5);
+      g.fillStyle(glow, 0.14 + 0.14 * pulse).fillEllipse(n.x, n.y + 8, 36, 15);
+      g.lineStyle(1.8, glow, 0.78).strokeEllipse(n.x, n.y + 8, 30 + pulse * 4, 12 + pulse * 2);
+      if (!hasGatherTex) {
+        if (n.kind === 'grain') {
+          g.lineStyle(2, 0xa16207, 1).lineBetween(n.x, n.y + 8, n.x, n.y - 6);
+          g.lineBetween(n.x - 4, n.y + 8, n.x - 5, n.y - 3).lineBetween(n.x + 4, n.y + 8, n.x + 5, n.y - 3);
+          g.fillStyle(0xfacc15, 1).fillEllipse(n.x, n.y - 7, 5, 9).fillEllipse(n.x - 5, n.y - 4, 4, 8).fillEllipse(n.x + 5, n.y - 4, 4, 8);
+        } else {
+          g.fillStyle(0xf5f5f4, 1).fillRect(n.x - 2, n.y - 1, 4, 8);
+          g.fillStyle(0xa855f7, 1).fillEllipse(n.x, n.y - 3, 16, 9);
+          g.fillStyle(0xf0abfc, 1).fillCircle(n.x - 4, n.y - 4, 1.5).fillCircle(n.x + 3, n.y - 5, 1.5);
+        }
       }
     }
     if (s.well) {
       const w = s.well;
       const full = w.water + w.fish > 0;
-      g.fillStyle(0x090d16, 0.3).fillEllipse(w.x, w.y + 10, 34, 10);
-      g.fillStyle(0x57534e, 1).fillCircle(w.x, w.y, 15);
-      g.fillStyle(full ? 0x0ea5e9 : 0x1e293b, 1).fillCircle(w.x, w.y, 10);
-      g.lineStyle(2, 0xa8a29e, 1).strokeCircle(w.x, w.y, 15);
-      if (full && s.phase === 'day') g.lineStyle(2, 0x7dd3fc, 0.5 + 0.5 * pulse).strokeCircle(w.x, w.y, 20 + pulse * 3);
+      if (!hasGatherTex) {
+        g.fillStyle(0x090d16, 0.3).fillEllipse(w.x, w.y + 10, 34, 10);
+        g.fillStyle(0x57534e, 1).fillCircle(w.x, w.y, 15);
+        g.fillStyle(full ? 0x0ea5e9 : 0x1e293b, 1).fillCircle(w.x, w.y, 10);
+        g.lineStyle(2, 0xa8a29e, 1).strokeCircle(w.x, w.y, 15);
+      }
+      if (full && s.phase === 'day') {
+        g.lineStyle(2, 0x7dd3fc, 0.55 + 0.45 * pulse).strokeEllipse(w.x, w.y + 10, 44 + pulse * 6, 17 + pulse * 3);
+      }
     }
     for (const t of s.traps ?? []) {
       if (t.uses <= 0) continue;
@@ -980,12 +1153,11 @@ export class GameScene extends Phaser.Scene {
 
     const invStr = formatInventorySummary(s.inventory ?? {});
     const coreStr = (s.cores ?? 0) > 0 ? ` · Core ×${s.cores}` : '';
-    const synStr = formatSynergySummary(
-      s.skills.filter((o) => !o.gift).map((o) => o.id),
-      this.data_.skills,
-    );
+    const synStr = formatSynergyHudLine(s, this.data_.skills);
+    const buffStr = s.phase === 'night' && s.nightBuff ? formatMealBuff(s.nightBuff) : '';
+    const extraLines = [synStr, buffStr ? `🍲 ${buffStr}` : ''].filter(Boolean);
     this.hudInvText.setWordWrapWidth(panelW - 22);
-    this.hudInvText.setText(`ของ: ${invStr}${coreStr}${synStr ? ` · ${synStr}` : ''}`);
+    this.hudInvText.setText(`ของ: ${invStr}${coreStr}${extraLines.length > 0 ? `\n${extraLines.join(' · ')}` : ''}`);
 
     const panelH = Math.max(126, 106 + Math.ceil(this.hudInvText.height) + 8);
     this.hudPanelH = panelH;
@@ -1011,8 +1183,52 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(RO_PALETTE.windowWell, 0.92).fillRoundedRect(16, 101, panelW - 12, wellH, 4);
     g.lineStyle(1, RO_PALETTE.windowBevelDark, 0.95).strokeRoundedRect(16, 101, panelW - 12, wellH, 4);
 
+    // Bottom-right 84x84 Tactical Mini-Radar
+    const radarSize = 84;
+    const rx = this.scale.width - 96;
+    const ry = this.scale.height - 134;
+    this.radarLabel.setPosition(rx, ry - 14);
+    g.fillStyle(RO_PALETTE.windowOuterBorder, 0.92).fillRoundedRect(rx - 2, ry - 2, radarSize + 4, radarSize + 4, 6);
+    g.fillStyle(0x0b1322, 0.86).fillRoundedRect(rx, ry, radarSize, radarSize, 5);
+    g.lineStyle(1.5, RO_PALETTE.windowGoldAccent, 0.8).strokeRoundedRect(rx, ry, radarSize, radarSize, 5);
+    const toRadar = (wx: number, wy: number) => ({
+      x: rx + 4 + Phaser.Math.Clamp(wx / WORLD, 0, 1) * (radarSize - 8),
+      y: ry + 4 + Phaser.Math.Clamp(wy / WORLD, 0, 1) * (radarSize - 8),
+    });
+    const corePt = toRadar(CORE_X, CORE_Y);
+    g.fillStyle(0x38bdf8, 0.95).fillRect(corePt.x - 3, corePt.y - 3, 6, 6);
+    if (s.well) {
+      const wp = toRadar(s.well.x, s.well.y);
+      g.fillStyle(s.well.water + s.well.fish > 0 ? 0x0ea5e9 : 0x475569, 0.95).fillCircle(wp.x, wp.y, 2.5);
+    }
+    for (const n of s.resourceNodes ?? []) {
+      if (n.taken) continue;
+      const np = toRadar(n.x, n.y);
+      g.fillStyle(n.kind === 'grain' ? 0xfacc15 : 0xc084fc, 0.9).fillCircle(np.x, np.y, 2);
+    }
+    for (const c of s.chests ?? []) {
+      if (c.opened) continue;
+      const cp = toRadar(c.x, c.y);
+      g.fillStyle(0xfbbf24, 0.95).fillRect(cp.x - 1.5, cp.y - 1.5, 3, 3);
+    }
+    for (const m of s.monsters) {
+      const mp = toRadar(m.x, m.y);
+      const elite = m.defId === 'rift_wolf' || !!m.affix;
+      g.fillStyle(elite ? 0xe879f9 : 0xf43f5e, 0.95).fillCircle(mp.x, mp.y, elite ? 2.6 : 1.7);
+    }
+    if (s.boss && s.boss.rules.hp > 0) {
+      const bp = toRadar(s.boss.x, s.boss.y);
+      g.fillStyle(0xff0055, 1).fillCircle(bp.x, bp.y, 3.8);
+      g.lineStyle(1, 0xfef08a, 0.9).strokeCircle(bp.x, bp.y, 4.5);
+    }
+    const playerPt = toRadar(s.player.x, s.player.y);
+    g.fillStyle(0xffffff, 1).fillCircle(playerPt.x, playerPt.y, 2.8);
+    g.lineStyle(1, 0xfde047, 1).strokeCircle(playerPt.x, playerPt.y, 3.2);
+
     this.recallBtn.setVisible(s.phase === 'day' && s.status === 'playing' && !s.pendingDraft);
     this.muteBtn.setText(`[M] ${this.sfx.isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด'}`);
+    this.codexBtn.setText(this.scale.width < 440 ? '[B] สูตร' : '[B] สูตรผสม');
+    this.layoutBottomButtons();
     if (isPlayerDown(s)) {
       this.downBanner.setText(`ล้มลง! ฟื้นที่ฐานใน ${Math.ceil(s.respawnIn)} วิ`).setVisible(true);
     } else {
@@ -1022,35 +1238,75 @@ export class GameScene extends Phaser.Scene {
     this.syncSkillDock();
   }
 
+  private showDockTooltip(text: string, screenX: number, screenY: number, borderColor: number = RO_PALETTE.windowGoldAccent): void {
+    this.hideDockTooltip();
+    const maxW = Math.min(280, this.scale.width - 20);
+    const lbl = this.add.text(10, 8, text, {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '12px',
+      color: '#f8fafc',
+      lineSpacing: 3,
+      wordWrap: { width: maxW - 20 },
+    });
+    const w = Math.min(maxW, Math.max(140, Math.ceil(lbl.width) + 20));
+    const h = Math.ceil(lbl.height) + 16;
+    const tx = Phaser.Math.Clamp(Math.round(screenX), 10, Math.max(10, this.scale.width - w - 10));
+    const ty = Phaser.Math.Clamp(Math.round(screenY), 10, Math.max(10, this.scale.height - h - 48));
+
+    const box = this.add.container(tx, ty).setScrollFactor(0).setDepth(1200);
+    const bg = this.add.graphics();
+    bg.fillStyle(RO_PALETTE.windowOuterBorder, 0.97).fillRoundedRect(-1, -1, w + 2, h + 2, 6);
+    bg.fillStyle(0x0f172a, 0.96).fillRoundedRect(0, 0, w, h, 5);
+    bg.lineStyle(1.5, borderColor, 0.95).strokeRoundedRect(1, 1, w - 2, h - 2, 5);
+    bg.setInteractive(new Phaser.Geom.Rectangle(0, 0, w, h), Phaser.Geom.Rectangle.Contains);
+    bg.on('pointerup', () => this.hideDockTooltip());
+    box.add([bg, lbl]);
+    box.each((child: Phaser.GameObjects.GameObject) => {
+      (child as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
+    });
+    this.dockTooltip = box;
+  }
+
+  private hideDockTooltip(): void {
+    this.dockTooltip?.destroy();
+    this.dockTooltip = undefined;
+  }
+
   private syncSkillDock(): void {
-    const key = this.state.skills
+    const synKey = Object.entries(this.state.synergy ?? {})
+      .map(([k, v]) => `${k}:${v}`)
+      .join(',');
+    const skillsKey = this.state.skills
       .map((o) => {
         const def = this.data_.skills.find((d) => d.id === o.id);
         const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
         return `${o.id}:${lv}:${o.gift ? 1 : 0}`;
       })
       .join(',');
+    const key = `${skillsKey}|${synKey}|${this.scale.width}`;
     if (key === this.skillDockKey) return;
     this.skillDockKey = key;
     this.skillDock?.destroy();
     this.skillDock = undefined;
     if (this.state.skills.length === 0) return;
 
+    const badges = buildSynergyHudBadges(this.state, this.data_.skills);
     const count = this.state.skills.length;
     const slotSize = 38;
     const step = 42;
     const padX = 6;
     const padY = 5;
-    const dockW = count * step - 4 + padX * 2;
-    const dockH = slotSize + padY * 2;
-    const dock = this.add.container(10, 10 + this.hudPanelH + 6).setScrollFactor(0).setDepth(900);
+    const slotsW = count * step - 4 + padX * 2;
+    const chipRowH = badges.length > 0 ? 22 : 0;
+    const chipGap = badges.length > 0 ? 4 : 0;
+    const dockX = 10;
+    const dockY = 10 + this.hudPanelH + 6;
+    const dock = this.add.container(dockX, dockY).setScrollFactor(0).setDepth(900);
 
     const dockG = this.add.graphics();
-    dockG.fillStyle(RO_PALETTE.windowOuterBorder, 0.96).fillRoundedRect(-1, -1, dockW + 2, dockH + 2, 6);
-    dockG.fillStyle(RO_PALETTE.windowBody, 0.92).fillRoundedRect(0, 0, dockW, dockH, 5);
-    dockG.lineStyle(1.5, RO_PALETTE.windowBevelLight, 0.85).strokeRoundedRect(1, 1, dockW - 2, dockH - 2, 5);
     dock.add(dockG);
 
+    const skillTexts: Phaser.GameObjects.GameObject[] = [];
     this.state.skills.forEach((o, i) => {
       const def = this.data_.skills.find((d) => d.id === o.id);
       const lv = def ? ownedLevel(def, o.xp) : levelForXp(o.xp);
@@ -1063,7 +1319,7 @@ export class GameScene extends Phaser.Scene {
         dock.add(this.add.image(sx + slotSize / 2, sy + slotSize / 2 + 2, `icon_${o.id}`).setDisplaySize(24, 24));
       }
 
-      dock.add(
+      skillTexts.push(
         this.add.text(sx + 2, sy + 2, hotkeyLabelForSlot(i), {
           fontFamily: 'monospace',
           fontSize: '9px',
@@ -1075,7 +1331,7 @@ export class GameScene extends Phaser.Scene {
       );
 
       const badge = o.gift ? 'ฟรี' : `Lv${lv}`;
-      dock.add(
+      skillTexts.push(
         this.add
           .text(sx + slotSize - 2, sy + slotSize - 2, badge, {
             fontFamily: 'monospace',
@@ -1087,7 +1343,102 @@ export class GameScene extends Phaser.Scene {
           })
           .setOrigin(1, 1),
       );
+
+      if (def) {
+        const hit = this.add
+          .rectangle(sx, sy, slotSize, slotSize, 0x000000, 0)
+          .setOrigin(0)
+          .setInteractive({ useHandCursor: true });
+        const dmgLine =
+          def.kind === 'active'
+            ? `พลังโจมตี ${damageAtLevel(def, lv)} · ทุก ${def.cooldown} วิ · ระยะ ${def.range} ช่อง`
+            : `${KIND_LABEL.passive} · เสริมความถึกและป้องกันฐาน`;
+        const tagLine = def.tags
+          .filter((t) => t in SYNERGY_META_TH)
+          .map((t) => {
+            const m = SYNERGY_META_TH[t as keyof typeof SYNERGY_META_TH];
+            return `${m.icon} ${m.labelTh}`;
+          })
+          .join(' · ');
+        const tipLines = [
+          `${def.name.th} (${o.gift ? 'สกิลของขวัญ' : `Lv${lv} · ${RARITY_LABEL[def.rarity]}`})`,
+          dmgLine,
+          tagLine ? `ธาตุ: ${tagLine}` : '',
+        ].filter(Boolean);
+        const showTip = () => this.showDockTooltip(tipLines.join('\n'), dockX + sx, dockY + slotSize + chipRowH + 16, borderColor);
+        hit.on('pointerover', showTip);
+        hit.on('pointerout', () => this.hideDockTooltip());
+        hit.on('pointerup', showTip);
+        dock.add(hit);
+      }
     });
+    dock.add(skillTexts);
+
+    let chipTotalW = 0;
+    if (badges.length > 0) {
+      let cx = padX;
+      const cy = padY + slotSize + chipGap;
+      const maxRowX = Math.max(slotsW, Math.min(340, this.scale.width - 20)) - padX;
+      for (const b of badges) {
+        const meta = SYNERGY_META_TH[b.tag];
+        const chipBg = b.tier >= 2 ? 0x1e293b : 0x0f172a;
+        const chipBorder = b.tier >= 2 ? RO_PALETTE.windowGoldAccent : 0x475569;
+        const txt = this.add.text(cx + 5, cy + 3, b.chipTextTh, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: b.tier >= 2 ? meta.colorHex : '#cbd5e1',
+        });
+        const cw = Math.ceil(txt.width) + 10;
+        if (cx > padX && cx + cw > maxRowX) {
+          txt.destroy();
+          continue;
+        }
+        dockG.fillStyle(chipBg, 0.94).fillRoundedRect(cx, cy, cw, chipRowH - 2, 4);
+        dockG.lineStyle(b.tier >= 2 ? 1.5 : 1, chipBorder, 0.95).strokeRoundedRect(cx, cy, cw, chipRowH - 2, 4);
+        dock.add(txt);
+        const hit = this.add
+          .rectangle(cx, cy, cw, chipRowH - 2, 0x000000, 0)
+          .setOrigin(0)
+          .setInteractive({ useHandCursor: true });
+        const showSyn = () => this.showDockTooltip(b.tooltipTh, dockX + cx, dockY + cy + chipRowH + 6, chipBorder);
+        hit.on('pointerover', showSyn);
+        hit.on('pointerout', () => this.hideDockTooltip());
+        hit.on('pointerup', showSyn);
+        dock.add(hit);
+        cx += cw + 4;
+        chipTotalW = Math.max(chipTotalW, cx - 4 + padX);
+      }
+    }
+
+    const dockW = Math.max(slotsW, chipTotalW);
+    const dockH = slotSize + padY * 2 + (chipTotalW > 0 ? chipGap + chipRowH : 0);
+    dockG.fillStyle(RO_PALETTE.windowOuterBorder, 0.96).fillRoundedRect(-1, -1, dockW + 2, dockH + 2, 6);
+    dockG.fillStyle(RO_PALETTE.windowBody, 0.92).fillRoundedRect(0, 0, dockW, dockH, 5);
+    dockG.lineStyle(1.5, RO_PALETTE.windowBevelLight, 0.85).strokeRoundedRect(1, 1, dockW - 2, dockH - 2, 5);
+    // Re-stroke slots & chips on top of the resized dock body.
+    this.state.skills.forEach((o, i) => {
+      const def = this.data_.skills.find((d) => d.id === o.id);
+      const borderColor = o.gift ? 0xff9f1c : def ? RARITY_COLOR[def.rarity] : RO_PALETTE.windowBevelLight;
+      drawRoIconSlot(dockG, padX + i * step, padY, slotSize, borderColor);
+    });
+    if (badges.length > 0) {
+      let cx = padX;
+      const cy = padY + slotSize + chipGap;
+      const maxRowX = Math.max(slotsW, Math.min(340, this.scale.width - 20)) - padX;
+      for (const b of badges) {
+        const approxMeasure = this.add.text(0, 0, b.chipTextTh, { fontFamily: 'system-ui, sans-serif', fontSize: '10px', fontStyle: 'bold' });
+        const cw = Math.ceil(approxMeasure.width) + 10;
+        approxMeasure.destroy();
+        if (cx > padX && cx + cw > maxRowX) continue;
+        const chipBg = b.tier >= 2 ? 0x1e293b : 0x0f172a;
+        const chipBorder = b.tier >= 2 ? RO_PALETTE.windowGoldAccent : 0x475569;
+        dockG.fillStyle(chipBg, 0.94).fillRoundedRect(cx, cy, cw, chipRowH - 2, 4);
+        dockG.lineStyle(b.tier >= 2 ? 1.5 : 1, chipBorder, 0.95).strokeRoundedRect(cx, cy, cw, chipRowH - 2, 4);
+        cx += cw + 4;
+      }
+    }
+
     dock.each((child: Phaser.GameObjects.GameObject) => {
       (child as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
     });
@@ -1110,16 +1461,20 @@ export class GameScene extends Phaser.Scene {
             ? `evening:${s.day}:${this.eveningMealId ?? 'none'}:${this.eveningChoiceId ?? 'none'}`
             : this.tutorialPending
               ? 'tutorial:night1'
-              : '';
+              : this.codexOpen
+                ? `codex:${this.codexTab}:${s.skills.map((o) => `${o.id}:${o.xp}`).join(',')}:${s.cores}`
+                : '';
     const size = `${this.scale.width}x${this.scale.height}`;
     if (`${key}|${size}` === this.overlayKey) return;
     this.overlayKey = `${key}|${size}`;
+    this.hideDockTooltip();
     this.overlay?.destroy();
     this.overlay = undefined;
     if (s.status !== 'playing') this.overlay = this.buildEndOverlay();
     else if (s.pendingDraft) this.overlay = this.buildDraftOverlay(s.pendingDraft);
     else if (this.eveningPending) this.overlay = this.buildEveningOverlay();
     else if (this.tutorialPending) this.overlay = this.buildTutorialOverlay();
+    else if (this.codexOpen) this.overlay = this.buildCodexOverlay();
     // Children do not inherit the container's scroll factor for input hit tests, so set it on each.
     this.overlay?.each((child: Phaser.GameObjects.GameObject) => {
       (child as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
@@ -1141,20 +1496,20 @@ export class GameScene extends Phaser.Scene {
     const availFusions = findAvailableFusions(this.state, this.data_.skills, FUSION_RECIPES);
     const fusion = availFusions[0];
     const showIntro = this.state.skills.length === 0 && this.state.day === 1;
-    const cardW = Math.min(432, w - 36);
-    const cardH = 88;
+    const cardW = Math.min(444, w - 28);
+    const cardH = 98;
     // Taller when the Core button shows, so head, preview, hint and button never overlap (R3).
     const fusionCanBoost =
       !!fusion && canBoostWithCore(this.state, this.data_.skills, fusion.recipe, fusion.resultSkill.id);
-    const fusionCardH = fusionCanBoost ? 150 : 122;
-    const gap = 10;
+    const fusionCardH = fusionCanBoost ? 158 : 130;
+    const gap = 8;
     const winW = cardW + 24;
     const headerH = 28;
-    const introH = showIntro ? 38 : 0;
+    const introH = showIntro ? 36 : 0;
     const cardsH = cards.length * cardH + Math.max(0, cards.length - 1) * gap + (fusion ? gap + fusionCardH : 0);
-    const winH = headerH + 14 + 32 + introH + cardsH + 14;
+    const winH = headerH + 14 + 32 + introH + cardsH + 12;
     const winX = Math.round((w - winW) / 2);
-    const winY = Math.max(54, Math.round((h - winH) / 2));
+    const winY = Math.max(18, Math.round((h - winH) / 2));
 
     const winG = this.add.graphics();
     drawRoWindow(winG, winX, winY, winW, winH, { headerHeight: headerH, bodyAlpha: 0.96 });
@@ -1232,14 +1587,15 @@ export class GameScene extends Phaser.Scene {
             ? `${KIND_LABEL.active} · พลัง ${damageAtLevel(def, 1)} · ทุก ${def.cooldown} วิ · ระยะ ${def.range} ช่อง`
             : `${KIND_LABEL.passive} · ถึกขึ้น: รับดาเมจน้อยลงและเลือดสูงสุดเพิ่ม`
           : `ได้ค่าฝึกสกิล +${upgradeXp(levelForXp(owned?.xp ?? 0))} ทันที`;
+      const hint = buildDraftCardHint(id, this.state, this.data_.skills, FUSION_RECIPES);
 
       const hasIcon = this.textures.exists(`icon_${id}`);
       const slotX = cardLeft + 12;
       const slotY = y + Math.round((cardH - 58) / 2);
       drawRoIconSlot(slotG, slotX, slotY, 58, RARITY_COLOR[def.rarity]);
 
-      const textX = cardLeft + 82;
-      const wrapW = cardW - 122;
+      const textX = cardLeft + 80;
+      const wrapW = cardW - 118;
       const cardItems: Phaser.GameObjects.GameObject[] = [frame];
       if (this.textures.exists(`card_frame_${def.rarity}`)) {
         cardItems.push(this.add.image(slotX + 29, slotY + 29, `card_frame_${def.rarity}`).setDisplaySize(50, 56));
@@ -1247,9 +1603,22 @@ export class GameScene extends Phaser.Scene {
       if (hasIcon) {
         cardItems.push(this.add.image(slotX + 29, slotY + 29, `icon_${id}`).setDisplaySize(42, 42));
       }
+      const headTxt = this.add.text(textX, y + 8, head, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#f8fafc',
+        wordWrap: { width: wrapW },
+      });
+      const bodyTxt = this.add.text(textX, y + 31, body, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '12px',
+        color: '#cbd5e1',
+        wordWrap: { width: wrapW },
+      });
       cardItems.push(
         this.add
-          .text(cardLeft + cardW - 10, y + 10, `[${i + 1}]`, {
+          .text(cardLeft + cardW - 10, y + 8, `[${i + 1}]`, {
             fontFamily: 'monospace',
             fontSize: '12px',
             fontStyle: 'bold',
@@ -1258,20 +1627,31 @@ export class GameScene extends Phaser.Scene {
             padding: { x: 5, y: 2 },
           })
           .setOrigin(1, 0),
-        this.add.text(textX, y + 12, head, {
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '17px',
-          fontStyle: 'bold',
-          color: '#f8fafc',
-          wordWrap: { width: wrapW },
-        }),
-        this.add.text(textX, y + 44, body, {
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '13px',
-          color: '#cbd5e1',
-          wordWrap: { width: wrapW },
-        }),
+        headTxt,
+        bodyTxt,
       );
+      let nextHintY = Math.max(y + 52, Math.round(bodyTxt.y + bodyTxt.height + 3));
+      if (hint.tagsLineTh) {
+        const tagTxt = this.add.text(textX, nextHintY, hint.tagsLineTh, {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '11px',
+          fontStyle: 'bold',
+          color: '#fde047',
+          wordWrap: { width: cardW - 92 },
+        });
+        cardItems.push(tagTxt);
+        nextHintY = Math.round(tagTxt.y + tagTxt.height + 2);
+      }
+      if (hint.fusionLineTh && nextHintY < y + cardH - 12) {
+        cardItems.push(
+          this.add.text(textX, nextHintY, hint.fusionLineTh, {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '11px',
+            color: '#86efac',
+            wordWrap: { width: cardW - 92 },
+          }),
+        );
+      }
       box.add(cardItems);
     });
     // Ensure sunken icon slots sit above card background fills
@@ -1294,6 +1674,11 @@ export class GameScene extends Phaser.Scene {
       frame.on('pointerout', () => frame.setFillStyle(0x2d1b4e));
       frame.on('pointerup', () => this.choose(cards.length));
 
+      const fSlotG = this.add.graphics();
+      const fSlotX = cardLeft + 12;
+      const fSlotY = y + 12;
+      drawRoIconSlot(fSlotG, fSlotX, fSlotY, 56, RARITY_COLOR[fusion.resultSkill.rarity]);
+
       const srcA = this.state.skills.find((s) => s.id === fusion.recipe.a);
       const srcB = this.state.skills.find((s) => s.id === fusion.recipe.b);
       const inheritedXp = Math.max(srcA?.xp ?? 0, srcB?.xp ?? 0);
@@ -1308,28 +1693,36 @@ export class GameScene extends Phaser.Scene {
       const hintLine = `อีกผล: "${fusion.alternateSkill.name.th}" (ดัน ${fusion.skillToRaiseForAlternate.name.th} ให้สูงกว่าก่อนผสม)${coreNote}`;
       const canBoost = fusionCanBoost;
 
-      const headText = this.add.text(cardLeft + 14, y + 10, head, {
+      const fTextX = cardLeft + 78;
+      const fWrapW = cardW - 116;
+      const headText = this.add.text(fTextX, y + 10, head, {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '16px',
+        fontSize: '15px',
         fontStyle: 'bold',
         color: '#ffffff',
-        wordWrap: { width: cardW - 60 },
+        wordWrap: { width: fWrapW },
       });
-      const previewText = this.add.text(cardLeft + 14, y + 14 + headText.height, previewLine, {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '13px',
-        color: '#e2e8f0',
-        wordWrap: { width: cardW - 28 },
-      });
-      const hintText = this.add.text(cardLeft + 14, previewText.y + previewText.height + 4, hintLine, {
+      const previewText = this.add.text(fTextX, y + 13 + headText.height, previewLine, {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
+        color: '#e2e8f0',
+        wordWrap: { width: cardW - 92 },
+      });
+      const hintText = this.add.text(fTextX, previewText.y + previewText.height + 4, hintLine, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11.5px',
         color: '#fde047',
-        wordWrap: { width: cardW - 28 },
+        wordWrap: { width: cardW - 92 },
       });
 
-      box.add([
-        frame,
+      const fusionItems: Phaser.GameObjects.GameObject[] = [frame, fSlotG];
+      if (this.textures.exists('card_frame_fusion')) {
+        fusionItems.push(this.add.image(fSlotX + 28, fSlotY + 28, 'card_frame_fusion').setDisplaySize(48, 54));
+      }
+      if (this.textures.exists(`icon_${fusion.resultSkill.id}`)) {
+        fusionItems.push(this.add.image(fSlotX + 28, fSlotY + 28, `icon_${fusion.resultSkill.id}`).setDisplaySize(40, 40));
+      }
+      fusionItems.push(
         this.add
           .text(cardLeft + cardW - 10, y + 10, `[${cards.length + 1}]`, {
             fontFamily: 'monospace',
@@ -1343,7 +1736,8 @@ export class GameScene extends Phaser.Scene {
         headText,
         previewText,
         hintText,
-      ]);
+      );
+      box.add(fusionItems);
       if (canBoost) {
         // Fusion Core "+1 rarity" (R3, D17): a separate button so a plain tap never spends the Core.
         const boosted = boostedRarity(fusion.resultSkill.rarity, 1);
@@ -1367,6 +1761,163 @@ export class GameScene extends Phaser.Scene {
         box.add(btn);
       }
     }
+    return box;
+  }
+
+  private buildCodexOverlay(): Phaser.GameObjects.Container {
+    const { box, w, h } = this.overlayBase();
+    const { recipes, synergies } = buildCodexEntries(this.state, this.data_.skills, FUSION_RECIPES);
+    const winW = Math.min(540, w - 16);
+    const winH = Math.min(640, h - 24);
+    const winX = Math.round((w - winW) / 2);
+    const winY = Math.round((h - winH) / 2);
+    const headerH = 28;
+
+    const winG = this.add.graphics();
+    drawRoWindow(winG, winX, winY, winW, winH, { headerHeight: headerH, bodyAlpha: 0.97 });
+    box.add(winG);
+
+    box.add(
+      this.add
+        .text(winX + 24, winY + headerH / 2 + 1, 'CODEX · สารานุกรมสูตรผสม & Synergy (หยุดเวลา)', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '12px',
+          fontStyle: 'bold',
+          color: '#f8fafc',
+          stroke: '#0b111e',
+          strokeThickness: 2,
+        })
+        .setOrigin(0, 0.5),
+    );
+
+    const closeBtn = this.add
+      .text(winX + winW - 12, winY + headerH / 2 + 1, '✕ ปิด', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#fda4af',
+      })
+      .setOrigin(1, 0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => {
+        this.codexOpen = false;
+      });
+    box.add(closeBtn);
+
+    const tabW = Math.floor((winW - 36) / 2);
+    const tabY = winY + headerH + 24;
+    box.add([
+      createRoButton(this, winX + 14 + tabW / 2, tabY, tabW, 30, `⚗️ สูตรผสม (${recipes.length})`, {
+        tone: this.codexTab === 'recipes' ? 'gold' : 'slate',
+        fontSize: '13px',
+        scrollFactor: 0,
+        onClick: () => {
+          this.codexTab = 'recipes';
+        },
+      }),
+      createRoButton(this, winX + winW - 14 - tabW / 2, tabY, tabW, 30, `✨ ธาตุ & Synergy (${synergies.length})`, {
+        tone: this.codexTab === 'synergy' ? 'gold' : 'slate',
+        fontSize: '13px',
+        scrollFactor: 0,
+        onClick: () => {
+          this.codexTab = 'synergy';
+        },
+      }),
+    ]);
+
+    const bodyTop = tabY + 22;
+    const footerH = 44;
+    const listH = winH - (bodyTop - winY) - footerH;
+    const listLeft = winX + 14;
+    const listW = winW - 28;
+
+    if (this.codexTab === 'recipes') {
+      const rowH = Math.max(42, Math.floor(listH / recipes.length));
+      recipes.forEach((r, idx) => {
+        const ry = bodyTop + idx * rowH;
+        const rowBg = r.readyToFuse ? 0x1e3a2f : idx % 2 === 0 ? RO_PALETTE.rowBg : 0x151e30;
+        const border = r.readyToFuse ? 0x22c55e : 0x334155;
+        winG.fillStyle(rowBg, 0.94).fillRoundedRect(listLeft, ry, listW, rowH - 4, 4);
+        winG.lineStyle(1, border, 0.9).strokeRoundedRect(listLeft, ry, listW, rowH - 4, 4);
+
+        const lvA = r.aOwnedLv !== null ? `(Lv${r.aOwnedLv})` : '';
+        const lvB = r.bOwnedLv !== null ? `(Lv${r.bOwnedLv})` : '';
+        const topLine = `${r.id} · ${r.aNameTh}${lvA} + ${r.bNameTh}${lvB}`;
+        const coreTag = r.requiresCore ? ' · 💠 Core' : '';
+        const botLine = `↳ ${r.resultANameTh} / ${r.resultBNameTh}${coreTag}`;
+        box.add([
+          this.add.text(listLeft + 8, ry + 4, topLine, {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '11.5px',
+            fontStyle: 'bold',
+            color: '#f8fafc',
+            wordWrap: { width: listW - 110 },
+          }),
+          this.add
+            .text(listLeft + listW - 8, ry + 4, r.statusLabelTh, {
+              fontFamily: 'system-ui, sans-serif',
+              fontSize: '10.5px',
+              fontStyle: 'bold',
+              color: r.readyToFuse ? '#86efac' : '#fde047',
+            })
+            .setOrigin(1, 0),
+          this.add.text(listLeft + 10, ry + 21, botLine, {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '11px',
+            color: '#93c5fd',
+            wordWrap: { width: listW - 20 },
+          }),
+        ]);
+      });
+    } else {
+      const rowH = Math.max(66, Math.floor(listH / synergies.length));
+      synergies.forEach((syn, idx) => {
+        const ry = bodyTop + idx * rowH;
+        const active = syn.tier >= 2;
+        winG.fillStyle(active ? 0x1c2840 : RO_PALETTE.rowBg, 0.95).fillRoundedRect(listLeft, ry, listW, rowH - 5, 5);
+        winG.lineStyle(active ? 1.5 : 1, active ? RO_PALETTE.windowGoldAccent : 0x334155, 0.92).strokeRoundedRect(listLeft, ry, listW, rowH - 5, 5);
+
+        box.add([
+          this.add.text(listLeft + 10, ry + 6, `${syn.icon} ${syn.labelTh} · สะสม ${syn.count} สกิล`, {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '13px',
+            fontStyle: 'bold',
+            color: syn.colorHex,
+          }),
+          this.add
+            .text(listLeft + listW - 10, ry + 7, active ? `เปิดขั้น ${syn.tier}!` : 'ยังไม่เปิดขั้น 2', {
+              fontFamily: 'system-ui, sans-serif',
+              fontSize: '11px',
+              fontStyle: 'bold',
+              color: active ? '#fde047' : '#94a3b8',
+            })
+            .setOrigin(1, 0),
+        ]);
+
+        const tierSummary = syn.tiers
+          .map((t) => `${t.unlocked ? '✓' : '○'} (${t.tier}) ${t.textTh}`)
+          .join('   ');
+        box.add(
+          this.add.text(listLeft + 10, ry + 27, tierSummary, {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: '11.5px',
+            color: active ? '#f8fafc' : '#cbd5e1',
+            wordWrap: { width: listW - 20 },
+          }),
+        );
+      });
+    }
+
+    box.add(
+      createRoButton(this, w / 2, winY + winH - 22, Math.min(220, winW - 40), 30, '[ESC / B] กลับสู่สนามรบ', {
+        tone: 'blue',
+        fontSize: '13px',
+        scrollFactor: 0,
+        onClick: () => {
+          this.codexOpen = false;
+        },
+      }),
+    );
     return box;
   }
 
@@ -1682,7 +2233,7 @@ export class GameScene extends Phaser.Scene {
         this.systemToast.setOrigin(0.5, 1).setY(h - 72);
       }
     } else {
-      const dockOffset = this.state.skills.length > 0 ? 58 : 8;
+      const dockOffset = this.state.skills.length > 0 ? 84 : 8;
       this.systemToast.setOrigin(0.5, 0).setY(10 + this.hudPanelH + dockOffset);
     }
   }
@@ -1701,7 +2252,7 @@ export class GameScene extends Phaser.Scene {
     const share = buildShareCardSummary(s, this.data_.skills);
     const topSkillsText = share.topSkillsTh.length > 0 ? `สกิลเด่น: ${share.topSkillsTh.join(' · ')}` : `Seed: ${share.seed}`;
     const cardW = Math.min(436, w - 20);
-    const cardH = 408;
+    const cardH = 446;
     const leftX = Math.round(w / 2 - cardW / 2);
     const topY = Math.max(12, Math.round(h / 2 - cardH / 2 + 8));
 
@@ -1723,11 +2274,17 @@ export class GameScene extends Phaser.Scene {
         if (lbl && 'setText' in lbl) (lbl as Phaser.GameObjects.Text).setText('✔ คัดลอกแล้ว!');
       },
     });
-    const restartBtn = createRoButton(this, w / 2, topY + 358, shareBtnW, 44, '▶ เริ่มรอบใหม่ [N]', {
+    const restartBtn = createRoButton(this, w / 2, topY + 356, shareBtnW, 42, '▶ เริ่มรอบใหม่ [N]', {
       tone: 'blue',
-      fontSize: '18px',
+      fontSize: '17px',
       scrollFactor: 0,
       onClick: () => this.newRun(),
+    });
+    const menuBtn = createRoButton(this, w / 2, topY + 410, shareBtnW, 38, '🏠 เมนูหลัก / ร้าน Meta', {
+      tone: 'gold',
+      fontSize: '15px',
+      scrollFactor: 0,
+      onClick: () => this.scene.start('TitleScene'),
     });
 
     box.add([
@@ -1788,6 +2345,7 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0.5),
       shareBtn,
       restartBtn,
+      menuBtn,
     ]);
     return box;
   }
@@ -1889,8 +2447,8 @@ export class GameScene extends Phaser.Scene {
       const kind = map.int(0, 3);
       if (Math.hypot(x - CORE_X, y - CORE_Y) < 188) continue;
       if (hasProps) {
-        gPropShadows.fillStyle(0x090d16, 0.22).fillEllipse(x + 4, y + 7, 44, 18);
-        gPropShadows.fillStyle(0x090d16, 0.36).fillEllipse(x + 2, y + 5, 32, 12);
+        gPropShadows.fillStyle(0x2a1c42, 0.14).fillEllipse(x + 4, y + 7, 44, 18);
+        gPropShadows.fillStyle(0x2a1c42, 0.24).fillEllipse(x + 2, y + 5, 32, 12);
         this.add
           .sprite(x, y, 'world_props', kind)
           .setOrigin(0.5, 0.78)
