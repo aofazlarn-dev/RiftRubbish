@@ -67,3 +67,17 @@ describe('eveningUiModel (G3 Evening UI)', () => {
     expect(formatSynergySummary(['E01'], [{ id: 'E01', tags: ['fire'] }])).toBe('');
   });
 });
+
+import { formatSynergyTiers } from '../src/scenes/eveningUiModel';
+import { SYNERGY_TEXT_TH } from '../src/systems/synergy';
+
+describe('HUD synergy tiers (R4 UI)', () => {
+  it('shows each tag at tier 2+ with every effect it has reached, in player Thai', () => {
+    const line = formatSynergyTiers({ earth: 4, fire: 2, ice: 0, lightning: 0, beast: 0, shadow: 0 }, SYNERGY_TEXT_TH);
+    expect(line).toContain('ดิน ขั้น 4: เลือดสูงสุด +10% · โดนตีเบาลง 10%');
+    expect(line).toContain('ไฟ ขั้น 2: สกิลไฟแรงขึ้น 20%');
+    expect(line).not.toContain('น้ำแข็ง');
+    expect(line).not.toMatch(/Active|Passive|stack|aura/i);
+    expect(formatSynergyTiers(undefined, SYNERGY_TEXT_TH)).toBe('');
+  });
+});

@@ -205,3 +205,21 @@ export function formatSynergySummary(
     .map(([tag, n]) => `${SYNERGY_TAG_TH[tag]} (${n})`);
   return active.length > 0 ? `Synergy: ${active.join(' · ')}` : '';
 }
+
+/**
+ * HUD line for synergy tiers (R4 UI): each tag at tier 2+ with its tier and what it does now,
+ * e.g. "ดิน ขั้น 4: โดนตีเบาลง 10% · วงโจมตีกว้างขึ้น". Reads `state.synergy` (rules in systems/synergy.ts).
+ */
+export function formatSynergyTiers(
+  tiers: Partial<Record<string, number>> | undefined,
+  texts: Record<string, Partial<Record<2 | 4 | 6, string>>>,
+): string {
+  if (!tiers) return '';
+  const parts: string[] = [];
+  for (const [tag, tier] of Object.entries(tiers)) {
+    if (!tier || tier < 2 || !SYNERGY_TAG_TH[tag]) continue;
+    const lines = ([2, 4, 6] as const).filter((t) => t <= tier).map((t) => texts[tag]?.[t]).filter(Boolean);
+    parts.push(`${SYNERGY_TAG_TH[tag]} ขั้น ${tier}${lines.length ? `: ${lines.join(' · ')}` : ''}`);
+  }
+  return parts.length > 0 ? `Synergy — ${parts.join(' | ')}` : '';
+}
