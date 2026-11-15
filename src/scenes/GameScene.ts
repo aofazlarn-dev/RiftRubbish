@@ -132,7 +132,20 @@ export class GameScene extends Phaser.Scene {
   private monsterSprites = new Map<number, Phaser.GameObjects.Sprite>();
   private spritePool: Phaser.GameObjects.Sprite[] = [];
   private shadowGraphics!: Phaser.GameObjects.Graphics;
+  private lightPoolSprites: Phaser.GameObjects.Image[] = [];
   private fxGraphics!: Phaser.GameObjects.Graphics;
+  private atmosphereGraphics!: Phaser.GameObjects.Graphics;
+  private ambientMotes: Array<{
+    ox: number;
+    oy: number;
+    vx: number;
+    vy: number;
+    r: number;
+    phase: number;
+    speed: number;
+    variant: number;
+  }> = [];
+  private vignetteOverlay?: Phaser.GameObjects.Image;
   private fxPool: Phaser.GameObjects.Image[] = [];
   private activeFxSprites: Phaser.GameObjects.Image[] = [];
   private barGraphics!: Phaser.GameObjects.Graphics;
@@ -332,8 +345,35 @@ export class GameScene extends Phaser.Scene {
 
     this.drawWorld();
     this.shadowGraphics = this.add.graphics().setDepth(3.2);
+    this.lightPoolSprites = [];
+    if (this.textures.exists('vfx_projectile')) {
+      for (let i = 0; i < 6; i++) {
+        this.lightPoolSprites.push(
+          this.add
+            .image(CORE_X, CORE_Y, 'vfx_projectile')
+            .setDepth(3.5)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setAlpha(0),
+        );
+      }
+    }
     this.barGraphics = this.add.graphics().setDepth(20);
     this.fxGraphics = this.add.graphics().setDepth(15);
+    this.atmosphereGraphics = this.add.graphics().setDepth(24);
+    this.ambientMotes = [];
+    const atmRng = RunRng.fromSeed(this.state.seed).get('map');
+    for (let i = 0; i < 28; i++) {
+      this.ambientMotes.push({
+        ox: (atmRng.next() - 0.5) * 1400,
+        oy: (atmRng.next() - 0.5) * 860,
+        vx: (atmRng.next() - 0.35) * 18,
+        vy: -8 - atmRng.next() * 14,
+        r: 1.5 + atmRng.next() * 1.9,
+        phase: atmRng.next() * Math.PI * 2,
+        speed: 1.8 + atmRng.next() * 2.2,
+        variant: i % 3,
+      });
+    }
     this.bossSprite = this.add.sprite(0, 0, 'boss_bloodmoon_walk').setScale(1.1).setDepth(9).setVisible(false);
     this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'hero_idle').setScale(0.54).setDepth(this.depthAtY(this.state.player.y));
     this.cameras.main.setBounds(0, 0, WORLD, WORLD).startFollow(this.playerSprite, true, 0.15, 0.15);
@@ -343,6 +383,27 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0)
       .setScrollFactor(0)
       .setDepth(500);
+    if (!this.textures.exists('vignette_radial') && typeof this.textures.createCanvas === 'function') {
+      const cTex = this.textures.createCanvas('vignette_radial', 256, 256);
+      if (cTex) {
+        const ctx = cTex.context;
+        const grad = ctx.createRadialGradient(128, 128, 72, 128, 128, 176);
+        grad.addColorStop(0, 'rgba(5, 8, 22, 0)');
+        grad.addColorStop(0.55, 'rgba(5, 8, 22, 0.28)');
+        grad.addColorStop(1, 'rgba(5, 8, 22, 0.92)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 256, 256);
+        cTex.refresh();
+      }
+    }
+    if (this.textures.exists('vignette_radial')) {
+      this.vignetteOverlay = this.add
+        .image(0, 0, 'vignette_radial')
+        .setOrigin(0)
+        .setScrollFactor(0)
+        .setDepth(501)
+        .setAlpha(0);
+    }
 
     const kb = this.input.keyboard!;
     this.keys = {
@@ -605,6 +666,7 @@ export class GameScene extends Phaser.Scene {
     this.drawBars();
     this.phaseShade.setFillStyle(PHASE_TINT[this.state.phase], PHASE_ALPHA[this.state.phase]);
     this.phaseShade.setSize(this.scale.width, this.scale.height);
+    this.updateVignette();
     this.drawHud(fpsSnap);
     this.syncOverlay();
     this.debug.update(this.state, this.children.length);
@@ -641,11 +703,42 @@ export class GameScene extends Phaser.Scene {
     const moving = move.x !== 0 || move.y !== 0;
     const down = isPlayerDown(s);
 
-    // Warm atmospheric glow halos centered over the 4 3D Sanctuary braziers + pulsing Core aura
+    // Warm atmospheric glow halos & additive light pools over the 4 Sanctuary braziers, Core & Hero
+    const phaseLight = s.phase === 'night' ? 1.0 : s.phase === 'evening' ? 0.65 : 0.16;
     const emberPulse = 0.24 + 0.08 * Math.sin(this.animTime * 7.2);
-    for (const [bx, by] of [[-91, -78], [91, -78], [-91, 18], [91, 18]]) {
-      sg.fillStyle(0xf97316, emberPulse * 0.6).fillEllipse(CORE_X + bx, CORE_Y + by, 54, 34);
-      sg.fillStyle(0xfef08a, emberPulse * 0.38).fillEllipse(CORE_X + bx, CORE_Y + by, 24, 16);
+    const braziers: Array<[number, number]> = [[-91, -78], [91, -78], [-91, 18], [91, 18]];
+    for (let i = 0; i < braziers.length; i++) {
+      const [bx, by] = braziers[i];
+      const lx = CORE_X + bx;
+      const ly = CORE_Y + by;
+      sg.fillStyle(0xf97316, emberPulse * 0.6).fillEllipse(lx, ly, 54, 34);
+      sg.fillStyle(0xfef08a, emberPulse * 0.38).fillEllipse(lx, ly, 24, 16);
+      const lp = this.lightPoolSprites[i];
+      if (lp) {
+        const flicker = 1 + 0.08 * Math.sin(this.animTime * 8.4 + i * 1.7);
+        lp.setPosition(lx, ly + 8)
+          .setTint(0xfb923c)
+          .setDisplaySize(124 * flicker, 78 * flicker)
+          .setAlpha((0.26 + 0.1 * Math.sin(this.animTime * 6.5 + i)) * phaseLight);
+      }
+    }
+    const coreLight = this.lightPoolSprites[4];
+    if (coreLight) {
+      const cp = 1 + 0.06 * Math.sin(this.animTime * 3.1);
+      coreLight
+        .setPosition(CORE_X, CORE_Y + 4)
+        .setTint(0xa78bfa)
+        .setDisplaySize(188 * cp, 114 * cp)
+        .setAlpha(0.24 * phaseLight);
+    }
+    const heroLight = this.lightPoolSprites[5];
+    if (heroLight) {
+      const heroAlpha = down ? 0 : s.phase === 'night' ? 0.34 : s.phase === 'evening' ? 0.2 : 0.04;
+      heroLight
+        .setPosition(s.player.x, s.player.y + 4)
+        .setTint(0xfde68a)
+        .setDisplaySize(196, 118)
+        .setAlpha(heroAlpha);
     }
 
     // 2.5D cartoon slate-ink drop shadow for Core pedestal
@@ -1162,6 +1255,52 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
+    this.drawAtmosphere(dt);
+  }
+
+  private drawAtmosphere(dt: number): void {
+    const ag = this.atmosphereGraphics.clear();
+    if (!this.ambientMotes.length) return;
+    const cam = this.cameras.main;
+    const cx = cam.midPoint.x;
+    const cy = cam.midPoint.y;
+    const halfW = 700;
+    const halfH = 430;
+    const phase = this.state.phase;
+
+    for (const m of this.ambientMotes) {
+      m.ox += m.vx * dt + Math.sin(this.animTime * m.speed + m.phase) * 9 * dt;
+      m.oy += m.vy * dt + Math.cos(this.animTime * m.speed * 0.8 + m.phase) * 5 * dt;
+      if (m.ox < -halfW) m.ox += halfW * 2;
+      if (m.ox > halfW) m.ox -= halfW * 2;
+      if (m.oy < -halfH) m.oy += halfH * 2;
+      if (m.oy > halfH) m.oy -= halfH * 2;
+
+      const wx = cx + m.ox;
+      const wy = cy + m.oy;
+      const pulse = 0.55 + 0.45 * Math.sin(this.animTime * (m.speed * 1.4) + m.phase);
+
+      if (phase === 'day') {
+        const col = m.variant === 0 ? 0xfef08a : m.variant === 1 ? 0xd9f99d : 0xffffff;
+        ag.fillStyle(col, 0.38 * pulse).fillCircle(wx, wy, m.r * 1.45);
+        ag.fillStyle(0xffffff, 0.55 * pulse).fillCircle(wx, wy, m.r * 0.55);
+      } else if (phase === 'evening') {
+        const col = m.variant === 0 ? 0xf97316 : m.variant === 1 ? 0xfacc15 : 0xfef08a;
+        ag.fillStyle(col, 0.32 * pulse).fillCircle(wx, wy, m.r * 2.1);
+        ag.fillStyle(0xfef9c3, 0.72 * pulse).fillCircle(wx, wy, m.r * 0.85);
+      } else {
+        const col = m.variant === 0 ? 0x67e8f9 : m.variant === 1 ? 0xc084fc : 0xa7f3d0;
+        ag.fillStyle(col, 0.24 * pulse).fillCircle(wx, wy, m.r * 3.1);
+        ag.fillStyle(col, 0.55 * pulse).fillCircle(wx, wy, m.r * 1.6);
+        ag.fillStyle(0xffffff, 0.9 * pulse).fillCircle(wx, wy, m.r * 0.65);
+      }
+    }
+  }
+
+  private updateVignette(): void {
+    if (!this.vignetteOverlay) return;
+    const a = this.state.phase === 'night' ? 0.52 : this.state.phase === 'evening' ? 0.26 : 0;
+    this.vignetteOverlay.setDisplaySize(this.scale.width, this.scale.height).setAlpha(a);
   }
 
   private drawBars(): void {
@@ -2524,8 +2663,8 @@ export class GameScene extends Phaser.Scene {
     if (this.textures.exists('tile_ground_01')) {
       const rt = this.add.renderTexture(0, 0, WORLD, WORLD).setOrigin(0).setDepth(0);
       rt.beginDraw();
-      for (let ty = 0; ty < WORLD; ty += 64) {
-        for (let tx = 0; tx < WORLD; tx += 64) {
+      for (let ty = 0; ty < WORLD; ty += 128) {
+        for (let tx = 0; tx < WORLD; tx += 128) {
           const tileIdx = map.int(1, 5);
           rt.batchDrawFrame(`tile_ground_0${tileIdx}`, undefined, tx, ty);
         }
@@ -2541,12 +2680,93 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Pre-rendered 3D Sanctuary Plaza around Core.
-    if (this.textures.exists('sanctuary_plaza')) {
-      this.add.image(CORE_X, CORE_Y + 4, 'sanctuary_plaza').setDepth(1.5);
+    // World-space painterly meadow glades + outer ancient rune rings + 4 cardinal beveled flagstone roads.
+    const gRoads = this.add.graphics().setDepth(0.8);
+    const plazaY = CORE_Y + 4;
+    for (let i = 0; i < 32; i++) {
+      const gx = map.int(120, WORLD - 120);
+      const gy = map.int(120, WORLD - 120);
+      const grx = map.int(130, 280);
+      const gry = map.int(85, 180);
+      if (i % 2 === 0) {
+        gRoads.fillStyle(0x86efac, 0.06).fillEllipse(gx, gy, grx, gry);
+      } else {
+        gRoads.fillStyle(0x14532d, 0.09).fillEllipse(gx, gy, grx, gry);
+      }
+    }
+    const drawFlagstone = (fx: number, fy: number, w: number, h: number, milestone = false) => {
+      gRoads.fillStyle(0x1e293b, 0.24).fillRoundedRect(fx - w / 2 + 2, fy - h / 2 + 3, w, h, 7);
+      gRoads.fillStyle(0x8b9db4, 0.92).fillRoundedRect(fx - w / 2, fy - h / 2, w, h, 7);
+      gRoads.fillStyle(0xcbd5e1, 0.72).fillRoundedRect(fx - w / 2 + 2, fy - h / 2 + 2, w - 6, Math.max(4, h * 0.48), 5);
+      gRoads.lineStyle(1.6, 0x1e293b, 0.68).strokeRoundedRect(fx - w / 2, fy - h / 2, w, h, 7);
+      if (milestone) {
+        gRoads.lineStyle(1.8, 0x38bdf8, 0.62).strokeEllipse(fx, fy, w * 0.48, h * 0.48);
+      }
+    };
+
+    // Twin outer Sanctuary stone rings in 3/4 perspective
+    for (const [rx, ry, bw, ba] of [
+      [295, 140, 26, 0.34],
+      [525, 250, 22, 0.24],
+    ] as const) {
+      gRoads.lineStyle(bw, 0x334155, ba).strokeEllipse(CORE_X, plazaY, rx * 2, ry * 2);
+      gRoads.lineStyle(bw - 10, 0x94a3b8, ba * 0.95).strokeEllipse(CORE_X, plazaY, rx * 2, ry * 2);
+      for (let k = 0; k < 12; k++) {
+        const a = (k * Math.PI * 2) / 12;
+        const gx = CORE_X + Math.cos(a) * rx;
+        const gy = plazaY + Math.sin(a) * ry;
+        gRoads.fillStyle(0x38bdf8, ba * 0.9).fillCircle(gx, gy, 2.4);
+      }
     }
 
-    // Deterministic 3D world props (trees, crystal boulders, mana basins, ruin pillars) sorted by Y depth.
+    // East / West flagstone walkways
+    for (const dir of [-1, 1]) {
+      gRoads.fillStyle(0x3b5c34, 0.5).fillRoundedRect(
+        dir > 0 ? CORE_X + 160 : CORE_X - 780,
+        plazaY - 26,
+        620,
+        52,
+        16,
+      );
+      for (let step = 0; step < 14; step++) {
+        const rx = CORE_X + dir * (186 + step * 42);
+        const jit = ((step * 17) % 5) - 2;
+        const isMile = step === 3 || step === 8;
+        drawFlagstone(rx, plazaY - 10 + jit * 0.6, 32, 19, isMile);
+        drawFlagstone(rx + dir * 18, plazaY + 10 - jit * 0.6, 30, 18, false);
+        if (step % 3 === 1) {
+          gRoads.fillStyle(0x4ade80, 0.36).fillCircle(rx + dir * 9, plazaY + (step % 2 === 0 ? -19 : 19), 4);
+        }
+      }
+    }
+
+    // North / South flagstone walkways
+    for (const dir of [-1, 1]) {
+      gRoads.fillStyle(0x3b5c34, 0.5).fillRoundedRect(
+        CORE_X - 28,
+        dir > 0 ? plazaY + 72 : plazaY - 540,
+        56,
+        468,
+        16,
+      );
+      for (let step = 0; step < 14; step++) {
+        const ry = plazaY + dir * (92 + step * 31);
+        const jit = ((step * 13) % 5) - 2;
+        const isMile = step === 2 || step === 5;
+        drawFlagstone(CORE_X - 11 + jit * 0.6, ry, 25, 22, isMile);
+        drawFlagstone(CORE_X + 11 - jit * 0.6, ry + dir * 14, 24, 20, false);
+        if (step % 3 === 1) {
+          gRoads.fillStyle(0x4ade80, 0.36).fillCircle(CORE_X + (step % 2 === 0 ? -23 : 23), ry + dir * 6, 4);
+        }
+      }
+    }
+
+    // Pre-rendered 3D Sanctuary Plaza around Core.
+    if (this.textures.exists('sanctuary_plaza')) {
+      this.add.image(CORE_X, plazaY, 'sanctuary_plaza').setDepth(1.5);
+    }
+
+    // Deterministic 3D world props (trees, crystal boulders, mossy shrine stele, ruin pillars) sorted by Y depth.
     const gPropShadows = this.add.graphics().setDepth(2.2);
     const hasProps = this.textures.exists('world_props');
     for (let i = 0; i < 84; i++) {
@@ -2554,6 +2774,9 @@ export class GameScene extends Phaser.Scene {
       const y = map.int(1, MAP_TILES - 2) * TILE + TILE / 2;
       const kind = map.int(0, 3);
       if (Math.hypot(x - CORE_X, y - CORE_Y) < 188) continue;
+      if ((Math.abs(x - CORE_X) < 44 && Math.abs(y - plazaY) < 560) || (Math.abs(y - plazaY) < 36 && Math.abs(x - CORE_X) < 800)) {
+        continue;
+      }
       if (hasProps) {
         gPropShadows.fillStyle(0x0f172a, 0.14).fillEllipse(x + 4, y + 7, 44, 18);
         gPropShadows.fillStyle(0x0f172a, 0.24).fillEllipse(x + 2, y + 5, 32, 12);
