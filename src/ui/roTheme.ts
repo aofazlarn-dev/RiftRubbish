@@ -204,10 +204,12 @@ export function drawRoGaugeBar(
   g.lineStyle(1, 0x475569, 0.9).strokeRoundedRect(x, y, w, h, 3);
 
   const innerW = Math.max(0, w - 2);
-  const fillW = r > 0 ? Math.max(3, Math.round(innerW * r)) : 0;
+  const fillW = r > 0 ? Math.max(4, Math.round(innerW * r)) : 0;
   if (fillW > 0) {
-    g.fillStyle(fillColor, 1).fillRoundedRect(x + 1, y + 1, fillW, Math.max(2, h - 2), 2);
-    const glossH = Math.max(2, Math.floor(h * 0.35));
+    const innerH = Math.max(2, h - 2);
+    const barRad = Math.max(0, Math.min(2, Math.floor(Math.min(fillW, innerH) / 2)));
+    g.fillStyle(fillColor, 1).fillRoundedRect(x + 1, y + 1, fillW, innerH, barRad);
+    const glossH = Math.max(1, Math.floor(h * 0.35));
     g.fillStyle(0xffffff, 0.3).fillRect(x + 2, y + 1, Math.max(1, fillW - 2), glossH);
   }
 

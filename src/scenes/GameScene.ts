@@ -223,8 +223,12 @@ export class GameScene extends Phaser.Scene {
   private heroFlipX = false;
   private mobPrevPos = new Map<number, { x: number; y: number }>();
   private mobFacing = new Map<number, { dir: FacingDir; flipX: boolean }>();
+  private mobPrevHp = new Map<number, number>();
+  private mobFlashLeft = new Map<number, number>();
   private bossPrevPos?: { x: number; y: number };
   private bossFacing: { dir: FacingDir; flipX: boolean } = { dir: 'down', flipX: false };
+  private bossPrevHp?: number;
+  private bossFlashLeft = 0;
   private systemToast!: Phaser.GameObjects.Text;
   private systemToastLeft = 0;
 
@@ -345,8 +349,12 @@ export class GameScene extends Phaser.Scene {
     this.heroFlipX = false;
     this.mobPrevPos.clear();
     this.mobFacing.clear();
+    this.mobPrevHp.clear();
+    this.mobFlashLeft.clear();
     this.bossPrevPos = undefined;
     this.bossFacing = { dir: 'down', flipX: false };
+    this.bossPrevHp = undefined;
+    this.bossFlashLeft = 0;
     this.bus.clear();
     this.ensureAnimations();
 
@@ -710,7 +718,7 @@ export class GameScene extends Phaser.Scene {
     }
     const fpsSnap = this.fpsMonitor.recordFrame(deltaMs, this.state.monsters.length);
 
-    this.drawActors();
+    this.drawActors(dt);
     this.drawFx(dt);
     this.drawBars();
     this.phaseShade.setFillStyle(PHASE_TINT[this.state.phase], PHASE_ALPHA[this.state.phase]);
@@ -745,29 +753,36 @@ export class GameScene extends Phaser.Scene {
     return 4 + y * 0.003;
   }
 
-  private drawActors(): void {
+  private drawActors(dt: number): void {
     const s = this.state;
     const sg = this.shadowGraphics.clear();
     const move = this.readInput();
     const moving = move.x !== 0 || move.y !== 0;
     const down = isPlayerDown(s);
 
-    // Warm atmospheric glow halos & additive light pools over the 4 Sanctuary braziers, Core & Hero
-    const phaseLight = s.phase === 'night' ? 1.0 : s.phase === 'evening' ? 0.65 : 0.16;
+    // Warm atmospheric glow halos & animated ember sparks over the 4 Sanctuary braziers, Core & Hero
+    const phaseLight = s.phase === 'night' ? 1.0 : s.phase === 'evening' ? 0.65 : 0.22;
     const emberPulse = 0.24 + 0.08 * Math.sin(this.animTime * 7.2);
     const braziers: Array<[number, number]> = [[-91, -78], [91, -78], [-91, 18], [91, 18]];
     for (let i = 0; i < braziers.length; i++) {
       const [bx, by] = braziers[i];
       const lx = CORE_X + bx;
       const ly = CORE_Y + by;
-      sg.fillStyle(0xf97316, emberPulse * 0.6).fillEllipse(lx, ly, 54, 34);
-      sg.fillStyle(0xfef08a, emberPulse * 0.38).fillEllipse(lx, ly, 24, 16);
+      sg.fillStyle(0xf97316, emberPulse * 0.65).fillEllipse(lx, ly, 56, 34);
+      sg.fillStyle(0xfef08a, emberPulse * 0.42).fillEllipse(lx, ly, 24, 16);
+      // Rising animated flame ember sparks above brazier bowl
+      for (let k = 0; k < 2; k++) {
+        const sp = (this.animTime * 1.9 + i * 0.37 + k * 0.5) % 1;
+        const sx = lx + Math.sin(this.animTime * 6 + i + k * 2.1) * 4.5;
+        const sy = ly - 10 - sp * 18;
+        sg.fillStyle(k === 0 ? 0xfef08a : 0xf97316, (1 - sp) * 0.85).fillCircle(sx, sy, 2.2 * (1 - sp * 0.5));
+      }
       const lp = this.lightPoolSprites[i];
       if (lp) {
         const flicker = 1 + 0.08 * Math.sin(this.animTime * 8.4 + i * 1.7);
         lp.setPosition(lx, ly + 8)
           .setTint(0xfb923c)
-          .setDisplaySize(124 * flicker, 78 * flicker)
+          .setDisplaySize(128 * flicker, 80 * flicker)
           .setAlpha((0.26 + 0.1 * Math.sin(this.animTime * 6.5 + i)) * phaseLight);
       }
     }
@@ -853,10 +868,11 @@ export class GameScene extends Phaser.Scene {
       this.playerSprite.setScale(0.58 * castPop, 0.58 * castPop);
     }
 
-    // Core visual reflects damage state (frame 0 healthy, 1 damaged, 2 broken).
+    // Core visual reflects damage state (frame 0 healthy, 1 damaged, 2 broken) with gentle levitation.
     if (this.coreSprite) {
       const frame = s.coreHp <= 0 ? 2 : s.coreHp < s.coreMaxHp * 0.6 ? 1 : 0;
-      this.coreSprite.setFrame(frame).setDepth(this.depthAtY(CORE_Y));
+      const floatOff = frame < 2 ? Math.sin(this.animTime * 2.6) * 2.8 : 0;
+      this.coreSprite.setFrame(frame).setY(CORE_Y - 12 - floatOff).setDepth(this.depthAtY(CORE_Y));
     }
 
     // Monster sprites are pooled: reuse Sprite instances instead of creating and destroying them.
@@ -870,6 +886,13 @@ export class GameScene extends Phaser.Scene {
         sprite.setVisible(true);
         this.monsterSprites.set(m.uid, sprite);
       }
+      const prevHp = this.mobPrevHp.get(m.uid) ?? m.hp;
+      if (m.hp < prevHp) this.mobFlashLeft.set(m.uid, 0.085);
+      this.mobPrevHp.set(m.uid, m.hp);
+      const flashRem = Math.max(0, (this.mobFlashLeft.get(m.uid) ?? 0) - dt);
+      if (flashRem > 0) this.mobFlashLeft.set(m.uid, flashRem);
+      else this.mobFlashLeft.delete(m.uid);
+
       const prev = this.mobPrevPos.get(m.uid);
       const aggroPlayer = m.defId === 'bat' || m.defId === 'spirit' || m.defId === 'rift_wolf';
       const fallbackTargetX = aggroPlayer ? s.player.x : CORE_X;
@@ -892,10 +915,12 @@ export class GameScene extends Phaser.Scene {
       const phase = this.animTime * (airMob ? 12 : 9.5) + m.uid * 1.7;
       const mobBob = airMob ? 5 + Math.sin(phase) * 3.5 : 0;
       const speciesScale = MONSTER_VISUAL_SCALE[m.defId] ?? 0.52;
-      const baseScale = speciesScale * (m.affix ? 1.18 : 1.0);
+      const hitPop = flashRem > 0 ? 1.09 : 1.0;
+      const baseScale = speciesScale * (m.affix ? 1.18 : 1.0) * hitPop;
       sprite.setScale(baseScale, baseScale);
 
-      if (m.slowLeft > 0) sprite.setTint(0x80d8ff);
+      if (flashRem > 0) sprite.setTintFill(0xffffff);
+      else if (m.slowLeft > 0) sprite.setTint(0x80d8ff);
       else if (m.affix) sprite.setTint(0xe0aaff);
       else sprite.clearTint();
       sprite.setPosition(m.x, m.y - 6 - mobBob).setDepth(this.depthAtY(m.y));
@@ -915,12 +940,19 @@ export class GameScene extends Phaser.Scene {
       this.monsterSprites.delete(uid);
       this.mobPrevPos.delete(uid);
       this.mobFacing.delete(uid);
+      this.mobPrevHp.delete(uid);
+      this.mobFlashLeft.delete(uid);
     }
 
     const boss = s.boss;
     const bossAlive = !!boss && boss.rules.hp > 0;
     this.bossSprite.setVisible(bossAlive);
     if (boss && bossAlive) {
+      const prevB = this.bossPrevHp ?? boss.rules.hp;
+      if (boss.rules.hp < prevB) this.bossFlashLeft = 0.09;
+      else this.bossFlashLeft = Math.max(0, this.bossFlashLeft - dt);
+      this.bossPrevHp = boss.rules.hp;
+
       const bDx = this.bossPrevPos && Math.hypot(boss.x - this.bossPrevPos.x, boss.y - this.bossPrevPos.y) > 0.05
         ? boss.x - this.bossPrevPos.x
         : s.player.x - boss.x;
@@ -931,6 +963,8 @@ export class GameScene extends Phaser.Scene {
       this.bossFacing = resolveFacing(bDx, bDy, this.bossFacing.dir, this.bossFacing.flipX);
 
       this.bossSprite.setPosition(boss.x, boss.y - 16).setDepth(this.depthAtY(boss.y)).setRotation(0);
+      if (this.bossFlashLeft > 0) this.bossSprite.setTintFill(0xffffff);
+      else this.bossSprite.clearTint();
       const bossBase = boss.rules.enraged ? 'boss_bloodmoon_enrage_walk' : 'boss_bloodmoon_walk';
       const bossAnim = `${bossBase}_${this.bossFacing.dir}`;
       if (this.bossSprite.anims.currentAnim?.key !== bossAnim) this.bossSprite.play(bossAnim, true);
@@ -1444,18 +1478,33 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1.5, 0xfef08a, 0.8).lineBetween(t.x - 7, t.y + 3, t.x + 7, t.y + 3);
       g.lineStyle(1.5, 0xfef08a, 0.8).lineBetween(t.x, t.y - 2, t.x, t.y + 8);
     }
-    const bar = (x: number, y: number, w: number, ratio: number, color: number) => {
-      const fillW = w * Phaser.Math.Clamp(ratio, 0, 1);
-      g.fillStyle(0x050811, 0.85).fillRect(x - w / 2 - 1.5, y - 1.5, w + 3, 9);
-      g.fillStyle(0x1e293b, 0.9).fillRect(x - w / 2, y, w, 6);
-      if (fillW > 0) {
-        g.fillStyle(color, 1).fillRect(x - w / 2, y, fillW, 6);
-        g.fillStyle(0xffffff, 0.34).fillRect(x - w / 2, y, fillW, 2);
+    const bar = (x: number, y: number, w: number, ratio: number, color: number, h = 7, shieldRatio = 0) => {
+      const r = Phaser.Math.Clamp(ratio, 0, 1);
+      const rad = Math.min(3, Math.floor(h / 2));
+      g.fillStyle(0x050811, 0.88).fillRoundedRect(x - w / 2 - 1.5, y - 1.5, w + 3, h + 3, rad + 1);
+      g.fillStyle(0x1e293b, 0.92).fillRoundedRect(x - w / 2, y, w, h, rad);
+      const fillW = Math.round(w * r);
+      if (fillW >= 3) {
+        g.fillStyle(color, 1).fillRoundedRect(x - w / 2, y, fillW, h, Math.min(rad, Math.floor(fillW / 2)));
+        g.fillStyle(0xffffff, 0.34).fillRect(x - w / 2 + 1, y + 1, Math.max(1, fillW - 2), Math.max(1, Math.floor(h * 0.32)));
+      }
+      if (shieldRatio > 0) {
+        const sw = Math.round(w * Phaser.Math.Clamp(shieldRatio, 0, 1));
+        if (sw >= 3) {
+          g.lineStyle(1.5, 0x38bdf8, 0.95).strokeRoundedRect(x - w / 2, y, sw, h, Math.min(rad, Math.floor(sw / 2)));
+        }
       }
     };
-    bar(CORE_X, CORE_Y - 54, 92, s.coreHp / s.coreMaxHp, 0xc77dff);
-    bar(s.player.x, s.player.y - 38, 38, s.player.hp / s.player.maxHp, 0x06d6a0);
-    if (s.boss && s.boss.rules.hp > 0) bar(s.boss.x, s.boss.y - 66, 124, s.boss.rules.hp / s.boss.rules.maxHp, 0xff4d6d);
+    const coreShieldRatio = (s.coreShield ?? 0) > 0 ? Math.min(1, s.coreShield! / Math.max(1, s.coreMaxHp * 0.4)) : 0;
+    bar(CORE_X, CORE_Y - 58, 96, s.coreHp / s.coreMaxHp, 0xc084fc, 8, coreShieldRatio);
+    bar(s.player.x, s.player.y - 44, 42, s.player.hp / s.player.maxHp, 0x22c55e, 7);
+    for (const m of s.monsters) {
+      if (m.hp < m.maxHp) {
+        const mw = m.defId === 'rift_wolf' || m.defId === 'golem' ? 36 : 26;
+        bar(m.x, m.y - (m.defId === 'golem' || m.defId === 'rift_wolf' ? 32 : 24), mw, m.hp / m.maxHp, m.affix ? 0xe879f9 : 0xf43f5e, 4.5);
+      }
+    }
+    if (s.boss && s.boss.rules.hp > 0) bar(s.boss.x, s.boss.y - 68, 128, s.boss.rules.hp / s.boss.rules.maxHp, 0xff4d6d, 9);
   }
 
   private drawHud(fpsSnap?: FpsMonitorSnapshot): void {
@@ -2758,86 +2807,88 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // World-space painterly meadow glades + outer ancient rune rings + 4 cardinal beveled flagstone roads.
+    // World-space painterly meadow glades + organic dirt & varied flagstone walkways + carved outer runic markers.
     const gRoads = this.add.graphics().setDepth(0.8);
     const plazaY = CORE_Y + 4;
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < 36; i++) {
       const gx = map.int(120, WORLD - 120);
       const gy = map.int(120, WORLD - 120);
-      const grx = map.int(130, 280);
-      const gry = map.int(85, 180);
+      const grx = map.int(140, 290);
+      const gry = map.int(90, 185);
       if (i % 2 === 0) {
-        gRoads.fillStyle(0x86efac, 0.06).fillEllipse(gx, gy, grx, gry);
+        gRoads.fillStyle(0x86efac, 0.065).fillEllipse(gx, gy, grx, gry);
       } else {
-        gRoads.fillStyle(0x14532d, 0.09).fillEllipse(gx, gy, grx, gry);
+        gRoads.fillStyle(0x14532d, 0.085).fillEllipse(gx, gy, grx, gry);
       }
     }
-    const drawFlagstone = (fx: number, fy: number, w: number, h: number, milestone = false) => {
-      gRoads.fillStyle(0x1e293b, 0.24).fillRoundedRect(fx - w / 2 + 2, fy - h / 2 + 3, w, h, 7);
-      gRoads.fillStyle(0x8b9db4, 0.92).fillRoundedRect(fx - w / 2, fy - h / 2, w, h, 7);
-      gRoads.fillStyle(0xcbd5e1, 0.72).fillRoundedRect(fx - w / 2 + 2, fy - h / 2 + 2, w - 6, Math.max(4, h * 0.48), 5);
-      gRoads.lineStyle(1.6, 0x1e293b, 0.68).strokeRoundedRect(fx - w / 2, fy - h / 2, w, h, 7);
+
+    // Subtle carved outer sanctuary ring + 8 runic perimeter stones
+    gRoads.lineStyle(10, 0x1e293b, 0.22).strokeEllipse(CORE_X, plazaY, 1080, 620);
+    gRoads.lineStyle(4, 0x94a3b8, 0.25).strokeEllipse(CORE_X, plazaY, 1080, 620);
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI * 2) / 8 + Math.PI / 8;
+      const sx = CORE_X + Math.cos(a) * 540;
+      const sy = plazaY + Math.sin(a) * 310;
+      gRoads.fillStyle(0x0f172a, 0.25).fillEllipse(sx + 2, sy + 4, 24, 14);
+      gRoads.fillStyle(0x64748b, 0.85).fillEllipse(sx, sy, 20, 12);
+      gRoads.fillStyle(0x38bdf8, 0.65).fillCircle(sx, sy - 1, 2.5);
+    }
+
+    const stoneTones = [0x94a3b8, 0x8192a8, 0xa8a29e, 0x7c8ca3];
+    const drawNaturalSlab = (fx: number, fy: number, w: number, h: number, idx: number, milestone = false) => {
+      const base = stoneTones[idx % stoneTones.length];
+      gRoads.fillStyle(0x0f172a, 0.24).fillEllipse(fx + 2, fy + 3.5, w + 2, h + 1);
+      gRoads.fillStyle(base, 0.94).fillEllipse(fx, fy, w, h);
+      gRoads.fillStyle(0xe2e8f0, 0.42).fillEllipse(fx - 1, fy - h * 0.16, Math.max(6, w * 0.68), Math.max(4, h * 0.46));
+      gRoads.lineStyle(1.4, 0x1e293b, 0.62).strokeEllipse(fx, fy, w, h);
       if (milestone) {
-        gRoads.lineStyle(1.8, 0x38bdf8, 0.62).strokeEllipse(fx, fy, w * 0.48, h * 0.48);
+        gRoads.lineStyle(1.5, 0x38bdf8, 0.58).strokeEllipse(fx, fy, w * 0.5, h * 0.5);
       }
     };
 
-    // Twin outer Sanctuary stone rings in 3/4 perspective
-    for (const [rx, ry, bw, ba] of [
-      [295, 140, 26, 0.34],
-      [525, 250, 22, 0.24],
-    ] as const) {
-      gRoads.lineStyle(bw, 0x334155, ba).strokeEllipse(CORE_X, plazaY, rx * 2, ry * 2);
-      gRoads.lineStyle(bw - 10, 0x94a3b8, ba * 0.95).strokeEllipse(CORE_X, plazaY, rx * 2, ry * 2);
-      for (let k = 0; k < 12; k++) {
-        const a = (k * Math.PI * 2) / 12;
-        const gx = CORE_X + Math.cos(a) * rx;
-        const gy = plazaY + Math.sin(a) * ry;
-        gRoads.fillStyle(0x38bdf8, ba * 0.9).fillCircle(gx, gy, 2.4);
-      }
-    }
+    const drawRoadTrack = (vertical: boolean, dir: -1 | 1) => {
+      const len = vertical ? 440 : 540;
+      const start = vertical ? 136 : 210;
+      const cx0 = CORE_X + (vertical ? 0 : dir * (start + len * 0.45));
+      const cy0 = plazaY + (vertical ? dir * (start + len * 0.45) : 0);
+      // Tapered earthy dirt & moss under-path (never boxy roundedRect strips!)
+      gRoads.fillStyle(0x3f4e32, 0.42).fillEllipse(cx0, cy0, vertical ? 64 : len, vertical ? len : 52);
+      gRoads.fillStyle(0x6b5b42, 0.46).fillEllipse(cx0, cy0, vertical ? 42 : len * 0.9, vertical ? len * 0.9 : 34);
 
-    // East / West flagstone walkways
-    for (const dir of [-1, 1]) {
-      gRoads.fillStyle(0x3b5c34, 0.5).fillRoundedRect(
-        dir > 0 ? CORE_X + 160 : CORE_X - 780,
-        plazaY - 26,
-        620,
-        52,
-        16,
-      );
-      for (let step = 0; step < 14; step++) {
-        const rx = CORE_X + dir * (186 + step * 42);
-        const jit = ((step * 17) % 5) - 2;
-        const isMile = step === 3 || step === 8;
-        drawFlagstone(rx, plazaY - 10 + jit * 0.6, 32, 19, isMile);
-        drawFlagstone(rx + dir * 18, plazaY + 10 - jit * 0.6, 30, 18, false);
-        if (step % 3 === 1) {
-          gRoads.fillStyle(0x4ade80, 0.36).fillCircle(rx + dir * 9, plazaY + (step % 2 === 0 ? -19 : 19), 4);
+      const steps = 11;
+      for (let step = 0; step < steps; step++) {
+        const t = step / (steps - 1);
+        const dist = start + t * len;
+        const wobble = Math.sin(step * 2.1 + dir) * 5;
+        const px = vertical ? CORE_X + wobble : CORE_X + dir * dist;
+        const py = vertical ? plazaY + dir * dist : plazaY + wobble * 0.7;
+        const sizeScale = 1 - t * 0.22;
+        const mainW = (24 + (step % 3) * 3) * sizeScale;
+        const mainH = (16 + ((step + 1) % 3) * 2) * sizeScale;
+        drawNaturalSlab(px + (vertical ? -7 : 0), py + (vertical ? 0 : -6), mainW, mainH, step, step === 3 || step === 7);
+        if (step % 2 === 0 || t < 0.65) {
+          drawNaturalSlab(
+            px + (vertical ? 9 : dir * 13),
+            py + (vertical ? dir * 12 : 7),
+            mainW * 0.78,
+            mainH * 0.76,
+            step + 2,
+          );
+        }
+        // Subtle tiny pebbles / grass tufts flanking road shoulders
+        if (step % 2 === 1) {
+          const sx = px + (vertical ? (step % 4 === 1 ? -22 : 22) : 6);
+          const sy = py + (vertical ? 5 : (step % 4 === 1 ? -18 : 18));
+          gRoads.fillStyle(0x475569, 0.7).fillCircle(sx, sy, 2.5);
+          gRoads.fillStyle(0x4ade80, 0.45).fillCircle(sx + 5, sy + 2, 3.2);
         }
       }
-    }
+    };
 
-    // North / South flagstone walkways
-    for (const dir of [-1, 1]) {
-      gRoads.fillStyle(0x3b5c34, 0.5).fillRoundedRect(
-        CORE_X - 28,
-        dir > 0 ? plazaY + 72 : plazaY - 540,
-        56,
-        468,
-        16,
-      );
-      for (let step = 0; step < 14; step++) {
-        const ry = plazaY + dir * (92 + step * 31);
-        const jit = ((step * 13) % 5) - 2;
-        const isMile = step === 2 || step === 5;
-        drawFlagstone(CORE_X - 11 + jit * 0.6, ry, 25, 22, isMile);
-        drawFlagstone(CORE_X + 11 - jit * 0.6, ry + dir * 14, 24, 20, false);
-        if (step % 3 === 1) {
-          gRoads.fillStyle(0x4ade80, 0.36).fillCircle(CORE_X + (step % 2 === 0 ? -23 : 23), ry + dir * 6, 4);
-        }
-      }
-    }
+    drawRoadTrack(false, -1);
+    drawRoadTrack(false, 1);
+    drawRoadTrack(true, -1);
+    drawRoadTrack(true, 1);
 
     // Pre-rendered 3D Sanctuary Plaza around Core.
     if (this.textures.exists('sanctuary_plaza')) {
