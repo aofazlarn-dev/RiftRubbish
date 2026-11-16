@@ -75,6 +75,7 @@
 
 
 
+
 ## Next up (งานที่ยังไม่มีคนรับ — หยิบแล้วย้ายไป Claims)
 > ⚠️ งานรอง — ทำ **Gap รอบ 2 (R1–R5)** ด้านบนก่อน
 > M2 "เล่นจบรอบได้" ทำแล้วใน branch `claude/playable-loop` (รอ merge) — รายการข้างล่างคือสิ่งที่ยังขาดจริง
@@ -196,6 +197,7 @@
 ## Log
 | เวลา | ใคร | ทำอะไร | commit/branch |
 | --- | --- | --- | --- |
+| 2026-11-16 21:20 | Gemini | **อัปเกรดโมเดลตัวละครสัดส่วนสมจริง 3.5-Head Articulated 2D Anime (`gemini/pro-character-models`):** ออกแบบโมเดลตัวละคร Hero และศัตรูครบทุกตัวใหม่ตามสัดส่วนคอนเซปต์อาร์ต (`title_bg.jpg` & `03_prototype_sprite_sheet.jpg`) พร้อมแขน-ขา 2 ข้อต่อและกายวิภาคชัดเจนครบ 3 ทิศทาง (`down`/`side`/`up`) — Hero เสื้อทูนิก+ผ้าคลุม+ปลอกแขนเหล็ก+รองเท้าบูตพับข้อ+ดาบรูน, Goblin คอมลูม+ไม้กระบอง, Skeleton ซี่โครง+กะโหลก+ธนู+ซองลูกธนู, Wraith ผีหมอก+ตะเกียงวิญญาณ, Golem ศิลา, Elite หมาป่ามิติ 4 ขา, และ Bloodmoon Boss (ร่างปกติ & ร่างคลั่งมีหนวดมิติ+เคียวจันทร์เลือด) + ปรับสเกลและตำแหน่งแถบ HP บนหัวใน `GameScene.ts` (`npm test` 34 ไฟล์/248 เทสต์, `npm run build`, Live Browser QA `60 FPS` / **0 errors**) | `gemini/pro-character-models` |
 | 2026-11-16 21:09 | Gemini | **เพิ่มจำนวนและการกระจายมอนสเตอร์กลางวัน (`gemini/more-day-monsters`):** เพิ่มฝูงมอนสเตอร์กลางวันใน `src/data/waves.json` เป็น 36–57 ตัวต่อวันใน 6–8 กลุ่ม (จากเดิม 15–21 ตัว) และปรับ `spawnDayPatrols()` ใน `src/systems/monsters.ts` ให้กระจายทั้งวงใกล้-กลาง (8–13 ช่อง) และวงนอก (13–20 ช่อง) + เพิ่มเทสต์ใน `tests/patrol.test.ts` (`npm test` **34 ไฟล์ / 248 เทสต์**, `npm run build`, Live Browser QA เห็น **มอน 34 ตัว + 60 FPS + 0 errors**) | `gemini/more-day-monsters` |
 | 2026-11-16 21:03 | Gemini | **ยกระดับกราฟิกทั้งฉากสไตล์นักออกแบบเกมมืออาชีพ (`gemini/pro-art-overhaul`):** สร้าง Asset 2D Cel-Shaded 4×SSAA ชุดใหม่ทั้งระบบ (`sanctuary_plaza.png` ลานศิลา + วงเวท + คบไฟ 4 มุม, `base_core.png` คริสตัลแกนฐานลอยตัว 3 สภาพ, `world_props.png` ต้นโอ๊ก/คริสตัล/ศาลเจ้า/เสารูน, `gather_nodes.png` ฟ่อนข้าวสาลี/เห็ด/บ่อน้ำ 3 มิติ, `tile_ground_01..05.png` หญ้าไร้รอยต่อแก้ขอบ GDI+ `WrapMode.Tile`, `vfx_*.png`, `card_frame_*.png`), แก้ถนนหิน 4 ทิศใน `GameScene.ts` เป็นทางดิน+หินธรรมชาติหลากหลายขนาด + หินหลักเขต + ประกายไฟเตา + แฟลชขาวมอนสเตอร์เมื่อโดนตี + แถบเลือดขอบมนแสดงเกจมอนบาดเจ็บ, แก้ `IndexSizeError` ใน `roTheme.ts` (`npm test` 34 ไฟล์/247 เทสต์, `npm run build`, Live Browser QA `1280×720` `?renderer=canvas` ผ่าน **0 errors / 60 FPS**) | `gemini/pro-art-overhaul` |
 | 2026-11-16 07:40 | Gemini | **ออกแบบตัวละครใหม่ 2D Cel-Shaded Anime 3 ทิศทาง (`down`/`side`/`up`) & แก้ทิศทางเดินใน `GameScene.ts`:** อัปเกรด `hero_*` (`hero_idle/walk/hit/death`), มอนสเตอร์ 6 ชนิด, `elite_rift_wolf`, และ `boss_bloodmoon{_enrage}` ให้เป็นชีต 3 ทิศทาง (แถว `down` หันหน้าเข้ากล้อง, `side` ด้านข้าง + `flipX`, `up` มุมมองด้านหลัง, ทุกไฟล์ `< 256 KB`), เพิ่ม `resolveFacing()` + ท่ายืนนิ่งปกติ + ท่าก้าวเดินจริง (ถอดการเอียงตัวเด้งปลอม `setRotation`), เทสต์ `npm test` 34 ไฟล์ / 247 เทสต์ & `npm run build` ผ่าน, Live Browser QA ยืนยันทิศทาง 4 ด้าน + Idle + Night 1 combat ผ่าน | `gemini/character-redesign` |

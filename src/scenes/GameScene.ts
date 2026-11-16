@@ -77,12 +77,12 @@ const MONSTER_SPRITE: Record<string, string> = {
 /** Per-species visual scale multiplier for clear enemy silhouette hierarchy. */
 const MONSTER_VISUAL_SCALE: Record<string, number> = {
   slime: 0.44,
-  bat: 0.48,
-  goblin: 0.52,
-  skeleton: 0.55,
-  spirit: 0.55,
-  golem: 0.64,
-  rift_wolf: 0.68,
+  bat: 0.50,
+  goblin: 0.58,
+  skeleton: 0.60,
+  spirit: 0.56,
+  golem: 0.70,
+  rift_wolf: 0.74,
 };
 
 type FacingDir = 'down' | 'side' | 'up';
@@ -431,8 +431,8 @@ export class GameScene extends Phaser.Scene {
         variant: i % 3,
       });
     }
-    this.bossSprite = this.add.sprite(0, 0, 'boss_bloodmoon_walk').setScale(1.1).setDepth(9).setVisible(false);
-    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'hero_idle').setScale(0.54).setDepth(this.depthAtY(this.state.player.y));
+    this.bossSprite = this.add.sprite(0, 0, 'boss_bloodmoon_walk').setScale(1.18).setDepth(9).setVisible(false);
+    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'hero_idle').setScale(0.66).setDepth(this.depthAtY(this.state.player.y));
     this.cameras.main.setBounds(0, 0, WORLD, WORLD).startFollow(this.playerSprite, true, 0.15, 0.15);
 
     this.phaseShade = this.add
@@ -815,7 +815,7 @@ export class GameScene extends Phaser.Scene {
     this.heroFacing = heroNextFacing.dir;
     this.heroFlipX = heroNextFacing.flipX;
     this.playerSprite.setFlipX(this.heroFlipX);
-    this.playerSprite.setPosition(s.player.x, s.player.y - 7);
+    this.playerSprite.setPosition(s.player.x, s.player.y - 12);
     this.playerSprite.setDepth(this.depthAtY(s.player.y));
     // 2.5D penumbra + contact shadow beneath feet
     sg.fillStyle(0x0f172a, down ? 0.12 : 0.16).fillEllipse(s.player.x + 3, s.player.y + 13, 38, 16);
@@ -851,21 +851,21 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (down) {
-      this.playerSprite.setFlipX(false).setAlpha(0.75).clearTint().setScale(0.58, 0.58).setRotation(0);
+      this.playerSprite.setFlipX(false).setAlpha(0.75).clearTint().setScale(0.66, 0.66).setRotation(0);
       if (this.playerSprite.anims.currentAnim?.key !== 'hero_death') this.playerSprite.play('hero_death', true);
     } else if (s.invulnLeft > 0) {
       this.playerSprite
         .setAlpha(0.92)
         .setTexture('hero_hit', FACING_ROW[this.heroFacing])
         .setTint(0xff9999)
-        .setScale(0.58, 0.58)
+        .setScale(0.66, 0.66)
         .setRotation(0);
     } else {
       this.playerSprite.setAlpha(1).clearTint().setRotation(0);
       const heroAnim = `${moving ? 'hero_walk' : 'hero_idle'}_${this.heroFacing}`;
       if (this.playerSprite.anims.currentAnim?.key !== heroAnim) this.playerSprite.play(heroAnim, true);
       const castPop = this.castPoseLeft > 0 ? 1.05 : 1;
-      this.playerSprite.setScale(0.58 * castPop, 0.58 * castPop);
+      this.playerSprite.setScale(0.66 * castPop, 0.66 * castPop);
     }
 
     // Core visual reflects damage state (frame 0 healthy, 1 damaged, 2 broken) with gentle levitation.
@@ -1497,7 +1497,7 @@ export class GameScene extends Phaser.Scene {
     };
     const coreShieldRatio = (s.coreShield ?? 0) > 0 ? Math.min(1, s.coreShield! / Math.max(1, s.coreMaxHp * 0.4)) : 0;
     bar(CORE_X, CORE_Y - 58, 96, s.coreHp / s.coreMaxHp, 0xc084fc, 8, coreShieldRatio);
-    bar(s.player.x, s.player.y - 44, 42, s.player.hp / s.player.maxHp, 0x22c55e, 7);
+    bar(s.player.x, s.player.y - 54, 42, s.player.hp / s.player.maxHp, 0x22c55e, 7);
     for (const m of s.monsters) {
       if (m.hp < m.maxHp) {
         const mw = m.defId === 'rift_wolf' || m.defId === 'golem' ? 36 : 26;
