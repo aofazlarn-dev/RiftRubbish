@@ -11,12 +11,12 @@
     { "night": 7, "affixChance": 0.25, "boss": "blood_moon_king", "spawns": { "goblin": 16, "skeleton": 14, "golem": 6, "spirit": 14 } }
   ],
   "days": [
-    { "day": 1, "groups": 3, "guaranteedNearPlayer": 6, "spawns": { "slime": 15 } },
-    { "day": 2, "groups": 4, "spawns": { "slime": 10, "bat": 6 } },
-    { "day": 3, "groups": 4, "spawns": { "slime": 6, "bat": 6, "goblin": 6 } },
-    { "day": 4, "groups": 4, "spawns": { "bat": 6, "goblin": 8, "skeleton": 4 } },
-    { "day": 5, "groups": 4, "spawns": { "goblin": 8, "skeleton": 6, "golem": 2 } },
-    { "day": 6, "groups": 5, "spawns": { "goblin": 8, "skeleton": 6, "golem": 3, "spirit": 4 } },
-    { "day": 7, "groups": 5, "spawns": { "goblin": 6, "skeleton": 6, "golem": 2, "spirit": 4 } }
+    { "day": 1, "groups": 6, "guaranteedNearPlayer": 8, "spawns": { "slime": 30, "bat": 6 } },
+    { "day": 2, "groups": 7, "spawns": { "slime": 24, "bat": 14, "goblin": 6 } },
+    { "day": 3, "groups": 7, "spawns": { "slime": 14, "bat": 14, "goblin": 16, "skeleton": 4 } },
+    { "day": 4, "groups": 8, "spawns": { "slime": 10, "bat": 14, "goblin": 18, "skeleton": 10 } },
+    { "day": 5, "groups": 8, "spawns": { "bat": 10, "goblin": 18, "skeleton": 16, "golem": 4, "spirit": 6 } },
+    { "day": 6, "groups": 8, "spawns": { "bat": 8, "goblin": 18, "skeleton": 16, "golem": 5, "spirit": 10 } },
+    { "day": 7, "groups": 8, "spawns": { "goblin": 18, "skeleton": 16, "golem": 5, "spirit": 12 } }
   ]
 }

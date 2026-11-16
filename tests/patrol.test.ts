@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createRun, type GameState } from '../src/core/state';
+import { RunRng } from '../src/core/rng';
 import { CORE_X, CORE_Y, TILE } from '../src/core/world';
 import { loadRunData } from '../src/data';
-import { findDef, spawnMonster, tickMonsters } from '../src/systems/monsters';
+import { findDef, spawnDayPatrols, spawnMonster, tickMonsters } from '../src/systems/monsters';
 
 const data = loadRunData();
 const goblin = findDef(data.monsters, 'goblin');
@@ -53,5 +54,18 @@ describe('patrol leash: gives up when the player is more than 10 tiles from home
     s.player.y = HOME_Y;
     tickMonsters(s, 0.01, data.monsters);
     expect(m.aggro).toBe(false);
+  });
+});
+
+describe('daytime patrol density (expanded day encounters)', () => {
+  it('spawns at least 35 monsters per day across distributed groups while keeping day 2–7 patrols passive until aggro', () => {
+    for (const daySpec of data.waves.days) {
+      const s = createRun({ seed: `day-${daySpec.day}` });
+      spawnDayPatrols(s, daySpec, RunRng.fromSeed(`day-${daySpec.day}`).get('combat'), data.monsters);
+      expect(s.monsters.length).toBeGreaterThanOrEqual(35);
+      if (daySpec.day >= 2) {
+        expect(s.monsters.every((m) => m.patrol)).toBe(true);
+      }
+    }
   });
 });
