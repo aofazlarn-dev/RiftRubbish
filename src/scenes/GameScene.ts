@@ -247,6 +247,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.load.image('sanctuary_plaza', 'assets/tiles/sanctuary_plaza.png');
     this.load.spritesheet('world_props', 'assets/tiles/world_props.png', { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('world_decals', 'assets/tiles/world_decals.png', { frameWidth: 64, frameHeight: 64 });
     this.load.spritesheet('gather_nodes', 'assets/tiles/gather_nodes.png', { frameWidth: 128, frameHeight: 128 });
     this.load.spritesheet('base_core', 'assets/sprites/base_core.png', { frameWidth: 160, frameHeight: 160 });
     this.load.spritesheet('hero_idle', 'assets/sprites/hero_idle.png', { frameWidth: 128, frameHeight: 128 });
@@ -403,12 +404,31 @@ export class GameScene extends Phaser.Scene {
 
     this.drawWorld();
     this.shadowGraphics = this.add.graphics().setDepth(3.2);
+    if (!this.textures.exists('vfx_soft_glow') && typeof this.textures.createCanvas === 'function') {
+      const gTex = this.textures.createCanvas('vfx_soft_glow', 128, 128);
+      if (gTex) {
+        const gCtx = gTex.context;
+        const grad = gCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        grad.addColorStop(0.28, 'rgba(255, 255, 255, 0.52)');
+        grad.addColorStop(0.65, 'rgba(255, 255, 255, 0.14)');
+        grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        gCtx.fillStyle = grad;
+        gCtx.fillRect(0, 0, 128, 128);
+        gTex.refresh();
+      }
+    }
     this.lightPoolSprites = [];
-    if (this.textures.exists('vfx_projectile')) {
+    const lightTexKey = this.textures.exists('vfx_soft_glow')
+      ? 'vfx_soft_glow'
+      : this.textures.exists('vfx_projectile')
+        ? 'vfx_projectile'
+        : null;
+    if (lightTexKey) {
       for (let i = 0; i < 6; i++) {
         this.lightPoolSprites.push(
           this.add
-            .image(CORE_X, CORE_Y, 'vfx_projectile')
+            .image(CORE_X, CORE_Y, lightTexKey)
             .setDepth(3.5)
             .setBlendMode(Phaser.BlendModes.ADD)
             .setAlpha(0),
@@ -688,6 +708,9 @@ export class GameScene extends Phaser.Scene {
       if (fx.some((f) => !f.missed)) {
         this.sfx.playCast();
         this.castPoseLeft = 0.24;
+        if (fx.some((f) => !f.missed && (f.skillId === 'R01a' || (f.radius ?? 0) >= 90))) {
+          this.cameras.main.shake(90, 0.0022, false);
+        }
       }
       for (const f of fx) {
         this.liveFx.push({ ...f, ttl: FX_SECONDS });
@@ -769,56 +792,61 @@ export class GameScene extends Phaser.Scene {
     const moving = move.x !== 0 || move.y !== 0;
     const down = isPlayerDown(s);
 
-    // Warm atmospheric glow halos & animated ember sparks over the 4 Sanctuary braziers, Core & Hero
-    const phaseLight = s.phase === 'night' ? 1.0 : s.phase === 'evening' ? 0.65 : 0.22;
-    const emberPulse = 0.24 + 0.08 * Math.sin(this.animTime * 7.2);
-    const braziers: Array<[number, number]> = [[-91, -78], [91, -78], [-91, 18], [91, 18]];
+    // Warm atmospheric Gaussian glow halos & animated ember sparks over the 4 Sanctuary braziers, Core & Hero
+    const phaseLight = s.phase === 'night' ? 1.0 : s.phase === 'evening' ? 0.72 : 0.36;
+    const emberPulse = 0.26 + 0.09 * Math.sin(this.animTime * 7.2);
+    const braziers: Array<[number, number]> = [
+      [-133, -72],
+      [133, -72],
+      [-137, 78],
+      [137, 78],
+    ];
     for (let i = 0; i < braziers.length; i++) {
       const [bx, by] = braziers[i];
       const lx = CORE_X + bx;
       const ly = CORE_Y + by;
-      sg.fillStyle(0xf97316, emberPulse * 0.65).fillEllipse(lx, ly, 56, 34);
-      sg.fillStyle(0xfef08a, emberPulse * 0.42).fillEllipse(lx, ly, 24, 16);
+      sg.fillStyle(0xf97316, emberPulse * 0.48).fillEllipse(lx, ly, 44, 26);
+      sg.fillStyle(0xfef08a, emberPulse * 0.45).fillEllipse(lx, ly - 4, 16, 11);
       // Rising animated flame ember sparks above brazier bowl
       for (let k = 0; k < 2; k++) {
-        const sp = (this.animTime * 1.9 + i * 0.37 + k * 0.5) % 1;
-        const sx = lx + Math.sin(this.animTime * 6 + i + k * 2.1) * 4.5;
-        const sy = ly - 10 - sp * 18;
-        sg.fillStyle(k === 0 ? 0xfef08a : 0xf97316, (1 - sp) * 0.85).fillCircle(sx, sy, 2.2 * (1 - sp * 0.5));
+        const sp = (this.animTime * 2.1 + i * 0.37 + k * 0.5) % 1;
+        const sx = lx + Math.sin(this.animTime * 6.5 + i + k * 2.1) * 4.2;
+        const sy = ly - 10 - sp * 20;
+        sg.fillStyle(k === 0 ? 0xfef08a : 0xf97316, (1 - sp) * 0.88).fillCircle(sx, sy, 2.2 * (1 - sp * 0.5));
       }
       const lp = this.lightPoolSprites[i];
       if (lp) {
         const flicker = 1 + 0.08 * Math.sin(this.animTime * 8.4 + i * 1.7);
-        lp.setPosition(lx, ly + 8)
+        lp.setPosition(lx, ly + 4)
           .setTint(0xfb923c)
-          .setDisplaySize(128 * flicker, 80 * flicker)
-          .setAlpha((0.26 + 0.1 * Math.sin(this.animTime * 6.5 + i)) * phaseLight);
+          .setDisplaySize(172 * flicker, 108 * flicker)
+          .setAlpha((0.36 + 0.12 * Math.sin(this.animTime * 6.5 + i)) * phaseLight);
       }
     }
     const coreLight = this.lightPoolSprites[4];
     if (coreLight) {
       const cp = 1 + 0.06 * Math.sin(this.animTime * 3.1);
       coreLight
-        .setPosition(CORE_X, CORE_Y + 4)
-        .setTint(0xa78bfa)
-        .setDisplaySize(188 * cp, 114 * cp)
-        .setAlpha(0.24 * phaseLight);
+        .setPosition(CORE_X, CORE_Y - 4)
+        .setTint(0xc084fc)
+        .setDisplaySize(236 * cp, 148 * cp)
+        .setAlpha(0.32 * phaseLight + 0.08);
     }
     const heroLight = this.lightPoolSprites[5];
     if (heroLight) {
-      const heroAlpha = down ? 0 : s.phase === 'night' ? 0.34 : s.phase === 'evening' ? 0.2 : 0.04;
+      const heroAlpha = down ? 0 : s.phase === 'night' ? 0.38 : s.phase === 'evening' ? 0.24 : 0.12;
       heroLight
         .setPosition(s.player.x, s.player.y + 4)
         .setTint(0xfde68a)
-        .setDisplaySize(196, 118)
+        .setDisplaySize(208, 128)
         .setAlpha(heroAlpha);
     }
 
-    // 2.5D cartoon slate-ink drop shadow for Core pedestal
-    sg.fillStyle(0x0f172a, 0.16).fillEllipse(CORE_X + 5, CORE_Y + 20, 90, 34);
-    sg.fillStyle(0x0f172a, 0.25).fillEllipse(CORE_X + 3, CORE_Y + 18, 70, 24);
-    const corePulse = 0.26 + 0.12 * Math.sin(this.animTime * 3.2);
-    sg.lineStyle(2.5, 0xd8b4fe, corePulse).strokeEllipse(CORE_X, CORE_Y + 6, 98 + Math.sin(this.animTime * 2.5) * 6, 62 + Math.sin(this.animTime * 2.5) * 4);
+    // 2.5D drop shadow + subtle luminous Violet pedestal ring for Core
+    sg.fillStyle(0x0f172a, 0.18).fillEllipse(CORE_X + 5, CORE_Y + 20, 96, 36);
+    sg.fillStyle(0x0f172a, 0.26).fillEllipse(CORE_X + 3, CORE_Y + 18, 74, 26);
+    const corePulse = 0.28 + 0.12 * Math.sin(this.animTime * 3.2);
+    sg.lineStyle(2.2, 0xd8b4fe, corePulse).strokeEllipse(CORE_X, CORE_Y + 6, 104 + Math.sin(this.animTime * 2.5) * 6, 66 + Math.sin(this.animTime * 2.5) * 4);
 
     const heroNextFacing = resolveFacing(move.x, move.y, this.heroFacing, this.heroFlipX);
     this.heroFacing = heroNextFacing.dir;
@@ -826,9 +854,12 @@ export class GameScene extends Phaser.Scene {
     this.playerSprite.setFlipX(this.heroFlipX);
     this.playerSprite.setPosition(s.player.x, s.player.y - 12);
     this.playerSprite.setDepth(this.depthAtY(s.player.y));
-    // 2.5D penumbra + contact shadow beneath feet
-    sg.fillStyle(0x0f172a, down ? 0.12 : 0.16).fillEllipse(s.player.x + 3, s.player.y + 13, 38, 16);
-    sg.fillStyle(0x0f172a, down ? 0.18 : 0.28).fillEllipse(s.player.x + 1, s.player.y + 11, 26, 11);
+    // 2.5D penumbra + contact shadow + crisp readable cyan Hero ground ring beneath feet
+    sg.fillStyle(0x0f172a, down ? 0.12 : 0.18).fillEllipse(s.player.x + 3, s.player.y + 13, 38, 16);
+    sg.fillStyle(0x0f172a, down ? 0.18 : 0.30).fillEllipse(s.player.x + 1, s.player.y + 11, 26, 11);
+    if (!down) {
+      sg.lineStyle(1.4, 0x38bdf8, 0.38).strokeEllipse(s.player.x, s.player.y + 11, 30, 13);
+    }
 
     if (!down && this.castPoseLeft > 0) {
       const auraAlpha = Math.min(1, this.castPoseLeft / 0.24) * 0.72;
@@ -2826,6 +2857,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawWorld(): void {
     const map = RunRng.fromSeed(this.state.seed).get('map');
+    const hasDecals = this.textures.exists('world_decals');
     if (this.textures.exists('tile_ground_01')) {
       const rt = this.add.renderTexture(0, 0, WORLD, WORLD).setOrigin(0).setDepth(0);
       rt.beginDraw();
@@ -2833,6 +2865,16 @@ export class GameScene extends Phaser.Scene {
         for (let tx = 0; tx < WORLD; tx += 128) {
           const tileIdx = map.int(1, 5);
           rt.batchDrawFrame(`tile_ground_0${tileIdx}`, undefined, tx, ty);
+        }
+      }
+      // Bake non-repeating organic meadow wildflowers, clover & mossy pebbles directly into static terrain
+      if (hasDecals) {
+        for (let d = 0; d < 170; d++) {
+          const dx = map.int(64, WORLD - 64);
+          const dy = map.int(64, WORLD - 64);
+          if (Math.hypot(dx - CORE_X, dy - CORE_Y) < 250) continue;
+          const frameIdx = map.int(0, 3);
+          rt.batchDrawFrame('world_decals', frameIdx, dx - 32, dy - 32);
         }
       }
       rt.endDraw();
@@ -2855,40 +2897,47 @@ export class GameScene extends Phaser.Scene {
       const grx = map.int(140, 290);
       const gry = map.int(90, 185);
       if (i % 2 === 0) {
-        gRoads.fillStyle(0x86efac, 0.065).fillEllipse(gx, gy, grx, gry);
+        gRoads.fillStyle(0xbef264, 0.085).fillEllipse(gx, gy, grx, gry);
       } else {
-        gRoads.fillStyle(0x14532d, 0.085).fillEllipse(gx, gy, grx, gry);
+        gRoads.fillStyle(0x064e3b, 0.13).fillEllipse(gx, gy, grx, gry);
       }
     }
 
-    // Outer sanctuary carved stone boundary ring + 8 glowing cyan crystal pylons (concept-art silhouette)
-    gRoads.lineStyle(12, 0x1e293b, 0.24).strokeEllipse(CORE_X, plazaY, 1080, 620);
-    gRoads.lineStyle(5, 0xcbd5e1, 0.34).strokeEllipse(CORE_X, plazaY, 1080, 620);
-    gRoads.lineStyle(2, 0x38bdf8, 0.24).strokeEllipse(CORE_X, plazaY, 1080, 620);
+    // Warm sunlit clearing glow around Sanctuary + subtle darker mossy perimeter outside ring
+    gRoads.fillStyle(0x052e16, 0.11).fillRect(0, 0, WORLD, WORLD);
+    gRoads.fillStyle(0xbef264, 0.08).fillEllipse(CORE_X - 40, plazaY - 30, 1240, 740);
+
+    // Outer sanctuary recessed stone boundary curb + 8 3D-shaded cyan crystal pylons
+    gRoads.lineStyle(18, 0x1e293b, 0.24).strokeEllipse(CORE_X, plazaY + 2, 1082, 622);
+    gRoads.lineStyle(10, 0x475569, 0.36).strokeEllipse(CORE_X, plazaY + 1, 1080, 620);
+    gRoads.lineStyle(4, 0xcbd5e1, 0.32).strokeEllipse(CORE_X - 1, plazaY - 1, 1078, 618);
+    gRoads.lineStyle(1.8, 0x38bdf8, 0.22).strokeEllipse(CORE_X, plazaY, 1080, 620);
     for (let k = 0; k < 8; k++) {
       const a = (k * Math.PI * 2) / 8 + Math.PI / 8;
       const sx = CORE_X + Math.cos(a) * 540;
       const sy = plazaY + Math.sin(a) * 310;
-      gRoads.fillStyle(0x38bdf8, 0.22).fillEllipse(sx, sy - 6, 44, 24);
-      gRoads.fillStyle(0x0f172a, 0.32).fillEllipse(sx + 2, sy + 5, 28, 15);
-      gRoads.fillStyle(0x64748b, 0.94).fillEllipse(sx, sy + 1, 24, 13);
-      gRoads.lineStyle(1.4, 0x0f172a, 0.78).strokeEllipse(sx, sy + 1, 24, 13);
-      // Upright glowing azure diamond pylon
-      gRoads.fillStyle(0x0284c7, 1).fillTriangle(sx, sy - 16, sx + 6.5, sy - 4, sx, sy + 2);
-      gRoads.fillStyle(0x7dd3fc, 1).fillTriangle(sx, sy - 16, sx - 6.5, sy - 4, sx, sy + 2);
-      gRoads.fillStyle(0xe0f2fe, 0.9).fillCircle(sx - 1, sy - 7, 1.8);
-      gRoads.lineStyle(1.2, 0x0f172a, 0.85).strokeTriangle(sx - 6.5, sy - 4, sx, sy - 16, sx + 6.5, sy - 4);
+      gRoads.fillStyle(0x38bdf8, 0.24).fillEllipse(sx, sy - 6, 54, 30);
+      gRoads.fillStyle(0x07121b, 0.34).fillEllipse(sx + 5, sy + 6, 34, 17);
+      // 3D beveled stone plinth
+      gRoads.fillStyle(0x475569, 0.96).fillEllipse(sx, sy + 2, 26, 14);
+      gRoads.fillStyle(0x94a3b8, 0.95).fillEllipse(sx - 1, sy, 22, 11);
+      // Shaded azure crystal prism (sunlit left facet + deep sapphire right facet, no chunky black outline)
+      gRoads.fillStyle(0x0369a1, 1).fillTriangle(sx, sy - 18, sx + 7, sy - 3, sx, sy + 2);
+      gRoads.fillStyle(0x7dd3fc, 1).fillTriangle(sx, sy - 18, sx - 7, sy - 3, sx, sy + 2);
+      gRoads.fillStyle(0xe0f2fe, 0.92).fillTriangle(sx, sy - 18, sx - 3.5, sy - 7, sx, sy - 2);
     }
 
-    const stoneTones = [0xcbd5e1, 0xb8c0cc, 0xd6d3d1, 0xa8a29e];
+    const stoneTones = [0x94a3b8, 0x8795a6, 0xa8a29e, 0x7c8a99];
     const drawNaturalSlab = (fx: number, fy: number, w: number, h: number, idx: number, milestone = false) => {
       const base = stoneTones[idx % stoneTones.length];
-      gRoads.fillStyle(0x0f172a, 0.24).fillEllipse(fx + 2, fy + 3.5, w + 2, h + 1);
-      gRoads.fillStyle(base, 0.94).fillEllipse(fx, fy, w, h);
-      gRoads.fillStyle(0xe2e8f0, 0.42).fillEllipse(fx - 1, fy - h * 0.16, Math.max(6, w * 0.68), Math.max(4, h * 0.46));
-      gRoads.lineStyle(1.4, 0x1e293b, 0.62).strokeEllipse(fx, fy, w, h);
+      // Embedded mossy earth AO rim + directional shadow + 3D stone bevel (no flat ink loop!)
+      gRoads.fillStyle(0x1f291c, 0.38).fillEllipse(fx + 2, fy + 3, w + 5, h + 3.5);
+      gRoads.fillStyle(0x475569, 0.94).fillEllipse(fx + 0.8, fy + 2.2, w, h);
+      gRoads.fillStyle(base, 0.96).fillEllipse(fx, fy, w, h);
+      gRoads.fillStyle(0xe2e8f0, 0.48).fillEllipse(fx - w * 0.08, fy - h * 0.16, Math.max(5, w * 0.65), Math.max(3.5, h * 0.45));
       if (milestone) {
-        gRoads.lineStyle(1.5, 0x38bdf8, 0.58).strokeEllipse(fx, fy, w * 0.5, h * 0.5);
+        gRoads.fillStyle(0x38bdf8, 0.18).fillEllipse(fx, fy, w * 0.72, h * 0.72);
+        gRoads.lineStyle(1.4, 0x7dd3fc, 0.65).strokeEllipse(fx, fy, w * 0.52, h * 0.52);
       }
     };
 
@@ -2941,24 +2990,29 @@ export class GameScene extends Phaser.Scene {
       this.add.image(CORE_X, plazaY, 'sanctuary_plaza').setDepth(1.5);
     }
 
-    // Deterministic 2.5D world props (oak trees, crystal clusters, mossy shrine arches, waystones) sorted by Y depth.
+    // Deterministic 2.5D world props (oak trees, crystal clusters, mossy shrine arches, waystones) with min spacing & organic offset.
     const gPropShadows = this.add.graphics().setDepth(2.2);
     const hasProps = this.textures.exists('world_props');
-    for (let i = 0; i < 84; i++) {
-      const x = map.int(1, MAP_TILES - 2) * TILE + TILE / 2;
-      const y = map.int(1, MAP_TILES - 2) * TILE + TILE / 2;
+    const placedProps: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < 110 && placedProps.length < 64; i++) {
+      const x = map.int(1, MAP_TILES - 2) * TILE + TILE / 2 + map.int(-14, 14);
+      const y = map.int(1, MAP_TILES - 2) * TILE + TILE / 2 + map.int(-14, 14);
       const kind = map.int(0, 3);
-      if (Math.hypot(x - CORE_X, y - CORE_Y) < 228) continue;
-      if ((Math.abs(x - CORE_X) < 52 && Math.abs(y - plazaY) < 560) || (Math.abs(y - plazaY) < 42 && Math.abs(x - CORE_X) < 800)) {
+      if (Math.hypot(x - CORE_X, y - CORE_Y) < 245) continue;
+      if ((Math.abs(x - CORE_X) < 58 && Math.abs(y - plazaY) < 560) || (Math.abs(y - plazaY) < 46 && Math.abs(x - CORE_X) < 800)) {
         continue;
       }
+      if (placedProps.some((p) => Math.hypot(p.x - x, p.y - y) < 108)) continue;
+      placedProps.push({ x, y });
       if (hasProps) {
-        gPropShadows.fillStyle(0x0f172a, 0.14).fillEllipse(x + 4, y + 7, 50, 20);
-        gPropShadows.fillStyle(0x0f172a, 0.24).fillEllipse(x + 2, y + 5, 36, 14);
+        const sc = 0.56 + ((i % 4) * 0.04);
+        // Directional lower-right cast shadow grounding props into the sunlit meadow
+        gPropShadows.fillStyle(0x07170e, 0.22).fillEllipse(x + 9, y + 7, 58 * (sc / 0.62), 22 * (sc / 0.62));
+        gPropShadows.fillStyle(0x07170e, 0.34).fillEllipse(x + 4, y + 5, 38 * (sc / 0.62), 14 * (sc / 0.62));
         this.add
           .sprite(x, y, 'world_props', kind)
           .setOrigin(0.5, 0.80)
-          .setScale(0.62)
+          .setScale(sc)
           .setDepth(this.depthAtY(y));
       } else {
         gPropShadows.fillStyle(0x2d6a4f, 0.9).fillCircle(x, y, 8);
@@ -2971,13 +3025,15 @@ export class GameScene extends Phaser.Scene {
       .setScale(1.06)
       .setDepth(this.depthAtY(CORE_Y));
     this.add
-      .text(CORE_X, CORE_Y + 46, 'แกนฐาน', {
+      .text(CORE_X, CORE_Y + 54, 'แกนฐาน', {
         fontFamily: 'system-ui, sans-serif',
-        fontSize: '14px',
+        fontSize: '13px',
         fontStyle: 'bold',
         color: '#f3e8ff',
+        backgroundColor: '#0f172acc',
         stroke: '#090d16',
-        strokeThickness: 4,
+        strokeThickness: 3,
+        padding: { x: 7, y: 2 },
       })
       .setOrigin(0.5)
       .setDepth(this.depthAtY(CORE_Y) + 0.1);
