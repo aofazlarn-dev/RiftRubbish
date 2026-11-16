@@ -73,6 +73,30 @@ const MONSTER_SPRITE: Record<string, string> = {
   spirit: 'mob_fog_wraith_walk',
   rift_wolf: 'elite_rift_wolf_walk',
 };
+
+/** Per-species visual scale multiplier for clear enemy silhouette hierarchy. */
+const MONSTER_VISUAL_SCALE: Record<string, number> = {
+  slime: 0.44,
+  bat: 0.48,
+  goblin: 0.52,
+  skeleton: 0.55,
+  spirit: 0.55,
+  golem: 0.64,
+  rift_wolf: 0.68,
+};
+
+type FacingDir = 'down' | 'side' | 'up';
+const FACING_DIRS: readonly FacingDir[] = ['down', 'side', 'up'];
+const FACING_ROW: Record<FacingDir, number> = { down: 0, side: 1, up: 2 };
+
+/** Resolves 3-row top-down sprite facing (`down` / `side` + `flipX` / `up`) from movement vector. */
+function resolveFacing(dx: number, dy: number, prevDir: FacingDir, prevFlipX: boolean): { dir: FacingDir; flipX: boolean } {
+  if (Math.hypot(dx, dy) < 0.01) return { dir: prevDir, flipX: prevFlipX };
+  if (Math.abs(dy) > Math.abs(dx) * 1.1) {
+    return { dir: dy > 0 ? 'down' : 'up', flipX: false };
+  }
+  return { dir: 'side', flipX: dx !== 0 ? dx < 0 : prevFlipX };
+}
 const SKILL_ICON_IDS: readonly string[] = skillsFullJson.skills.map((s) => s.id);
 const CARD_FRAME_KEYS = ['common', 'rare', 'epic', 'legendary', 'mythic', 'fusion'] as const;
 const VFX_SHAPES = ['projectile', 'cone', 'ring', 'line'] as const;
@@ -195,6 +219,12 @@ export class GameScene extends Phaser.Scene {
   private comboWindow = 0;
   private bossWarnShown = false;
   private seenElites = new Set<number>();
+  private heroFacing: FacingDir = 'down';
+  private heroFlipX = false;
+  private mobPrevPos = new Map<number, { x: number; y: number }>();
+  private mobFacing = new Map<number, { dir: FacingDir; flipX: boolean }>();
+  private bossPrevPos?: { x: number; y: number };
+  private bossFacing: { dir: FacingDir; flipX: boolean } = { dir: 'down', flipX: false };
   private systemToast!: Phaser.GameObjects.Text;
   private systemToastLeft = 0;
 
@@ -263,14 +293,27 @@ export class GameScene extends Phaser.Scene {
         repeat,
       });
     };
-    makeAnim('hero_idle', 2, 4, -1);
-    makeAnim('hero_walk', 4, 10, -1);
+    const makeDirectionalAnims = (texKey: string, cols: number, frameRate: number) => {
+      if (!this.textures.exists(texKey)) return;
+      FACING_DIRS.forEach((dir, row) => {
+        const key = `${texKey}_${dir}`;
+        if (this.anims.exists(key)) return;
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(texKey, { start: row * cols, end: row * cols + cols - 1 }),
+          frameRate,
+          repeat: -1,
+        });
+      });
+    };
+    makeDirectionalAnims('hero_idle', 2, 3);
+    makeDirectionalAnims('hero_walk', 4, 10);
     makeAnim('hero_death', 4, 8, 0);
     for (const key of Object.values(MONSTER_SPRITE)) {
-      makeAnim(key, 4, key === 'mob_bat_walk' ? 10 : 8, -1);
+      makeDirectionalAnims(key, 4, key === 'mob_bat_walk' ? 10 : 8);
     }
-    makeAnim('boss_bloodmoon_walk', 4, 8, -1);
-    makeAnim('boss_bloodmoon_enrage_walk', 4, 10, -1);
+    makeDirectionalAnims('boss_bloodmoon_walk', 4, 8);
+    makeDirectionalAnims('boss_bloodmoon_enrage_walk', 4, 10);
   }
 
   create(): void {
@@ -298,6 +341,12 @@ export class GameScene extends Phaser.Scene {
     this.comboWindow = 0;
     this.bossWarnShown = false;
     this.seenElites.clear();
+    this.heroFacing = 'down';
+    this.heroFlipX = false;
+    this.mobPrevPos.clear();
+    this.mobFacing.clear();
+    this.bossPrevPos = undefined;
+    this.bossFacing = { dir: 'down', flipX: false };
     this.bus.clear();
     this.ensureAnimations();
 
@@ -747,9 +796,11 @@ export class GameScene extends Phaser.Scene {
     const corePulse = 0.26 + 0.12 * Math.sin(this.animTime * 3.2);
     sg.lineStyle(2.5, 0xd8b4fe, corePulse).strokeEllipse(CORE_X, CORE_Y + 6, 98 + Math.sin(this.animTime * 2.5) * 6, 62 + Math.sin(this.animTime * 2.5) * 4);
 
-    if (move.x !== 0) this.playerSprite.setFlipX(move.x < 0);
-    const bob = !down && moving ? Math.abs(Math.sin(this.animTime * 14)) * 3.5 : 0;
-    this.playerSprite.setPosition(s.player.x, s.player.y - 7 - bob);
+    const heroNextFacing = resolveFacing(move.x, move.y, this.heroFacing, this.heroFlipX);
+    this.heroFacing = heroNextFacing.dir;
+    this.heroFlipX = heroNextFacing.flipX;
+    this.playerSprite.setFlipX(this.heroFlipX);
+    this.playerSprite.setPosition(s.player.x, s.player.y - 7);
     this.playerSprite.setDepth(this.depthAtY(s.player.y));
     // 2.5D penumbra + contact shadow beneath feet
     sg.fillStyle(0x0f172a, down ? 0.12 : 0.16).fillEllipse(s.player.x + 3, s.player.y + 13, 38, 16);
@@ -785,18 +836,21 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (down) {
-      this.playerSprite.setAlpha(0.55).clearTint().setScale(0.54, 0.54).setRotation(0);
+      this.playerSprite.setFlipX(false).setAlpha(0.75).clearTint().setScale(0.58, 0.58).setRotation(0);
       if (this.playerSprite.anims.currentAnim?.key !== 'hero_death') this.playerSprite.play('hero_death', true);
     } else if (s.invulnLeft > 0) {
-      this.playerSprite.setAlpha(0.88).setTexture('hero_hit', 0).setTint(0xff8080).setScale(0.58, 0.51).setRotation(0);
+      this.playerSprite
+        .setAlpha(0.92)
+        .setTexture('hero_hit', FACING_ROW[this.heroFacing])
+        .setTint(0xff9999)
+        .setScale(0.58, 0.58)
+        .setRotation(0);
     } else {
-      this.playerSprite.setAlpha(1).clearTint();
-      this.playerSprite.play(moving ? 'hero_walk' : 'hero_idle', true);
-      const breath = moving ? Math.sin(this.animTime * 14) * 0.045 : Math.sin(this.animTime * 4.2) * 0.04;
-      const castPop = this.castPoseLeft > 0 ? 1.08 : 1;
-      this.playerSprite.setScale(0.54 * (1 - breath * 0.5) * castPop, 0.54 * (1 + breath) * castPop);
-      const tilt = moving ? Math.sin(this.animTime * 14) * 0.065 : this.castPoseLeft > 0 ? (this.playerSprite.flipX ? -0.09 : 0.09) : 0;
-      this.playerSprite.setRotation(tilt);
+      this.playerSprite.setAlpha(1).clearTint().setRotation(0);
+      const heroAnim = `${moving ? 'hero_walk' : 'hero_idle'}_${this.heroFacing}`;
+      if (this.playerSprite.anims.currentAnim?.key !== heroAnim) this.playerSprite.play(heroAnim, true);
+      const castPop = this.castPoseLeft > 0 ? 1.05 : 1;
+      this.playerSprite.setScale(0.58 * castPop, 0.58 * castPop);
     }
 
     // Core visual reflects damage state (frame 0 healthy, 1 damaged, 2 broken).
@@ -816,17 +870,30 @@ export class GameScene extends Phaser.Scene {
         sprite.setVisible(true);
         this.monsterSprites.set(m.uid, sprite);
       }
-      if (sprite.anims.currentAnim?.key !== texKey) sprite.play(texKey, true);
-      const targetX = m.defId === 'bat' || m.defId === 'spirit' || m.defId === 'rift_wolf' ? s.player.x : CORE_X;
-      sprite.setFlipX(m.x > targetX);
+      const prev = this.mobPrevPos.get(m.uid);
+      const aggroPlayer = m.defId === 'bat' || m.defId === 'spirit' || m.defId === 'rift_wolf';
+      const fallbackTargetX = aggroPlayer ? s.player.x : CORE_X;
+      const fallbackTargetY = aggroPlayer ? s.player.y : CORE_Y;
+      const stepDx = prev ? m.x - prev.x : 0;
+      const stepDy = prev ? m.y - prev.y : 0;
+      const useStep = prev && Math.hypot(stepDx, stepDy) > 0.05;
+      const dx = useStep ? stepDx : fallbackTargetX - m.x;
+      const dy = useStep ? stepDy : fallbackTargetY - m.y;
+      const prevFacing = this.mobFacing.get(m.uid) ?? { dir: 'down' as FacingDir, flipX: false };
+      const mobDir = resolveFacing(dx, dy, prevFacing.dir, prevFacing.flipX);
+      this.mobFacing.set(m.uid, mobDir);
+      this.mobPrevPos.set(m.uid, { x: m.x, y: m.y });
+
+      const mobAnim = `${texKey}_${mobDir.dir}`;
+      if (sprite.anims.currentAnim?.key !== mobAnim) sprite.play(mobAnim, true);
+      sprite.setFlipX(mobDir.flipX).setRotation(0);
 
       const airMob = m.defId === 'bat' || m.defId === 'spirit';
-      const phase = this.animTime * (airMob ? 14 : 9.5) + m.uid * 1.7;
-      const mobBob = airMob ? 5 + Math.sin(phase) * 4.5 : Math.abs(Math.sin(phase)) * 3;
-      const baseScale = m.affix ? 0.60 : 0.49;
-      const squash = Math.sin(phase * 2) * 0.055;
-      sprite.setScale(baseScale * (1 - squash * 0.5), baseScale * (1 + squash));
-      sprite.setRotation(Math.sin(phase) * 0.045);
+      const phase = this.animTime * (airMob ? 12 : 9.5) + m.uid * 1.7;
+      const mobBob = airMob ? 5 + Math.sin(phase) * 3.5 : 0;
+      const speciesScale = MONSTER_VISUAL_SCALE[m.defId] ?? 0.52;
+      const baseScale = speciesScale * (m.affix ? 1.18 : 1.0);
+      sprite.setScale(baseScale, baseScale);
 
       if (m.slowLeft > 0) sprite.setTint(0x80d8ff);
       else if (m.affix) sprite.setTint(0xe0aaff);
@@ -834,7 +901,7 @@ export class GameScene extends Phaser.Scene {
       sprite.setPosition(m.x, m.y - 6 - mobBob).setDepth(this.depthAtY(m.y));
       sprite.setAlpha(m.slowLeft > 0 ? 0.8 : 1);
 
-      const shadowW = m.affix ? 36 : 28;
+      const shadowW = Math.round(speciesScale * 58 * (m.affix ? 1.2 : 1.0));
       sg.fillStyle(0x0f172a, 0.15).fillEllipse(m.x + 3, m.y + 13, shadowW + 8, 14);
       sg.fillStyle(0x0f172a, 0.26).fillEllipse(m.x + 1, m.y + 11, shadowW, 10);
       if (m.affix) {
@@ -846,17 +913,28 @@ export class GameScene extends Phaser.Scene {
       sprite.setVisible(false);
       this.spritePool.push(sprite);
       this.monsterSprites.delete(uid);
+      this.mobPrevPos.delete(uid);
+      this.mobFacing.delete(uid);
     }
 
     const boss = s.boss;
     const bossAlive = !!boss && boss.rules.hp > 0;
     this.bossSprite.setVisible(bossAlive);
     if (boss && bossAlive) {
-      const bossBob = Math.sin(this.animTime * 5) * 4.5;
-      this.bossSprite.setPosition(boss.x, boss.y - 16 - bossBob).setDepth(this.depthAtY(boss.y));
-      const bossAnim = boss.rules.enraged ? 'boss_bloodmoon_enrage_walk' : 'boss_bloodmoon_walk';
+      const bDx = this.bossPrevPos && Math.hypot(boss.x - this.bossPrevPos.x, boss.y - this.bossPrevPos.y) > 0.05
+        ? boss.x - this.bossPrevPos.x
+        : s.player.x - boss.x;
+      const bDy = this.bossPrevPos && Math.hypot(boss.x - this.bossPrevPos.x, boss.y - this.bossPrevPos.y) > 0.05
+        ? boss.y - this.bossPrevPos.y
+        : s.player.y - boss.y;
+      this.bossPrevPos = { x: boss.x, y: boss.y };
+      this.bossFacing = resolveFacing(bDx, bDy, this.bossFacing.dir, this.bossFacing.flipX);
+
+      this.bossSprite.setPosition(boss.x, boss.y - 16).setDepth(this.depthAtY(boss.y)).setRotation(0);
+      const bossBase = boss.rules.enraged ? 'boss_bloodmoon_enrage_walk' : 'boss_bloodmoon_walk';
+      const bossAnim = `${bossBase}_${this.bossFacing.dir}`;
       if (this.bossSprite.anims.currentAnim?.key !== bossAnim) this.bossSprite.play(bossAnim, true);
-      this.bossSprite.setFlipX(boss.x > s.player.x);
+      this.bossSprite.setFlipX(this.bossFacing.flipX);
       sg.fillStyle(0x0f172a, 0.18).fillEllipse(boss.x + 6, boss.y + 38, 108, 36);
       sg.fillStyle(0x0f172a, 0.28).fillEllipse(boss.x + 2, boss.y + 34, 86, 28);
       sg.lineStyle(2.5, boss.rules.enraged ? 0xff4d79 : 0xf43f5e, 0.65).strokeEllipse(boss.x, boss.y + 34, 104, 38);
