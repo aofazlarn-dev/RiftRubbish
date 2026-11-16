@@ -6,7 +6,7 @@ import type Phaser from 'phaser';
  */
 export const RO_PALETTE = {
   windowOuterBorder: 0x0b111e,
-  windowBevelLight: 0x9bb5dc,
+  windowBevelLight: 0xe5c158,
   windowBevelDark: 0x2c3e5e,
   windowGoldAccent: 0xe5c158,
   windowBody: 0x182238,
@@ -16,7 +16,7 @@ export const RO_PALETTE = {
   rowSelectedBg: 0x27476e,
   headerTop: 0x3b5b8c,
   headerBottom: 0x253b61,
-  headerHighlight: 0x93c5fd,
+  headerHighlight: 0xfde68a,
   headerCrimsonTop: 0x7f1d3d,
   headerCrimsonBottom: 0x4c1127,
   hpFill: 0x22c55e,
@@ -170,9 +170,9 @@ export function drawRoWindow(
   g.lineStyle(1.5, RO_PALETTE.windowBevelLight, 0.85).strokeRoundedRect(x + 1, y + 1, w - 2, h - 2, 5);
   g.lineStyle(1, RO_PALETTE.windowBevelDark, 0.9).strokeRoundedRect(x + 2, y + 2, w - 4, h - 4, 4);
 
-  // Brass/gold corner L-ticks for RO-Rift signature trim
-  const tick = 7;
-  g.lineStyle(2, RO_PALETTE.windowGoldAccent, 0.92);
+  // Brass/gold corner L-ticks & ornate filigree studs for fantasy RPG trim
+  const tick = 8;
+  g.lineStyle(2, RO_PALETTE.windowGoldAccent, 0.95);
   // Top-left
   g.lineBetween(x + 1, y + tick, x + 1, y + 1);
   g.lineBetween(x + 1, y + 1, x + tick, y + 1);
@@ -185,6 +185,16 @@ export function drawRoWindow(
   // Bottom-right
   g.lineBetween(x + w - tick, y + h - 1, x + w - 1, y + h - 1);
   g.lineBetween(x + w - 1, y + h - tick, x + w - 1, y + h - 1);
+  // Corner gold studs
+  g.fillStyle(RO_PALETTE.windowGoldAccent, 0.95);
+  for (const [cx, cy] of [
+    [x + 2, y + 2],
+    [x + w - 2, y + 2],
+    [x + 2, y + h - 2],
+    [x + w - 2, y + h - 2],
+  ]) {
+    g.fillCircle(cx, cy, 2);
+  }
 }
 
 /**
