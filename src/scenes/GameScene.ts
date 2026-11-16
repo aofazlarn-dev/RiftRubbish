@@ -76,13 +76,13 @@ const MONSTER_SPRITE: Record<string, string> = {
 
 /** Per-species visual scale multiplier for clear enemy silhouette hierarchy. */
 const MONSTER_VISUAL_SCALE: Record<string, number> = {
-  slime: 0.44,
+  slime: 0.35,
   bat: 0.50,
-  goblin: 0.58,
+  goblin: 0.56,
   skeleton: 0.60,
   spirit: 0.56,
-  golem: 0.70,
-  rift_wolf: 0.74,
+  golem: 0.72,
+  rift_wolf: 0.72,
 };
 
 type FacingDir = 'down' | 'side' | 'up';
