@@ -179,6 +179,13 @@ export class GameScene extends Phaser.Scene {
   private popupPool: Phaser.GameObjects.Text[] = [];
   private animTime = 0;
   private castPoseLeft = 0;
+  private castDuration = 0.28;
+  private castAngle = Math.PI / 2;
+  private castTriggerSeq = 0;
+  private lastPlayedCastSeq = -1;
+  private heroHurtRecoilLeft = 0;
+  private prevInvulnLeft = 0;
+  private mobRecoil = new Map<number, { ox: number; oy: number; ttl: number }>();
   private sfx = new SoundEffects();
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
   private joystick!: VirtualJoystick;
@@ -252,10 +259,11 @@ export class GameScene extends Phaser.Scene {
     this.load.spritesheet('world_decals', `assets/tiles/world_decals.png${v}`, { frameWidth: 128, frameHeight: 128 });
     this.load.spritesheet('gather_nodes', `assets/tiles/gather_nodes.png${v}`, { frameWidth: 160, frameHeight: 160 });
     this.load.spritesheet('base_core', `assets/sprites/base_core.png${v}`, { frameWidth: 160, frameHeight: 160 });
-    this.load.spritesheet('hero_idle', 'assets/sprites/hero_idle.png', { frameWidth: 128, frameHeight: 128 });
-    this.load.spritesheet('hero_walk', 'assets/sprites/hero_walk.png', { frameWidth: 128, frameHeight: 128 });
-    this.load.spritesheet('hero_hit', 'assets/sprites/hero_hit.png', { frameWidth: 128, frameHeight: 128 });
-    this.load.spritesheet('hero_death', 'assets/sprites/hero_death.png', { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('hero_idle', `assets/sprites/hero_idle.png?v=studio2`, { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('hero_walk', `assets/sprites/hero_walk.png?v=studio2`, { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('hero_attack', `assets/sprites/hero_attack.png?v=studio2`, { frameWidth: 144, frameHeight: 144 });
+    this.load.spritesheet('hero_hit', `assets/sprites/hero_hit.png?v=studio2`, { frameWidth: 128, frameHeight: 128 });
+    this.load.spritesheet('hero_death', `assets/sprites/hero_death.png?v=studio2`, { frameWidth: 128, frameHeight: 128 });
 
     for (const key of [
       'mob_slime_walk',
@@ -301,7 +309,7 @@ export class GameScene extends Phaser.Scene {
         repeat,
       });
     };
-    const makeDirectionalAnims = (texKey: string, cols: number, frameRate: number) => {
+    const makeDirectionalAnims = (texKey: string, cols: number, frameRate: number, repeat = -1) => {
       if (!this.textures.exists(texKey)) return;
       FACING_DIRS.forEach((dir, row) => {
         const key = `${texKey}_${dir}`;
@@ -310,18 +318,20 @@ export class GameScene extends Phaser.Scene {
           key,
           frames: this.anims.generateFrameNumbers(texKey, { start: row * cols, end: row * cols + cols - 1 }),
           frameRate,
-          repeat: -1,
+          repeat,
         });
       });
     };
-    makeDirectionalAnims('hero_idle', 2, 3);
-    makeDirectionalAnims('hero_walk', 4, 10);
-    makeAnim('hero_death', 4, 8, 0);
+    makeDirectionalAnims('hero_idle', 4, 6, -1);
+    makeDirectionalAnims('hero_walk', 4, 11, -1);
+    makeDirectionalAnims('hero_attack', 4, 15, 0);
+    makeAnim('hero_death', 4, 9, 0);
     for (const key of Object.values(MONSTER_SPRITE)) {
-      makeDirectionalAnims(key, 4, key === 'mob_bat_walk' ? 10 : 8);
+      const fps = key === 'mob_bat_walk' ? 12 : key === 'elite_rift_wolf_walk' ? 11 : 9;
+      makeDirectionalAnims(key, 4, fps, -1);
     }
-    makeDirectionalAnims('boss_bloodmoon_walk', 4, 8);
-    makeDirectionalAnims('boss_bloodmoon_enrage_walk', 4, 10);
+    makeDirectionalAnims('boss_bloodmoon_walk', 4, 9, -1);
+    makeDirectionalAnims('boss_bloodmoon_enrage_walk', 4, 11, -1);
   }
 
   create(): void {
@@ -339,6 +349,12 @@ export class GameScene extends Phaser.Scene {
     this.popupPool = [];
     this.animTime = 0;
     this.castPoseLeft = 0;
+    this.castAngle = Math.PI / 2;
+    this.castTriggerSeq = 0;
+    this.lastPlayedCastSeq = -1;
+    this.heroHurtRecoilLeft = 0;
+    this.prevInvulnLeft = 0;
+    this.mobRecoil.clear();
     this.overlay = undefined;
     this.overlayKey = '';
     this.skillDock = undefined;
@@ -456,7 +472,11 @@ export class GameScene extends Phaser.Scene {
       });
     }
     this.bossSprite = this.add.sprite(0, 0, 'boss_bloodmoon_walk').setScale(1.18).setDepth(9).setVisible(false);
-    this.playerSprite = this.add.sprite(this.state.player.x, this.state.player.y, 'hero_idle').setScale(0.58).setDepth(this.depthAtY(this.state.player.y));
+    this.playerSprite = this.add
+      .sprite(this.state.player.x, this.state.player.y + 12, 'hero_idle')
+      .setOrigin(0.5, 0.94)
+      .setScale(0.58)
+      .setDepth(this.depthAtY(this.state.player.y));
     this.cameras.main.setBounds(0, 0, WORLD, WORLD).startFollow(this.playerSprite, true, 0.15, 0.15);
 
     this.phaseShade = this.add
@@ -702,15 +722,26 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(deltaMs / 1000, 0.1); // clamp long frames (tab switch, GC pause)
     this.animTime += dt;
     if (this.castPoseLeft > 0) this.castPoseLeft = Math.max(0, this.castPoseLeft - dt);
+    if (this.heroHurtRecoilLeft > 0) this.heroHurtRecoilLeft = Math.max(0, this.heroHurtRecoilLeft - dt);
     if (this.comboWindow > 0) {
       this.comboWindow = Math.max(0, this.comboWindow - dt);
       if (this.comboWindow === 0) this.comboCount = 0;
     }
     if (!this.eveningPending && !this.tutorialPending && !this.codexOpen) {
       const fx = stepRun(this.state, this.rng, this.readInput(), dt, this.data_, this.bus);
-      if (fx.some((f) => !f.missed)) {
+      if (this.state.invulnLeft > this.prevInvulnLeft + 0.05) {
+        this.heroHurtRecoilLeft = 0.22;
+      }
+      this.prevInvulnLeft = this.state.invulnLeft;
+
+      const hitFx = fx.find((f) => !f.missed && f.shape === 'cone') ?? fx.find((f) => !f.missed);
+      if (hitFx) {
         this.sfx.playCast();
-        this.castPoseLeft = 0.24;
+        this.castPoseLeft = this.castDuration;
+        this.castTriggerSeq++;
+        if (Math.hypot(hitFx.x2 - this.state.player.x, hitFx.y2 - this.state.player.y) > 4) {
+          this.castAngle = Math.atan2(hitFx.y2 - this.state.player.y, hitFx.x2 - this.state.player.x);
+        }
         if (fx.some((f) => !f.missed && (f.skillId === 'R01a' || (f.radius ?? 0) >= 90))) {
           this.cameras.main.shake(90, 0.0022, false);
         }
@@ -851,21 +882,63 @@ export class GameScene extends Phaser.Scene {
     const corePulse = 0.28 + 0.12 * Math.sin(this.animTime * 3.2);
     sg.lineStyle(2.2, 0xd8b4fe, corePulse).strokeEllipse(CORE_X, CORE_Y + 6, 104 + Math.sin(this.animTime * 2.5) * 6, 66 + Math.sin(this.animTime * 2.5) * 4);
 
-    const heroNextFacing = resolveFacing(move.x, move.y, this.heroFacing, this.heroFlipX);
+    // Face toward skill target during active attack swing, otherwise smoothly toward movement vector
+    const aimDx = this.castPoseLeft > 0.04 ? Math.cos(this.castAngle) : move.x;
+    const aimDy = this.castPoseLeft > 0.04 ? Math.sin(this.castAngle) : move.y;
+    const heroNextFacing = resolveFacing(aimDx, aimDy, this.heroFacing, this.heroFlipX);
     this.heroFacing = heroNextFacing.dir;
     this.heroFlipX = heroNextFacing.flipX;
     this.playerSprite.setFlipX(this.heroFlipX);
-    this.playerSprite.setPosition(s.player.x, s.player.y - 12);
+
+    // Kinetic follow-through offsets (attack lunge, walk stride hop, hurt stagger) anchored cleanly at feet
+    let kinOffX = 0;
+    let kinOffY = 0;
+    let scaleX = 0.58;
+    let scaleY = 0.58;
+    let rotRad = 0;
+
+    if (!down && this.heroHurtRecoilLeft > 0) {
+      const rNorm = this.heroHurtRecoilLeft / 0.22;
+      kinOffY = -Math.sin(rNorm * Math.PI) * 5;
+      kinOffX = (this.heroFlipX ? 1 : -1) * rNorm * 4;
+      rotRad = (this.heroFlipX ? 0.1 : -0.1) * rNorm;
+      scaleX = 0.58 * (1 + rNorm * 0.06);
+      scaleY = 0.58 * (1 - rNorm * 0.05);
+    } else if (!down && this.castPoseLeft > 0) {
+      const tNorm = 1 - Math.min(1, this.castPoseLeft / this.castDuration);
+      const lunge = Math.sin(Math.min(1, tNorm * 1.15) * Math.PI) * 7.5;
+      kinOffX = Math.cos(this.castAngle) * lunge;
+      kinOffY = Math.sin(this.castAngle) * lunge * 0.65;
+      const apex = Math.sin(tNorm * Math.PI);
+      scaleX = 0.58 * (1 + apex * 0.075);
+      scaleY = 0.58 * (1 - apex * 0.045);
+      rotRad = Math.cos(this.castAngle) * apex * 0.045;
+    } else if (!down && moving) {
+      const stepPhase = this.animTime * 11.5;
+      const hop = Math.abs(Math.sin(stepPhase));
+      kinOffY = -hop * 2.4;
+      const strideSquash = Math.sin(stepPhase * 2) * 0.022;
+      scaleX = 0.58 * (1 + strideSquash);
+      scaleY = 0.58 * (1 - strideSquash);
+      rotRad = move.x !== 0 ? Math.sign(move.x) * 0.032 : 0;
+    } else if (!down) {
+      // Smooth 60 FPS breathing chest elasticity layered with cape-sway frames
+      const breath = Math.sin(this.animTime * 2.8);
+      scaleY = 0.58 * (1 + breath * 0.018);
+      scaleX = 0.58 * (1 - breath * 0.012);
+    }
+
+    this.playerSprite.setPosition(s.player.x + kinOffX, s.player.y + 12 + kinOffY);
     this.playerSprite.setDepth(this.depthAtY(s.player.y));
     // 2.5D penumbra + contact shadow + crisp readable cyan Hero ground ring beneath feet
-    sg.fillStyle(0x0f172a, down ? 0.12 : 0.18).fillEllipse(s.player.x + 3, s.player.y + 13, 38, 16);
-    sg.fillStyle(0x0f172a, down ? 0.18 : 0.30).fillEllipse(s.player.x + 1, s.player.y + 11, 26, 11);
+    sg.fillStyle(0x0f172a, down ? 0.12 : 0.18).fillEllipse(s.player.x + kinOffX * 0.4 + 3, s.player.y + 13, 38, 16);
+    sg.fillStyle(0x0f172a, down ? 0.18 : 0.30).fillEllipse(s.player.x + kinOffX * 0.4 + 1, s.player.y + 11, 26, 11);
     if (!down) {
-      sg.lineStyle(1.4, 0x38bdf8, 0.38).strokeEllipse(s.player.x, s.player.y + 11, 30, 13);
+      sg.lineStyle(1.4, 0x38bdf8, 0.38).strokeEllipse(s.player.x + kinOffX * 0.3, s.player.y + 11, 30, 13);
     }
 
     if (!down && this.castPoseLeft > 0) {
-      const auraAlpha = Math.min(1, this.castPoseLeft / 0.24) * 0.72;
+      const auraAlpha = Math.min(1, this.castPoseLeft / this.castDuration) * 0.72;
       const ringPulse = 1 + (1 - auraAlpha) * 0.14;
       sg.lineStyle(2.5, 0xfbbf24, auraAlpha).strokeEllipse(s.player.x, s.player.y + 11, 56 * ringPulse, 26 * ringPulse);
       sg.lineStyle(1.8, 0x38bdf8, auraAlpha * 0.9).strokeEllipse(s.player.x, s.player.y + 11, 42 * ringPulse, 19 * ringPulse);
@@ -896,19 +969,28 @@ export class GameScene extends Phaser.Scene {
     if (down) {
       this.playerSprite.setFlipX(false).setAlpha(0.75).clearTint().setScale(0.58, 0.58).setRotation(0);
       if (this.playerSprite.anims.currentAnim?.key !== 'hero_death') this.playerSprite.play('hero_death', true);
-    } else if (s.invulnLeft > 0) {
+    } else if (this.heroHurtRecoilLeft > 0) {
       this.playerSprite
-        .setAlpha(0.92)
+        .setAlpha(0.95)
         .setTexture('hero_hit', FACING_ROW[this.heroFacing])
         .setTint(0xff9999)
-        .setScale(0.58, 0.58)
-        .setRotation(0);
+        .setScale(scaleX, scaleY)
+        .setRotation(rotRad);
+    } else if (this.castPoseLeft > 0 && this.textures.exists('hero_attack')) {
+      const iFrameAlpha = s.invulnLeft > 0 ? 0.65 + 0.3 * Math.sin(this.animTime * 28) : 1;
+      this.playerSprite.setAlpha(iFrameAlpha).clearTint().setScale(scaleX, scaleY).setRotation(rotRad);
+      const atkAnim = `hero_attack_${this.heroFacing}`;
+      if (this.lastPlayedCastSeq !== this.castTriggerSeq) {
+        this.lastPlayedCastSeq = this.castTriggerSeq;
+        this.playerSprite.play(atkAnim, false);
+      } else if (this.playerSprite.anims.currentAnim?.key !== atkAnim) {
+        this.playerSprite.play(atkAnim, true);
+      }
     } else {
-      this.playerSprite.setAlpha(1).clearTint().setRotation(0);
+      const iFrameAlpha = s.invulnLeft > 0 ? 0.65 + 0.3 * Math.sin(this.animTime * 28) : 1;
+      this.playerSprite.setAlpha(iFrameAlpha).clearTint().setScale(scaleX, scaleY).setRotation(rotRad);
       const heroAnim = `${moving ? 'hero_walk' : 'hero_idle'}_${this.heroFacing}`;
       if (this.playerSprite.anims.currentAnim?.key !== heroAnim) this.playerSprite.play(heroAnim, true);
-      const castPop = this.castPoseLeft > 0 ? 1.05 : 1;
-      this.playerSprite.setScale(0.58 * castPop, 0.58 * castPop);
     }
 
     // Core visual reflects damage state (frame 0 healthy, 1 damaged, 2 broken) with gentle levitation.
@@ -930,11 +1012,28 @@ export class GameScene extends Phaser.Scene {
         this.monsterSprites.set(m.uid, sprite);
       }
       const prevHp = this.mobPrevHp.get(m.uid) ?? m.hp;
-      if (m.hp < prevHp) this.mobFlashLeft.set(m.uid, 0.085);
+      if (m.hp < prevHp) {
+        this.mobFlashLeft.set(m.uid, 0.095);
+        const rx = m.x - s.player.x;
+        const ry = m.y - s.player.y;
+        const rLen = Math.hypot(rx, ry) || 1;
+        this.mobRecoil.set(m.uid, { ox: (rx / rLen) * 6.5, oy: (ry / rLen) * 5.0, ttl: 0.12 });
+      }
       this.mobPrevHp.set(m.uid, m.hp);
       const flashRem = Math.max(0, (this.mobFlashLeft.get(m.uid) ?? 0) - dt);
       if (flashRem > 0) this.mobFlashLeft.set(m.uid, flashRem);
       else this.mobFlashLeft.delete(m.uid);
+
+      const rec = this.mobRecoil.get(m.uid);
+      let recX = 0;
+      let recY = 0;
+      if (rec) {
+        rec.ttl = Math.max(0, rec.ttl - dt);
+        const recFrac = rec.ttl / 0.12;
+        recX = rec.ox * recFrac;
+        recY = rec.oy * recFrac;
+        if (rec.ttl <= 0) this.mobRecoil.delete(m.uid);
+      }
 
       const prev = this.mobPrevPos.get(m.uid);
       const aggroPlayer = m.defId === 'bat' || m.defId === 'spirit' || m.defId === 'rift_wolf';
@@ -952,26 +1051,40 @@ export class GameScene extends Phaser.Scene {
 
       const mobAnim = `${texKey}_${mobDir.dir}`;
       if (sprite.anims.currentAnim?.key !== mobAnim) sprite.play(mobAnim, true);
-      sprite.setFlipX(mobDir.flipX).setRotation(0);
+      sprite.setFlipX(mobDir.flipX);
 
       const airMob = m.defId === 'bat' || m.defId === 'spirit';
-      const phase = this.animTime * (airMob ? 12 : 9.5) + m.uid * 1.7;
-      const mobBob = airMob ? 5 + Math.sin(phase) * 3.5 : 0;
+      const isSlime = m.defId === 'slime';
+      const phase = this.animTime * (airMob ? 12 : isSlime ? 8.2 : 9.5) + m.uid * 1.7;
+      const hop = isSlime ? Math.max(0, Math.sin(phase)) : 0;
+      const mobBob = airMob ? 5 + Math.sin(phase) * 3.5 : isSlime ? hop * 4.5 : Math.abs(Math.sin(phase)) * 1.6;
       const speciesScale = MONSTER_VISUAL_SCALE[m.defId] ?? 0.52;
-      const hitPop = flashRem > 0 ? 1.09 : 1.0;
-      const baseScale = speciesScale * (m.affix ? 1.18 : 1.0) * hitPop;
-      sprite.setScale(baseScale, baseScale);
+      const baseScale = speciesScale * (m.affix ? 1.18 : 1.0);
+      let mScaleX = baseScale;
+      let mScaleY = baseScale;
+      if (isSlime) {
+        mScaleY = baseScale * (0.88 + hop * 0.22);
+        mScaleX = baseScale * (1.12 - hop * 0.14);
+      }
+      if (flashRem > 0) {
+        mScaleX *= 1.16;
+        mScaleY *= 0.86;
+      }
+      sprite.setScale(mScaleX, mScaleY);
+      const mobRot = airMob ? Math.sin(phase * 0.5) * 0.08 + Math.sign(dx) * 0.04 : 0;
+      sprite.setRotation(mobRot);
 
       if (flashRem > 0) sprite.setTintFill(0xffffff);
       else if (m.slowLeft > 0) sprite.setTint(0x80d8ff);
       else if (m.affix) sprite.setTint(0xe0aaff);
       else sprite.clearTint();
-      sprite.setPosition(m.x, m.y - 6 - mobBob).setDepth(this.depthAtY(m.y));
+      sprite.setPosition(m.x + recX, m.y - 6 - mobBob + recY).setDepth(this.depthAtY(m.y));
       sprite.setAlpha(m.slowLeft > 0 ? 0.8 : 1);
 
-      const shadowW = Math.round(speciesScale * 58 * (m.affix ? 1.2 : 1.0));
-      sg.fillStyle(0x0f172a, 0.15).fillEllipse(m.x + 3, m.y + 13, shadowW + 8, 14);
-      sg.fillStyle(0x0f172a, 0.26).fillEllipse(m.x + 1, m.y + 11, shadowW, 10);
+      const hopShadowShrink = isSlime ? 1 - hop * 0.18 : 1;
+      const shadowW = Math.round(speciesScale * 58 * (m.affix ? 1.2 : 1.0) * hopShadowShrink);
+      sg.fillStyle(0x0f172a, 0.15).fillEllipse(m.x + recX + 3, m.y + recY + 13, shadowW + 8, 14);
+      sg.fillStyle(0x0f172a, 0.26).fillEllipse(m.x + recX + 1, m.y + recY + 11, shadowW, 10);
       if (m.affix) {
         sg.lineStyle(1.8, 0xc084fc, 0.65).strokeEllipse(m.x, m.y + 11, shadowW + 14, 16);
       }
@@ -985,6 +1098,7 @@ export class GameScene extends Phaser.Scene {
       this.mobFacing.delete(uid);
       this.mobPrevHp.delete(uid);
       this.mobFlashLeft.delete(uid);
+      this.mobRecoil.delete(uid);
     }
 
     const boss = s.boss;
