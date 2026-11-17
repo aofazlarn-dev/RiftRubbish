@@ -1,22 +1,22 @@
 {
-  "_comment": "Night waves from docs/content/balance.md §5.1 and day patrols from §5.2. Nights 1–6 last 40 s. Night 7 is the boss with a background trickle. affixChance per monster (balance §4).",
-  "maxOnScreen": 40,
+  "_comment": "Night waves and expanded day patrols for higher encounter density. Nights 1–6 last 40 s. Night 7 is the boss with a background trickle. affixChance per monster (balance §4).",
+  "maxOnScreen": 64,
   "nights": [
-    { "night": 1, "affixChance": 0, "spawns": { "slime": 32, "bat": 8 } },
-    { "night": 2, "affixChance": 0, "spawns": { "slime": 30, "bat": 14, "goblin": 16 } },
-    { "night": 3, "affixChance": 0, "spawns": { "slime": 24, "bat": 18, "goblin": 20, "skeleton": 14 } },
-    { "night": 4, "affixChance": 0, "elite": "rift_wolf", "spawns": { "slime": 14, "bat": 14, "goblin": 16, "skeleton": 12, "golem": 3 } },
-    { "night": 5, "affixChance": 0.1, "spawns": { "slime": 10, "bat": 14, "goblin": 18, "skeleton": 14, "golem": 6, "spirit": 12 } },
-    { "night": 6, "affixChance": 0.2, "spawns": { "slime": 8, "bat": 12, "goblin": 20, "skeleton": 16, "golem": 8, "spirit": 16 } },
-    { "night": 7, "affixChance": 0.25, "boss": "blood_moon_king", "spawns": { "goblin": 16, "skeleton": 14, "golem": 6, "spirit": 14 } }
+    { "night": 1, "affixChance": 0, "spawns": { "slime": 46, "bat": 14 } },
+    { "night": 2, "affixChance": 0, "spawns": { "slime": 42, "bat": 20, "goblin": 22 } },
+    { "night": 3, "affixChance": 0, "spawns": { "slime": 34, "bat": 26, "goblin": 28, "skeleton": 18 } },
+    { "night": 4, "affixChance": 0, "elite": "rift_wolf", "spawns": { "slime": 20, "bat": 20, "goblin": 22, "skeleton": 16, "golem": 4 } },
+    { "night": 5, "affixChance": 0.1, "spawns": { "slime": 14, "bat": 20, "goblin": 26, "skeleton": 20, "golem": 8, "spirit": 16 } },
+    { "night": 6, "affixChance": 0.2, "spawns": { "slime": 12, "bat": 18, "goblin": 28, "skeleton": 22, "golem": 10, "spirit": 22 } },
+    { "night": 7, "affixChance": 0.25, "boss": "blood_moon_king", "spawns": { "goblin": 24, "skeleton": 20, "golem": 8, "spirit": 18 } }
   ],
   "days": [
-    { "day": 1, "groups": 6, "guaranteedNearPlayer": 8, "spawns": { "slime": 30, "bat": 6 } },
-    { "day": 2, "groups": 7, "spawns": { "slime": 24, "bat": 14, "goblin": 6 } },
-    { "day": 3, "groups": 7, "spawns": { "slime": 14, "bat": 14, "goblin": 16, "skeleton": 4 } },
-    { "day": 4, "groups": 8, "spawns": { "slime": 10, "bat": 14, "goblin": 18, "skeleton": 10 } },
-    { "day": 5, "groups": 8, "spawns": { "bat": 10, "goblin": 18, "skeleton": 16, "golem": 4, "spirit": 6 } },
-    { "day": 6, "groups": 8, "spawns": { "bat": 8, "goblin": 18, "skeleton": 16, "golem": 5, "spirit": 10 } },
-    { "day": 7, "groups": 8, "spawns": { "goblin": 18, "skeleton": 16, "golem": 5, "spirit": 12 } }
+    { "day": 1, "groups": 8, "guaranteedNearPlayer": 12, "spawns": { "slime": 44, "bat": 14 } },
+    { "day": 2, "groups": 9, "spawns": { "slime": 36, "bat": 20, "goblin": 12 } },
+    { "day": 3, "groups": 10, "spawns": { "slime": 22, "bat": 20, "goblin": 24, "skeleton": 10 } },
+    { "day": 4, "groups": 10, "spawns": { "slime": 14, "bat": 20, "goblin": 26, "skeleton": 18 } },
+    { "day": 5, "groups": 11, "spawns": { "bat": 16, "goblin": 26, "skeleton": 22, "golem": 6, "spirit": 12 } },
+    { "day": 6, "groups": 11, "spawns": { "bat": 14, "goblin": 26, "skeleton": 24, "golem": 8, "spirit": 16 } },
+    { "day": 7, "groups": 12, "spawns": { "goblin": 30, "skeleton": 28, "golem": 9, "spirit": 20 } }
   ]
 }

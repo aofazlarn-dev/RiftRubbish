@@ -154,8 +154,11 @@ export class GameScene extends Phaser.Scene {
   private wellLabel?: Phaser.GameObjects.Text;
   private nodeSprites: Phaser.GameObjects.Sprite[] = [];
   private chestSprites: Phaser.GameObjects.Sprite[] = [];
+  private worldPropSprites: Phaser.GameObjects.Sprite[] = [];
   private monsterSprites = new Map<number, Phaser.GameObjects.Sprite>();
   private spritePool: Phaser.GameObjects.Sprite[] = [];
+  private shadowPool: Phaser.GameObjects.Image[] = [];
+  private activeShadowSprites: Phaser.GameObjects.Image[] = [];
   private shadowGraphics!: Phaser.GameObjects.Graphics;
   private lightPoolSprites: Phaser.GameObjects.Image[] = [];
   private fxGraphics!: Phaser.GameObjects.Graphics;
@@ -192,6 +195,8 @@ export class GameScene extends Phaser.Scene {
   private hudGraphics!: Phaser.GameObjects.Graphics;
   private hudTitle!: Phaser.GameObjects.Text;
   private hudHeroPortrait?: Phaser.GameObjects.Sprite;
+  private hudPortraitFrame?: Phaser.GameObjects.Image;
+  private hudRadarFrame?: Phaser.GameObjects.Image;
   private hudHpText!: Phaser.GameObjects.Text;
   private hudCoreText!: Phaser.GameObjects.Text;
   private hudMetaText!: Phaser.GameObjects.Text;
@@ -202,10 +207,17 @@ export class GameScene extends Phaser.Scene {
   private muteBtn!: Phaser.GameObjects.Text;
   private codexBtn!: Phaser.GameObjects.Text;
   private restartBtn!: Phaser.GameObjects.Text;
+  private bottomBtnPlates = new Map<Phaser.GameObjects.Text, Phaser.GameObjects.Image>();
   private skillDock?: Phaser.GameObjects.Container;
   private skillDockKey = '';
   private dockTooltip?: Phaser.GameObjects.Container;
   private hudPanelH = 126;
+  private isCanvasRenderer = false;
+  private lowSpecBoot = false;
+  private hudLastDrawMs = -1000;
+  private lastHudHash = '';
+  private lastShadePhase = '';
+  private lastShadeSize = '';
   private phaseShade!: Phaser.GameObjects.Rectangle;
   private debug!: DebugOverlay;
   private fpsMonitor = new MobileFpsMonitor();
@@ -292,8 +304,12 @@ export class GameScene extends Phaser.Scene {
       this.load.image(`icon_${id}`, `assets/icons/${id}.png`);
     }
     for (const r of CARD_FRAME_KEYS) {
-      this.load.image(`card_frame_${r}`, `assets/ui/card_frame_${r}.png`);
+      this.load.image(`card_frame_${r}`, `assets/ui/card_frame_${r}.png?v=ui1`);
     }
+    this.load.image('ui_portrait_frame', 'assets/ui/ui_portrait_frame.png?v=ui1');
+    this.load.image('ui_radar_frame', 'assets/ui/ui_radar_frame.png?v=ui1');
+    this.load.image('ui_skill_slot', 'assets/ui/ui_skill_slot.png?v=ui1');
+    this.load.image('ui_button_plate', 'assets/ui/ui_button_plate.png?v=ui1');
     for (const shape of VFX_SHAPES) {
       this.load.image(`vfx_${shape}`, `assets/vfx/vfx_${shape}.png`);
     }
@@ -334,10 +350,26 @@ export class GameScene extends Phaser.Scene {
     makeDirectionalAnims('boss_bloodmoon_enrage_walk', 4, 11, -1);
   }
 
+  private isLowSpecMode(): boolean {
+    return this.lowSpecBoot || this.isCanvasRenderer || this.fpsMonitor.isLowEndFallbackActive();
+  }
+
   create(): void {
     this.data_ = loadRunData();
+    this.isCanvasRenderer = this.game.renderer.type === Phaser.CANVAS;
+    this.lowSpecBoot = !!(typeof window !== 'undefined' && (window as { __lowSpecRenderer?: boolean }).__lowSpecRenderer);
     this.monsterSprites.clear();
     this.spritePool = [];
+    this.shadowPool = [];
+    this.activeShadowSprites = [];
+    this.worldPropSprites = [];
+    this.bottomBtnPlates.clear();
+    this.hudPortraitFrame = undefined;
+    this.hudRadarFrame = undefined;
+    this.hudLastDrawMs = -1000;
+    this.lastHudHash = '';
+    this.lastShadePhase = '';
+    this.lastShadeSize = '';
     this.wellSprite = undefined;
     this.wellLabel = undefined;
     this.nodeSprites = [];
@@ -423,35 +455,57 @@ export class GameScene extends Phaser.Scene {
 
     this.drawWorld();
     this.shadowGraphics = this.add.graphics().setDepth(3.2);
-    if (!this.textures.exists('vfx_soft_glow') && typeof this.textures.createCanvas === 'function') {
-      const gTex = this.textures.createCanvas('vfx_soft_glow', 128, 128);
-      if (gTex) {
-        const gCtx = gTex.context;
-        const grad = gCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
-        grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        grad.addColorStop(0.28, 'rgba(255, 255, 255, 0.52)');
-        grad.addColorStop(0.65, 'rgba(255, 255, 255, 0.14)');
-        grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        gCtx.fillStyle = grad;
-        gCtx.fillRect(0, 0, 128, 128);
-        gTex.refresh();
+    if (!this.textures.exists('soft_shadow') && typeof this.textures.createCanvas === 'function') {
+      const sTex = this.textures.createCanvas('soft_shadow', 48, 24);
+      if (sTex) {
+        const sCtx = sTex.context;
+        sCtx.save();
+        sCtx.translate(24, 12);
+        sCtx.scale(1, 0.5);
+        const sGrad = sCtx.createRadialGradient(0, 0, 2, 0, 0, 22);
+        sGrad.addColorStop(0, 'rgba(9, 13, 24, 0.44)');
+        sGrad.addColorStop(0.55, 'rgba(9, 13, 24, 0.24)');
+        sGrad.addColorStop(1, 'rgba(9, 13, 24, 0)');
+        sCtx.fillStyle = sGrad;
+        sCtx.beginPath();
+        sCtx.arc(0, 0, 22, 0, Math.PI * 2);
+        sCtx.fill();
+        sCtx.restore();
+        sTex.refresh();
       }
     }
     this.lightPoolSprites = [];
-    const lightTexKey = this.textures.exists('vfx_soft_glow')
-      ? 'vfx_soft_glow'
-      : this.textures.exists('vfx_projectile')
-        ? 'vfx_projectile'
-        : null;
-    if (lightTexKey) {
-      for (let i = 0; i < 6; i++) {
-        this.lightPoolSprites.push(
-          this.add
-            .image(CORE_X, CORE_Y, lightTexKey)
-            .setDepth(3.5)
-            .setBlendMode(Phaser.BlendModes.ADD)
-            .setAlpha(0),
-        );
+    const lowBoot = this.lowSpecBoot || this.isCanvasRenderer;
+    if (!lowBoot) {
+      if (!this.textures.exists('vfx_soft_glow') && typeof this.textures.createCanvas === 'function') {
+        const gTex = this.textures.createCanvas('vfx_soft_glow', 128, 128);
+        if (gTex) {
+          const gCtx = gTex.context;
+          const grad = gCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+          grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+          grad.addColorStop(0.28, 'rgba(255, 255, 255, 0.52)');
+          grad.addColorStop(0.65, 'rgba(255, 255, 255, 0.14)');
+          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          gCtx.fillStyle = grad;
+          gCtx.fillRect(0, 0, 128, 128);
+          gTex.refresh();
+        }
+      }
+      const lightTexKey = this.textures.exists('vfx_soft_glow')
+        ? 'vfx_soft_glow'
+        : this.textures.exists('vfx_projectile')
+          ? 'vfx_projectile'
+          : null;
+      if (lightTexKey) {
+        for (let i = 0; i < 6; i++) {
+          this.lightPoolSprites.push(
+            this.add
+              .image(CORE_X, CORE_Y, lightTexKey)
+              .setDepth(3.5)
+              .setBlendMode(Phaser.BlendModes.ADD)
+              .setAlpha(0),
+          );
+        }
       }
     }
     this.barGraphics = this.add.graphics().setDepth(20);
@@ -483,8 +537,9 @@ export class GameScene extends Phaser.Scene {
       .rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0)
       .setOrigin(0)
       .setScrollFactor(0)
-      .setDepth(500);
-    if (!this.textures.exists('vignette_radial') && typeof this.textures.createCanvas === 'function') {
+      .setDepth(500)
+      .setVisible(false);
+    if (!lowBoot && !this.textures.exists('vignette_radial') && typeof this.textures.createCanvas === 'function') {
       const cTex = this.textures.createCanvas('vignette_radial', 256, 256);
       if (cTex) {
         const ctx = cTex.context;
@@ -497,13 +552,13 @@ export class GameScene extends Phaser.Scene {
         cTex.refresh();
       }
     }
-    if (this.textures.exists('vignette_radial')) {
+    if (!lowBoot && this.textures.exists('vignette_radial')) {
       this.vignetteOverlay = this.add
         .image(0, 0, 'vignette_radial')
         .setOrigin(0)
         .setScrollFactor(0)
         .setDepth(501)
-        .setAlpha(0);
+        .setVisible(false);
     }
 
     const kb = this.input.keyboard!;
@@ -536,11 +591,18 @@ export class GameScene extends Phaser.Scene {
     this.hudGraphics = this.add.graphics().setScrollFactor(0).setDepth(890);
     if (this.textures.exists('hero_idle')) {
       this.hudHeroPortrait = this.add
-        .sprite(38, 66, 'hero_idle', 0)
-        .setCrop(24, 6, 80, 74)
-        .setScale(0.45)
+        .sprite(38, 62, 'hero_idle', 0)
+        .setCrop(26, 6, 76, 74)
+        .setScale(0.43)
         .setScrollFactor(0)
         .setDepth(900);
+    }
+    if (this.textures.exists('ui_portrait_frame')) {
+      this.hudPortraitFrame = this.add
+        .image(38, 57, 'ui_portrait_frame')
+        .setDisplaySize(54, 54)
+        .setScrollFactor(0)
+        .setDepth(901);
     }
     this.hudTitle = this.add
       .text(31, 15, '', {
@@ -612,15 +674,16 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false);
 
     const compactHud = this.scale.width < 440;
+    const hasBtnPlate = this.textures.exists('ui_button_plate');
     const btnStyle = {
       fontFamily: 'system-ui, sans-serif',
       fontSize: compactHud ? '11px' : '12px',
       fontStyle: 'bold',
       color: '#f8fafc',
-      backgroundColor: '#1d2b45ee',
+      ...(hasBtnPlate ? {} : { backgroundColor: '#1d2b45ee' }),
       stroke: '#0b111e',
-      strokeThickness: 2,
-      padding: { x: compactHud ? 7 : 9, y: 5 },
+      strokeThickness: 2.5,
+      padding: { x: compactHud ? 8 : 10, y: 5 },
     };
     const btnY = this.scale.height - 34;
     this.recallBtn = this.add
@@ -654,17 +717,36 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerup', () => this.newRun());
 
+    if (hasBtnPlate) {
+      for (const btn of [this.recallBtn, this.muteBtn, this.codexBtn, this.restartBtn]) {
+        const plate = this.add
+          .image(btn.x, btn.y, 'ui_button_plate')
+          .setOrigin(0, 0)
+          .setScrollFactor(0)
+          .setDepth(899);
+        this.bottomBtnPlates.set(btn, plate);
+      }
+    }
+
+    if (this.textures.exists('ui_radar_frame')) {
+      this.hudRadarFrame = this.add
+        .image(this.scale.width - 66, this.scale.height - 76, 'ui_radar_frame')
+        .setDisplaySize(112, 112)
+        .setScrollFactor(0)
+        .setDepth(901);
+    }
     this.radarLabel = this.add
-      .text(this.scale.width - 96, this.scale.height - 148, '🧭 RADAR', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
+      .text(this.scale.width - 66, this.scale.height - 116, this.hudRadarFrame ? 'N' : '🧭 RADAR', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: this.hudRadarFrame ? '10px' : '10px',
         fontStyle: 'bold',
-        color: '#fde68a',
-        stroke: '#0b111e',
-        strokeThickness: 3,
+        color: this.hudRadarFrame ? '#1e1b4b' : '#fde68a',
+        stroke: this.hudRadarFrame ? '#fef3c7' : '#0b111e',
+        strokeThickness: this.hudRadarFrame ? 2 : 3,
       })
+      .setOrigin(this.hudRadarFrame ? 0.5 : 0, this.hudRadarFrame ? 0.5 : 0)
       .setScrollFactor(0)
-      .setDepth(900);
+      .setDepth(902);
     this.prevKills = this.state.kills;
     this.layoutBottomButtons();
 
@@ -676,7 +758,13 @@ export class GameScene extends Phaser.Scene {
       this.codexBtn.setY(y);
       this.restartBtn.setY(y);
       this.layoutBottomButtons();
-      this.radarLabel.setPosition(size.width - 96, size.height - 148);
+      if (this.hudRadarFrame) {
+        this.hudRadarFrame.setPosition(size.width - 66, size.height - 76);
+        this.radarLabel.setPosition(size.width - 66, size.height - 116);
+      } else {
+        this.radarLabel.setPosition(size.width - 96, size.height - 148);
+      }
+      this.hudLastDrawMs = -1000;
       this.downBanner.setX(size.width / 2);
       this.systemToast.setWordWrapWidth(Math.min(460, size.width - 24));
       this.positionSystemToast();
@@ -787,8 +875,21 @@ export class GameScene extends Phaser.Scene {
     this.drawActors(dt);
     this.drawFx(dt);
     this.drawBars();
-    this.phaseShade.setFillStyle(PHASE_TINT[this.state.phase], PHASE_ALPHA[this.state.phase]);
-    this.phaseShade.setSize(this.scale.width, this.scale.height);
+    const shadeAlpha = PHASE_ALPHA[this.state.phase];
+    const shadeSize = `${this.scale.width}x${this.scale.height}`;
+    if (shadeAlpha <= 0) {
+      if (this.phaseShade.visible) this.phaseShade.setVisible(false);
+    } else {
+      if (!this.phaseShade.visible) this.phaseShade.setVisible(true);
+      if (this.lastShadePhase !== this.state.phase) {
+        this.lastShadePhase = this.state.phase;
+        this.phaseShade.setFillStyle(PHASE_TINT[this.state.phase], shadeAlpha);
+      }
+      if (this.lastShadeSize !== shadeSize) {
+        this.lastShadeSize = shadeSize;
+        this.phaseShade.setSize(this.scale.width, this.scale.height);
+      }
+    }
     this.updateVignette();
     this.drawHud(fpsSnap);
     this.syncOverlay();
@@ -807,8 +908,17 @@ export class GameScene extends Phaser.Scene {
     let x = 10;
     const gap = this.scale.width < 440 ? 5 : 8;
     for (const btn of [this.recallBtn, this.muteBtn, this.codexBtn, this.restartBtn]) {
-      if (!btn || !btn.visible) continue;
+      const plate = this.bottomBtnPlates.get(btn);
+      if (!btn || !btn.visible) {
+        plate?.setVisible(false);
+        continue;
+      }
       btn.setX(x);
+      if (plate) {
+        const pw = Math.ceil(btn.width) + 10;
+        const ph = Math.ceil(btn.height) + 4;
+        plate.setPosition(x - 5, btn.y - 2).setDisplaySize(pw, ph).setVisible(true);
+      }
       x += Math.ceil(btn.width) + gap;
     }
   }
@@ -822,65 +932,109 @@ export class GameScene extends Phaser.Scene {
   private drawActors(dt: number): void {
     const s = this.state;
     const sg = this.shadowGraphics.clear();
+    for (const sh of this.activeShadowSprites) {
+      sh.setVisible(false);
+      this.shadowPool.push(sh);
+    }
+    this.activeShadowSprites.length = 0;
+
+    const lowSpec = this.isLowSpecMode();
+    const hasSoftShadow = this.textures.exists('soft_shadow');
+    const drawShadow = (x: number, y: number, w: number, h: number, alpha: number) => {
+      if (hasSoftShadow) {
+        const img = this.shadowPool.pop() ?? this.add.image(0, 0, 'soft_shadow').setDepth(3.15);
+        img.setPosition(x, y).setDisplaySize(w * 1.15, h * 1.25).setAlpha(alpha * 2.1).setVisible(true);
+        this.activeShadowSprites.push(img);
+      } else {
+        sg.fillStyle(0x0f172a, alpha).fillEllipse(x, y, w, h);
+      }
+    };
+
+    const view = this.cameras.main.worldView;
+    const pad = 110;
+    const cLeft = (view.width > 0 ? view.x : s.player.x - 680) - pad;
+    const cRight = (view.width > 0 ? view.right : s.player.x + 680) + pad;
+    const cTop = (view.height > 0 ? view.y : s.player.y - 420) - pad;
+    const cBot = (view.height > 0 ? view.bottom : s.player.y + 420) + pad;
+    const inView = (x: number, y: number) => x >= cLeft && x <= cRight && y >= cTop && y <= cBot;
+
+    for (const prop of this.worldPropSprites) {
+      const vis = inView(prop.x, prop.y);
+      if (prop.visible !== vis) prop.setVisible(vis);
+    }
+
     const move = this.readInput();
     const moving = move.x !== 0 || move.y !== 0;
     const down = isPlayerDown(s);
 
-    // Warm atmospheric Gaussian glow halos & animated ember sparks over the 4 Sanctuary braziers, Core & Hero
+    // Warm atmospheric glow halos & animated ember sparks (skipped in low-spec/no-GPU mode)
     const phaseLight = s.phase === 'night' ? 1.0 : s.phase === 'evening' ? 0.72 : 0.36;
-    const emberPulse = 0.26 + 0.09 * Math.sin(this.animTime * 7.2);
-    const braziers: Array<[number, number]> = [
-      [-108, -92],
-      [108, -92],
-      [-110, 28],
-      [110, 28],
-    ];
-    for (let i = 0; i < braziers.length; i++) {
-      const [bx, by] = braziers[i];
-      const lx = CORE_X + bx;
-      const ly = CORE_Y + by;
-      sg.fillStyle(0xf97316, emberPulse * 0.48).fillEllipse(lx, ly, 44, 26);
-      sg.fillStyle(0xfef08a, emberPulse * 0.45).fillEllipse(lx, ly - 4, 16, 11);
-      // Rising animated flame ember sparks above brazier bowl
-      for (let k = 0; k < 2; k++) {
-        const sp = (this.animTime * 2.1 + i * 0.37 + k * 0.5) % 1;
-        const sx = lx + Math.sin(this.animTime * 6.5 + i + k * 2.1) * 4.2;
-        const sy = ly - 10 - sp * 20;
-        sg.fillStyle(k === 0 ? 0xfef08a : 0xf97316, (1 - sp) * 0.88).fillCircle(sx, sy, 2.2 * (1 - sp * 0.5));
+    if (lowSpec) {
+      for (const lp of this.lightPoolSprites) {
+        if (lp.visible) lp.setVisible(false);
       }
-      const lp = this.lightPoolSprites[i];
-      if (lp) {
-        const flicker = 1 + 0.08 * Math.sin(this.animTime * 8.4 + i * 1.7);
-        lp.setPosition(lx, ly + 4)
-          .setTint(0xfb923c)
-          .setDisplaySize(172 * flicker, 108 * flicker)
-          .setAlpha((0.36 + 0.12 * Math.sin(this.animTime * 6.5 + i)) * phaseLight);
+    } else {
+      const emberPulse = 0.26 + 0.09 * Math.sin(this.animTime * 7.2);
+      const braziers: Array<[number, number]> = [
+        [-108, -92],
+        [108, -92],
+        [-110, 28],
+        [110, 28],
+      ];
+      for (let i = 0; i < braziers.length; i++) {
+        const [bx, by] = braziers[i];
+        const lx = CORE_X + bx;
+        const ly = CORE_Y + by;
+        if (inView(lx, ly)) {
+          sg.fillStyle(0xf97316, emberPulse * 0.48).fillEllipse(lx, ly, 44, 26);
+          sg.fillStyle(0xfef08a, emberPulse * 0.45).fillEllipse(lx, ly - 4, 16, 11);
+          for (let k = 0; k < 2; k++) {
+            const sp = (this.animTime * 2.1 + i * 0.37 + k * 0.5) % 1;
+            const sx = lx + Math.sin(this.animTime * 6.5 + i + k * 2.1) * 4.2;
+            const sy = ly - 10 - sp * 20;
+            sg.fillStyle(k === 0 ? 0xfef08a : 0xf97316, (1 - sp) * 0.88).fillCircle(sx, sy, 2.2 * (1 - sp * 0.5));
+          }
+        }
+        const lp = this.lightPoolSprites[i];
+        if (lp) {
+          const flicker = 1 + 0.08 * Math.sin(this.animTime * 8.4 + i * 1.7);
+          lp.setVisible(true)
+            .setPosition(lx, ly + 4)
+            .setTint(0xfb923c)
+            .setDisplaySize(172 * flicker, 108 * flicker)
+            .setAlpha((0.36 + 0.12 * Math.sin(this.animTime * 6.5 + i)) * phaseLight);
+        }
       }
-    }
-    const coreLight = this.lightPoolSprites[4];
-    if (coreLight) {
-      const cp = 1 + 0.06 * Math.sin(this.animTime * 3.1);
-      coreLight
-        .setPosition(CORE_X, CORE_Y - 4)
-        .setTint(0xc084fc)
-        .setDisplaySize(236 * cp, 148 * cp)
-        .setAlpha(0.32 * phaseLight + 0.08);
-    }
-    const heroLight = this.lightPoolSprites[5];
-    if (heroLight) {
-      const heroAlpha = down ? 0 : s.phase === 'night' ? 0.38 : s.phase === 'evening' ? 0.24 : 0.12;
-      heroLight
-        .setPosition(s.player.x, s.player.y + 4)
-        .setTint(0xfde68a)
-        .setDisplaySize(208, 128)
-        .setAlpha(heroAlpha);
+      const coreLight = this.lightPoolSprites[4];
+      if (coreLight) {
+        const cp = 1 + 0.06 * Math.sin(this.animTime * 3.1);
+        coreLight
+          .setVisible(true)
+          .setPosition(CORE_X, CORE_Y - 4)
+          .setTint(0xc084fc)
+          .setDisplaySize(236 * cp, 148 * cp)
+          .setAlpha(0.32 * phaseLight + 0.08);
+      }
+      const heroLight = this.lightPoolSprites[5];
+      if (heroLight) {
+        const heroAlpha = down ? 0 : s.phase === 'night' ? 0.38 : s.phase === 'evening' ? 0.24 : 0.12;
+        heroLight
+          .setVisible(heroAlpha > 0)
+          .setPosition(s.player.x, s.player.y + 4)
+          .setTint(0xfde68a)
+          .setDisplaySize(208, 128)
+          .setAlpha(heroAlpha);
+      }
     }
 
     // 2.5D drop shadow + subtle luminous Violet pedestal ring for Core
-    sg.fillStyle(0x0f172a, 0.18).fillEllipse(CORE_X + 5, CORE_Y + 20, 96, 36);
-    sg.fillStyle(0x0f172a, 0.26).fillEllipse(CORE_X + 3, CORE_Y + 18, 74, 26);
-    const corePulse = 0.28 + 0.12 * Math.sin(this.animTime * 3.2);
-    sg.lineStyle(2.2, 0xd8b4fe, corePulse).strokeEllipse(CORE_X, CORE_Y + 6, 104 + Math.sin(this.animTime * 2.5) * 6, 66 + Math.sin(this.animTime * 2.5) * 4);
+    if (inView(CORE_X, CORE_Y)) {
+      drawShadow(CORE_X + 3, CORE_Y + 18, 76, 26, 0.28);
+      if (!lowSpec) {
+        const corePulse = 0.28 + 0.12 * Math.sin(this.animTime * 3.2);
+        sg.lineStyle(2.2, 0xd8b4fe, corePulse).strokeEllipse(CORE_X, CORE_Y + 6, 104 + Math.sin(this.animTime * 2.5) * 6, 66 + Math.sin(this.animTime * 2.5) * 4);
+      }
+    }
 
     // Face toward skill target during active attack swing, otherwise smoothly toward movement vector
     const aimDx = this.castPoseLeft > 0.04 ? Math.cos(this.castAngle) : move.x;
@@ -930,9 +1084,8 @@ export class GameScene extends Phaser.Scene {
 
     this.playerSprite.setPosition(s.player.x + kinOffX, s.player.y + 12 + kinOffY);
     this.playerSprite.setDepth(this.depthAtY(s.player.y));
-    // 2.5D penumbra + contact shadow + crisp readable cyan Hero ground ring beneath feet
-    sg.fillStyle(0x0f172a, down ? 0.12 : 0.18).fillEllipse(s.player.x + kinOffX * 0.4 + 3, s.player.y + 13, 38, 16);
-    sg.fillStyle(0x0f172a, down ? 0.18 : 0.30).fillEllipse(s.player.x + kinOffX * 0.4 + 1, s.player.y + 11, 26, 11);
+    // Soft pooled contact shadow + crisp readable cyan Hero ground ring beneath feet
+    drawShadow(s.player.x + kinOffX * 0.4 + 1, s.player.y + 11, 28, 12, down ? 0.18 : 0.30);
     if (!down) {
       sg.lineStyle(1.4, 0x38bdf8, 0.38).strokeEllipse(s.player.x + kinOffX * 0.3, s.player.y + 11, 30, 13);
     }
@@ -941,20 +1094,22 @@ export class GameScene extends Phaser.Scene {
       const auraAlpha = Math.min(1, this.castPoseLeft / this.castDuration) * 0.72;
       const ringPulse = 1 + (1 - auraAlpha) * 0.14;
       sg.lineStyle(2.5, 0xfbbf24, auraAlpha).strokeEllipse(s.player.x, s.player.y + 11, 56 * ringPulse, 26 * ringPulse);
-      sg.lineStyle(1.8, 0x38bdf8, auraAlpha * 0.9).strokeEllipse(s.player.x, s.player.y + 11, 42 * ringPulse, 19 * ringPulse);
-      sg.fillStyle(0x38bdf8, auraAlpha * 0.22).fillEllipse(s.player.x, s.player.y + 11, 44, 20);
-      for (let k = 0; k < 4; k++) {
-        const ra = this.animTime * 6 + (k * Math.PI) / 2;
-        sg.fillStyle(0xfef08a, auraAlpha).fillCircle(
-          s.player.x + Math.cos(ra) * 26 * ringPulse,
-          s.player.y + 11 + Math.sin(ra) * 12 * ringPulse,
-          2.2,
-        );
+      if (!lowSpec) {
+        sg.lineStyle(1.8, 0x38bdf8, auraAlpha * 0.9).strokeEllipse(s.player.x, s.player.y + 11, 42 * ringPulse, 19 * ringPulse);
+        sg.fillStyle(0x38bdf8, auraAlpha * 0.22).fillEllipse(s.player.x, s.player.y + 11, 44, 20);
+        for (let k = 0; k < 4; k++) {
+          const ra = this.animTime * 6 + (k * Math.PI) / 2;
+          sg.fillStyle(0xfef08a, auraAlpha).fillCircle(
+            s.player.x + Math.cos(ra) * 26 * ringPulse,
+            s.player.y + 11 + Math.sin(ra) * 12 * ringPulse,
+            2.2,
+          );
+        }
       }
     }
 
-    // Subtle pastel walking dust puffs behind feet when hero moves
-    if (!down && moving) {
+    // Subtle pastel walking dust puffs behind feet when hero moves (skipped in low-spec mode)
+    if (!lowSpec && !down && moving) {
       const dirX = move.x !== 0 ? -Math.sign(move.x) : this.playerSprite.flipX ? 1 : -1;
       const dirY = move.y !== 0 ? -Math.sign(move.y) : 0;
       for (let p = 0; p < 3; p++) {
@@ -971,11 +1126,11 @@ export class GameScene extends Phaser.Scene {
       if (this.playerSprite.anims.currentAnim?.key !== 'hero_death') this.playerSprite.play('hero_death', true);
     } else if (this.heroHurtRecoilLeft > 0) {
       this.playerSprite
-        .setAlpha(0.95)
+        .setAlpha(this.isCanvasRenderer ? 0.65 : 0.95)
         .setTexture('hero_hit', FACING_ROW[this.heroFacing])
-        .setTint(0xff9999)
         .setScale(scaleX, scaleY)
         .setRotation(rotRad);
+      if (!this.isCanvasRenderer) this.playerSprite.setTint(0xff9999);
     } else if (this.castPoseLeft > 0 && this.textures.exists('hero_attack')) {
       const iFrameAlpha = s.invulnLeft > 0 ? 0.65 + 0.3 * Math.sin(this.animTime * 28) : 1;
       this.playerSprite.setAlpha(iFrameAlpha).clearTint().setScale(scaleX, scaleY).setRotation(rotRad);
@@ -1049,6 +1204,13 @@ export class GameScene extends Phaser.Scene {
       this.mobFacing.set(m.uid, mobDir);
       this.mobPrevPos.set(m.uid, { x: m.x, y: m.y });
 
+      // Viewport culling: keep simulation synced above, skip animation/tint/shadow work off-screen
+      if (!inView(m.x, m.y)) {
+        if (sprite.visible) sprite.setVisible(false);
+        continue;
+      }
+      if (!sprite.visible) sprite.setVisible(true);
+
       const mobAnim = `${texKey}_${mobDir.dir}`;
       if (sprite.anims.currentAnim?.key !== mobAnim) sprite.play(mobAnim, true);
       sprite.setFlipX(mobDir.flipX);
@@ -1074,19 +1236,25 @@ export class GameScene extends Phaser.Scene {
       const mobRot = airMob ? Math.sin(phase * 0.5) * 0.08 + Math.sign(dx) * 0.04 : 0;
       sprite.setRotation(mobRot);
 
-      if (flashRem > 0) sprite.setTintFill(0xffffff);
-      else if (m.slowLeft > 0) sprite.setTint(0x80d8ff);
-      else if (m.affix) sprite.setTint(0xe0aaff);
-      else sprite.clearTint();
+      if (this.isCanvasRenderer) {
+        // Avoid CPU per-pixel CanvasTexture tinting on Canvas2D; use alpha pulse & crisp ring indicators.
+        sprite.setAlpha(flashRem > 0 ? 0.52 : m.slowLeft > 0 ? 0.78 : 1);
+      } else {
+        if (flashRem > 0) sprite.setTintFill(0xffffff);
+        else if (m.slowLeft > 0) sprite.setTint(0x80d8ff);
+        else if (m.affix) sprite.setTint(0xe0aaff);
+        else sprite.clearTint();
+        sprite.setAlpha(m.slowLeft > 0 ? 0.8 : 1);
+      }
       sprite.setPosition(m.x + recX, m.y - 6 - mobBob + recY).setDepth(this.depthAtY(m.y));
-      sprite.setAlpha(m.slowLeft > 0 ? 0.8 : 1);
 
       const hopShadowShrink = isSlime ? 1 - hop * 0.18 : 1;
       const shadowW = Math.round(speciesScale * 58 * (m.affix ? 1.2 : 1.0) * hopShadowShrink);
-      sg.fillStyle(0x0f172a, 0.15).fillEllipse(m.x + recX + 3, m.y + recY + 13, shadowW + 8, 14);
-      sg.fillStyle(0x0f172a, 0.26).fillEllipse(m.x + recX + 1, m.y + recY + 11, shadowW, 10);
+      drawShadow(m.x + recX + 1, m.y + recY + 11, shadowW, 10, 0.26);
       if (m.affix) {
-        sg.lineStyle(1.8, 0xc084fc, 0.65).strokeEllipse(m.x, m.y + 11, shadowW + 14, 16);
+        sg.lineStyle(1.8, 0xc084fc, 0.68).strokeEllipse(m.x, m.y + 11, shadowW + 14, 16);
+      } else if (this.isCanvasRenderer && m.slowLeft > 0) {
+        sg.lineStyle(1.5, 0x38bdf8, 0.7).strokeEllipse(m.x, m.y + 11, shadowW + 10, 14);
       }
     }
     for (const [uid, sprite] of this.monsterSprites) {
@@ -1103,7 +1271,8 @@ export class GameScene extends Phaser.Scene {
 
     const boss = s.boss;
     const bossAlive = !!boss && boss.rules.hp > 0;
-    this.bossSprite.setVisible(bossAlive);
+    const bossVis = bossAlive && inView(boss!.x, boss!.y);
+    this.bossSprite.setVisible(bossVis);
     if (boss && bossAlive) {
       const prevB = this.bossPrevHp ?? boss.rules.hp;
       if (boss.rules.hp < prevB) this.bossFlashLeft = 0.09;
@@ -1119,21 +1288,26 @@ export class GameScene extends Phaser.Scene {
       this.bossPrevPos = { x: boss.x, y: boss.y };
       this.bossFacing = resolveFacing(bDx, bDy, this.bossFacing.dir, this.bossFacing.flipX);
 
-      this.bossSprite.setPosition(boss.x, boss.y - 16).setDepth(this.depthAtY(boss.y)).setRotation(0);
-      if (this.bossFlashLeft > 0) this.bossSprite.setTintFill(0xffffff);
-      else this.bossSprite.clearTint();
-      const bossBase = boss.rules.enraged ? 'boss_bloodmoon_enrage_walk' : 'boss_bloodmoon_walk';
-      const bossAnim = `${bossBase}_${this.bossFacing.dir}`;
-      if (this.bossSprite.anims.currentAnim?.key !== bossAnim) this.bossSprite.play(bossAnim, true);
-      this.bossSprite.setFlipX(this.bossFacing.flipX);
-      sg.fillStyle(0x0f172a, 0.18).fillEllipse(boss.x + 6, boss.y + 38, 108, 36);
-      sg.fillStyle(0x0f172a, 0.28).fillEllipse(boss.x + 2, boss.y + 34, 86, 28);
-      sg.lineStyle(2.5, boss.rules.enraged ? 0xff4d79 : 0xf43f5e, 0.65).strokeEllipse(boss.x, boss.y + 34, 104, 38);
+      if (bossVis) {
+        this.bossSprite.setPosition(boss.x, boss.y - 16).setDepth(this.depthAtY(boss.y)).setRotation(0);
+        if (this.isCanvasRenderer) {
+          this.bossSprite.setAlpha(this.bossFlashLeft > 0 ? 0.6 : 1);
+        } else {
+          if (this.bossFlashLeft > 0) this.bossSprite.setTintFill(0xffffff);
+          else this.bossSprite.clearTint();
+        }
+        const bossBase = boss.rules.enraged ? 'boss_bloodmoon_enrage_walk' : 'boss_bloodmoon_walk';
+        const bossAnim = `${bossBase}_${this.bossFacing.dir}`;
+        if (this.bossSprite.anims.currentAnim?.key !== bossAnim) this.bossSprite.play(bossAnim, true);
+        this.bossSprite.setFlipX(this.bossFacing.flipX);
+        drawShadow(boss.x + 2, boss.y + 34, 88, 28, 0.30);
+        sg.lineStyle(2.5, boss.rules.enraged ? 0xff4d79 : 0xf43f5e, 0.65).strokeEllipse(boss.x, boss.y + 34, 104, 38);
+      }
     }
 
     // HD 2.5D sprites for the base well and gatherable ingredient nodes (R2) with Y-depth sorting.
     const hasGatherTex = this.textures.exists('gather_nodes');
-    if (hasGatherTex && s.well) {
+    if (hasGatherTex && s.well && inView(s.well.x, s.well.y)) {
       const w = s.well;
       const full = w.water + w.fish > 0;
       const frame = full ? 2 : 3;
@@ -1155,13 +1329,12 @@ export class GameScene extends Phaser.Scene {
           .setOrigin(0.5);
       }
       this.wellSprite.setFrame(frame).setPosition(w.x, w.y - 6).setDepth(this.depthAtY(w.y)).setVisible(true);
-      const labelBob = Math.sin(this.animTime * 3.4) * 2.5;
+      const labelBob = lowSpec ? 0 : Math.sin(this.animTime * 3.4) * 2.5;
       this.wellLabel
         .setPosition(w.x, w.y - 44 + labelBob)
         .setDepth(this.depthAtY(w.y) + 0.2)
         .setVisible(full && s.phase === 'day');
-      sg.fillStyle(0x0f172a, 0.15).fillEllipse(w.x + 6, w.y + 13, 52, 18);
-      sg.fillStyle(0x0f172a, 0.25).fillEllipse(w.x + 2, w.y + 11, 42, 14);
+      drawShadow(w.x + 2, w.y + 11, 44, 14, 0.25);
     } else {
       this.wellSprite?.setVisible(false);
       this.wellLabel?.setVisible(false);
@@ -1176,18 +1349,21 @@ export class GameScene extends Phaser.Scene {
           spr = this.add.sprite(n.x, n.y, 'gather_nodes', 0);
           this.nodeSprites[nodeIdx] = spr;
         }
-        const frame = n.kind === 'grain' ? 0 : 1;
-        const bob = Math.sin(this.animTime * 2.8 + n.x * 0.05) * 1.4;
-        const sway = Math.sin(this.animTime * 3.1 + n.y * 0.05) * 0.045;
-        spr
-          .setFrame(frame)
-          .setPosition(n.x, n.y - 8 - bob)
-          .setScale(0.36)
-          .setRotation(sway)
-          .setDepth(this.depthAtY(n.y))
-          .setVisible(true);
-        sg.fillStyle(0x0f172a, 0.14).fillEllipse(n.x + 4, n.y + 10, 36, 13);
-        sg.fillStyle(0x0f172a, 0.22).fillEllipse(n.x + 1, n.y + 9, 28, 10);
+        if (inView(n.x, n.y)) {
+          const frame = n.kind === 'grain' ? 0 : 1;
+          const bob = lowSpec ? 0 : Math.sin(this.animTime * 2.8 + n.x * 0.05) * 1.4;
+          const sway = lowSpec ? 0 : Math.sin(this.animTime * 3.1 + n.y * 0.05) * 0.045;
+          spr
+            .setFrame(frame)
+            .setPosition(n.x, n.y - 8 - bob)
+            .setScale(0.36)
+            .setRotation(sway)
+            .setDepth(this.depthAtY(n.y))
+            .setVisible(true);
+          drawShadow(n.x + 1, n.y + 9, 28, 10, 0.22);
+        } else {
+          spr.setVisible(false);
+        }
         nodeIdx++;
       }
     }
@@ -1204,13 +1380,19 @@ export class GameScene extends Phaser.Scene {
           cspr = this.add.sprite(c.x, c.y, 'world_decals', 2).setScale(0.38);
           this.chestSprites[chestIdx] = cspr;
         }
-        cspr.setPosition(c.x, c.y - 4).setDepth(this.depthAtY(c.y)).setVisible(true);
-        if (c.opened) {
-          cspr.setTint(0x64748b).setAlpha(0.55);
+        if (inView(c.x, c.y)) {
+          cspr.setPosition(c.x, c.y - 4).setDepth(this.depthAtY(c.y)).setVisible(true);
+          if (c.opened) {
+            if (!this.isCanvasRenderer) cspr.setTint(0x64748b);
+            cspr.setAlpha(0.45);
+          } else {
+            if (!this.isCanvasRenderer) cspr.clearTint();
+            cspr.setAlpha(1);
+            drawShadow(c.x + 2, c.y + 10, 30, 12, 0.24);
+            sg.fillStyle(0xfbbf24, 0.22).fillEllipse(c.x, c.y + 6, 44, 22);
+          }
         } else {
-          cspr.clearTint().setAlpha(1);
-          sg.fillStyle(0x0f172a, 0.24).fillEllipse(c.x + 2, c.y + 10, 30, 12);
-          sg.fillStyle(0xfbbf24, 0.22).fillEllipse(c.x, c.y + 6, 44, 22);
+          cspr.setVisible(false);
         }
         chestIdx++;
       }
@@ -1340,6 +1522,8 @@ export class GameScene extends Phaser.Scene {
     }
     this.activeFxSprites.length = 0;
 
+    const lowSpec = this.isLowSpecMode();
+    const useVfxSprites = !lowSpec && !this.isCanvasRenderer;
     const acquireVfx = (key: string): Phaser.GameObjects.Image => {
       const img = this.fxPool.pop() ?? this.add.image(0, 0, key).setDepth(16);
       img.setTexture(key).setBlendMode(Phaser.BlendModes.ADD).setVisible(true);
@@ -1363,6 +1547,9 @@ export class GameScene extends Phaser.Scene {
     };
 
     this.liveFx = this.liveFx.filter((f) => (f.ttl -= dt) > 0);
+    if (lowSpec && this.liveFx.length > 20) {
+      this.liveFx = this.liveFx.slice(-20);
+    }
     for (const f of this.liveFx) {
       const alpha = Phaser.Math.Clamp(f.ttl / FX_SECONDS, 0, 1);
       const progress = 1 - alpha;
@@ -1371,7 +1558,7 @@ export class GameScene extends Phaser.Scene {
       const vfxKey = f.shape === 'cone' ? 'vfx_cone' : f.shape === 'line' ? 'vfx_line' : f.shape === 'ring' ? 'vfx_ring' : 'vfx_projectile';
 
       // Brief 2.5D foreshortened caster magic rune ellipse on ground plane.
-      if (!f.missed && progress < 0.5) {
+      if (!lowSpec && !f.missed && progress < 0.5) {
         const castAlpha = (1 - progress / 0.5) * 0.72;
         const castR = 14 + progress * 24;
         g.lineStyle(2.2, 0xfef08a, castAlpha).strokeEllipse(f.x1, f.y1 + 8, castR * 2.1, castR * 1.25);
@@ -1381,7 +1568,7 @@ export class GameScene extends Phaser.Scene {
       if (f.shape === 'cone') {
         const radius = f.radius ?? 52;
         const reach = radius * (0.76 + 0.26 * Math.sin(Math.min(1, progress * 1.45) * Math.PI * 0.5));
-        if (this.textures.exists(vfxKey)) {
+        if (useVfxSprites && this.textures.exists(vfxKey)) {
           const size = Math.max(66, radius * 1.85);
           acquireVfx(vfxKey)
             .setTint(color)
@@ -1398,31 +1585,28 @@ export class GameScene extends Phaser.Scene {
             .setRotation(facing + 0.08 * progress)
             .setDisplaySize(size * 0.82, size * 0.82);
         }
-        // Foreshortened ground cleave glow + triple-layered crescent sword waves
-        g.fillStyle(color, 0.22 * alpha).fillEllipse(
-          f.x1 + Math.cos(facing) * (radius * 0.45),
-          f.y1 + 10 + Math.sin(facing) * (radius * 0.35),
-          radius * 1.2,
-          radius * 0.72,
-        );
-        g.fillStyle(color, 0.26 * alpha);
+        g.fillStyle(color, 0.24 * alpha);
         g.slice(f.x1, f.y1 - 4, reach, facing - 0.88, facing + 0.88, false).fillPath();
-        g.fillStyle(0xffffff, 0.18 * alpha);
-        g.slice(f.x1, f.y1 - 4, reach * 0.66, facing - 0.72, facing + 0.72, false).fillPath();
-        g.lineStyle(8, color, 0.45 * alpha).beginPath().arc(f.x1, f.y1 - 4, reach * 0.94, facing - 0.86, facing + 0.86, false).strokePath();
-        g.lineStyle(4.5, color, 0.85 * alpha).beginPath().arc(f.x1, f.y1 - 4, reach * 0.78, facing - 0.8, facing + 0.8, false).strokePath();
+        g.lineStyle(4.5, color, 0.85 * alpha).beginPath().arc(f.x1, f.y1 - 4, reach * 0.82, facing - 0.82, facing + 0.82, false).strokePath();
         g.lineStyle(2.5, 0xffffff, 0.95 * alpha).beginPath().arc(f.x1, f.y1 - 4, reach, facing - 0.85, facing + 0.85, false).strokePath();
-        // Flying starlight / sakura spark motes bursting off slash edge
-        for (let k = 0; k < 6; k++) {
-          const sa = facing - 0.72 + (k / 5) * 1.44 + progress * 0.14;
-          const sr = reach * (0.72 + 0.34 * progress) + (k % 2) * 5;
-          const sx = f.x1 + Math.cos(sa) * sr;
-          const sy = f.y1 - 4 + Math.sin(sa) * sr - progress * 8;
-          g.fillStyle(k % 2 === 0 ? 0xffffff : color, alpha).fillCircle(sx, sy, 2.8 * alpha + 1);
+        if (!lowSpec) {
+          g.fillStyle(color, 0.22 * alpha).fillEllipse(
+            f.x1 + Math.cos(facing) * (radius * 0.45),
+            f.y1 + 10 + Math.sin(facing) * (radius * 0.35),
+            radius * 1.2,
+            radius * 0.72,
+          );
+          for (let k = 0; k < 6; k++) {
+            const sa = facing - 0.72 + (k / 5) * 1.44 + progress * 0.14;
+            const sr = reach * (0.72 + 0.34 * progress) + (k % 2) * 5;
+            const sx = f.x1 + Math.cos(sa) * sr;
+            const sy = f.y1 - 4 + Math.sin(sa) * sr - progress * 8;
+            g.fillStyle(k % 2 === 0 ? 0xffffff : color, alpha).fillCircle(sx, sy, 2.8 * alpha + 1);
+          }
         }
       } else if (f.shape === 'line') {
         const len = Math.max(36, Math.hypot(f.x2 - f.x1, f.y2 - f.y1));
-        if (this.textures.exists(vfxKey)) {
+        if (useVfxSprites && this.textures.exists(vfxKey)) {
           acquireVfx(vfxKey)
             .setTint(color)
             .setAlpha(0.95 * alpha)
@@ -1435,12 +1619,10 @@ export class GameScene extends Phaser.Scene {
         const dy = f.y2 - f.y1;
         const nx = len > 0 ? -dy / len : 0;
         const ny = len > 0 ? dx / len : 0;
-        // Ground glow projection under beam
-        g.lineStyle(10, 0x090d16, 0.2 * alpha).lineBetween(f.x1, f.y1 + 10, f.x2, f.y2 + 10);
-        g.lineStyle(12, color, 0.28 * alpha).lineBetween(f.x1, f.y1 - 6, f.x2, f.y2 - 6);
+        if (!lowSpec) g.lineStyle(12, color, 0.26 * alpha).lineBetween(f.x1, f.y1 - 6, f.x2, f.y2 - 6);
         const drawBolt = (width: number, col: number, a: number) => {
           g.lineStyle(width, col, a).beginPath().moveTo(f.x1, f.y1 - 6);
-          const segments = 6;
+          const segments = lowSpec ? 4 : 6;
           for (let i = 1; i < segments; i++) {
             const t = i / segments;
             const jag = Math.sin((i + 1) * 3.7 + this.animTime * 42) * 10 * alpha;
@@ -1450,22 +1632,15 @@ export class GameScene extends Phaser.Scene {
         };
         drawBolt(5.5, color, 0.85 * alpha);
         drawBolt(2.2, 0xffffff, 0.98 * alpha);
-        // Secondary spiraling energy helix along beam
-        g.lineStyle(2, 0xfef08a, 0.72 * alpha).beginPath().moveTo(f.x1, f.y1 - 6);
-        for (let i = 1; i <= 8; i++) {
-          const t = i / 8;
-          const wave = Math.sin(t * Math.PI * 3.5 + this.animTime * 34) * 8 * Math.sin(t * Math.PI);
-          g.lineTo(f.x1 + dx * t + nx * wave, f.y1 - 6 + dy * t + ny * wave);
+        if (!lowSpec) {
+          drawStarburst(f.x1, f.y1 - 6, 4, 10 * alpha + 3, color, 0.9 * alpha, facing);
+          drawStarburst(f.x2, f.y2 - 6, 8, 16 * alpha + 6, color, 0.95 * alpha, -facing);
         }
-        g.strokePath();
-        // Muzzle star flare + 8-ray impact starburst
-        drawStarburst(f.x1, f.y1 - 6, 4, 10 * alpha + 3, color, 0.9 * alpha, facing);
-        drawStarburst(f.x2, f.y2 - 6, 8, 16 * alpha + 6, color, 0.95 * alpha, -facing);
         g.lineStyle(2.2, 0xffffff, 0.82 * alpha).strokeEllipse(f.x2, f.y2 + 2, (12 + 22 * progress), (7 + 13 * progress));
       } else if (f.shape === 'ring') {
         const radius = f.radius ?? 52;
         const dia = Math.max(54, radius * 2);
-        if (this.textures.exists(vfxKey)) {
+        if (useVfxSprites && this.textures.exists(vfxKey)) {
           const rScale = 0.65 + 0.45 * progress;
           acquireVfx(vfxKey)
             .setTint(color)
@@ -1474,61 +1649,39 @@ export class GameScene extends Phaser.Scene {
             .setOrigin(0.5)
             .setRotation(progress * 2.8)
             .setDisplaySize(dia * rScale, dia * rScale * 0.64);
-          acquireVfx(vfxKey)
-            .setTint(0xfef08a)
-            .setAlpha(0.55 * alpha)
-            .setPosition(f.x2, f.y2 + 4)
-            .setOrigin(0.5)
-            .setRotation(-progress * 3.8)
-            .setDisplaySize(dia * rScale * 0.72, dia * rScale * 0.46);
         }
         const waveR = radius * (0.45 + 0.65 * progress);
-        // 2.5D foreshortened ground shockwave ellipses
-        g.fillStyle(color, 0.24 * alpha).fillEllipse(f.x2, f.y2 + 4, waveR * 2, waveR * 1.28);
-        g.lineStyle(4, color, 0.88 * alpha).strokeEllipse(f.x2, f.y2 + 4, waveR * 2, waveR * 1.28);
-        g.lineStyle(2.2, 0xffffff, 0.8 * alpha).strokeEllipse(f.x2, f.y2 + 4, waveR * 1.44, waveR * 0.92);
-        // 8 Orbiting rising magic star motes around ring perimeter
-        for (let k = 0; k < 8; k++) {
-          const ma = progress * 2.2 + (k * Math.PI * 2) / 8;
-          const mx = f.x2 + Math.cos(ma) * waveR * 0.82;
-          const my = f.y2 + 4 + Math.sin(ma) * waveR * 0.52 - progress * 28 - (k % 3) * 6;
-          g.fillStyle(k % 2 === 0 ? 0xfef08a : 0xffffff, 0.9 * alpha).fillCircle(mx, my, 2.4 * alpha + 1);
-        }
-        // 3D Vertical Spell Pillar rising into sky + base flare
-        if (!f.missed) {
-          const beamW = Math.max(14, radius * 0.58) * (1 - progress * 0.35);
-          const beamH = 104 * Math.sin(Math.min(1, progress * 1.4) * Math.PI * 0.5);
-          g.fillStyle(color, 0.18 * alpha).fillRect(f.x2 - beamW * 0.72, f.y2 + 4 - beamH * 1.05, beamW * 1.44, beamH * 1.05);
-          g.fillStyle(color, 0.3 * alpha).fillRect(f.x2 - beamW * 0.5, f.y2 + 4 - beamH, beamW, beamH);
-          g.fillStyle(0xffffff, 0.42 * alpha).fillRect(f.x2 - beamW * 0.2, f.y2 + 4 - beamH * 0.95, beamW * 0.4, beamH * 0.95);
+        g.fillStyle(color, 0.22 * alpha).fillEllipse(f.x2, f.y2 + 4, waveR * 2, waveR * 1.28);
+        g.lineStyle(3.5, color, 0.88 * alpha).strokeEllipse(f.x2, f.y2 + 4, waveR * 2, waveR * 1.28);
+        g.lineStyle(2, 0xffffff, 0.8 * alpha).strokeEllipse(f.x2, f.y2 + 4, waveR * 1.44, waveR * 0.92);
+        if (!lowSpec) {
+          for (let k = 0; k < 6; k++) {
+            const ma = progress * 2.2 + (k * Math.PI * 2) / 6;
+            const mx = f.x2 + Math.cos(ma) * waveR * 0.82;
+            const my = f.y2 + 4 + Math.sin(ma) * waveR * 0.52 - progress * 28 - (k % 3) * 6;
+            g.fillStyle(k % 2 === 0 ? 0xfef08a : 0xffffff, 0.9 * alpha).fillCircle(mx, my, 2.4 * alpha + 1);
+          }
+          if (!f.missed) {
+            const beamW = Math.max(14, radius * 0.58) * (1 - progress * 0.35);
+            const beamH = 104 * Math.sin(Math.min(1, progress * 1.4) * Math.PI * 0.5);
+            g.fillStyle(color, 0.3 * alpha).fillRect(f.x2 - beamW * 0.5, f.y2 + 4 - beamH, beamW, beamH);
+            g.fillStyle(0xffffff, 0.42 * alpha).fillRect(f.x2 - beamW * 0.2, f.y2 + 4 - beamH * 0.95, beamW * 0.4, beamH * 0.95);
+          }
         }
         if (f.skillId === 'R01a' && progress < 0.8) {
           const drop = 1 - progress / 0.8;
           const mx = f.x2 - 86 * drop;
           const my = f.y2 - 160 * drop;
-          g.lineStyle(12, 0xff5400, 0.88).lineBetween(mx, my, f.x2, f.y2);
-          g.lineStyle(5, 0xfef08a, 0.98).lineBetween(mx, my, f.x2, f.y2);
-          // Fluffy cartoon smoke puffs along meteor trail
-          for (let sm = 0; sm < 3; sm++) {
-            const st = 0.25 + sm * 0.28;
-            g.fillStyle(0xfda4af, 0.45 * alpha).fillCircle(mx + (f.x2 - mx) * st, my + (f.y2 - my) * st, 6 + sm * 3);
-          }
-          drawStarburst(f.x2, f.y2, 8, 18 + 14 * (1 - drop), 0xff9f1c, 0.95);
+          g.lineStyle(10, 0xff5400, 0.88).lineBetween(mx, my, f.x2, f.y2);
+          g.lineStyle(4, 0xfef08a, 0.98).lineBetween(mx, my, f.x2, f.y2);
+          drawStarburst(f.x2, f.y2, lowSpec ? 4 : 8, 16 + 12 * (1 - drop), 0xff9f1c, 0.95);
         }
       } else {
         const eased = Math.min(1, progress * 1.35);
         const px = f.x1 + (f.x2 - f.x1) * eased;
         const py = f.y1 + (f.y2 - f.y1) * eased;
         const elev = Math.sin(eased * Math.PI) * 10 + 6;
-        // Ground shadow traveling beneath elevated projectile
-        g.fillStyle(0x090d16, 0.26 * alpha).fillEllipse(px + 2, py + 12, 18, 8);
-        for (let k = 5; k >= 1; k--) {
-          const bt = Math.max(0, eased - k * 0.075);
-          const bx = f.x1 + (f.x2 - f.x1) * bt;
-          const by = f.y1 + (f.y2 - f.y1) * bt - (Math.sin(bt * Math.PI) * 10 + 6);
-          g.fillStyle(k % 2 === 0 ? 0xfef08a : color, (0.8 - k * 0.13) * alpha).fillCircle(bx, by, 6.2 - k * 0.85);
-        }
-        if (this.textures.exists(vfxKey)) {
+        if (useVfxSprites && this.textures.exists(vfxKey)) {
           acquireVfx(vfxKey)
             .setTint(color)
             .setAlpha(0.98 * alpha)
@@ -1536,15 +1689,16 @@ export class GameScene extends Phaser.Scene {
             .setOrigin(0.5)
             .setRotation(facing + progress * 2.5)
             .setDisplaySize(34, 34);
+        } else {
+          g.fillStyle(color, 0.85 * alpha).fillCircle(px, py - elev, 6.5);
         }
-        g.fillStyle(0xffffff, 0.95 * alpha).fillCircle(px, py - elev, 4.8);
-        g.lineStyle(2.5, color, 0.6 * alpha).lineBetween(f.x1, f.y1 - 6, px, py - elev);
+        g.fillStyle(0xffffff, 0.95 * alpha).fillCircle(px, py - elev, 4.2);
+        g.lineStyle(2.5, color, 0.65 * alpha).lineBetween(f.x1, f.y1 - 6, px, py - elev);
         if (progress > 0.52) {
           const burst = (progress - 0.52) / 0.48;
-          const br = 8 + burst * 24;
-          g.lineStyle(2.6, 0xffffff, (1 - burst) * 0.92).strokeEllipse(f.x2, f.y2 + 2, br * 2, br * 1.3);
-          g.lineStyle(2, color, (1 - burst) * 0.75).strokeEllipse(f.x2, f.y2 + 2, br * 2.5, br * 1.62);
-          drawStarburst(f.x2, f.y2 - 4, 8, br * 1.15, color, (1 - burst) * 0.95, facing);
+          const br = 8 + burst * 22;
+          g.lineStyle(2.4, color, (1 - burst) * 0.85).strokeEllipse(f.x2, f.y2 + 2, br * 2.2, br * 1.4);
+          if (!lowSpec) drawStarburst(f.x2, f.y2 - 4, 6, br, color, (1 - burst) * 0.95, facing);
         }
       }
     }
@@ -1553,7 +1707,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawAtmosphere(dt: number): void {
     const ag = this.atmosphereGraphics.clear();
-    if (!this.ambientMotes.length) return;
+    if (this.isLowSpecMode() || !this.ambientMotes.length) return;
     const cam = this.cameras.main;
     const cx = cam.midPoint.x;
     const cy = cam.midPoint.y;
@@ -1609,15 +1763,33 @@ export class GameScene extends Phaser.Scene {
 
   private updateVignette(): void {
     if (!this.vignetteOverlay) return;
+    if (this.isLowSpecMode()) {
+      if (this.vignetteOverlay.visible) this.vignetteOverlay.setVisible(false);
+      return;
+    }
     const a = this.state.phase === 'night' ? 0.52 : this.state.phase === 'evening' ? 0.26 : 0;
-    this.vignetteOverlay.setDisplaySize(this.scale.width, this.scale.height).setAlpha(a);
+    if (a <= 0) {
+      if (this.vignetteOverlay.visible) this.vignetteOverlay.setVisible(false);
+      return;
+    }
+    this.vignetteOverlay.setVisible(true).setDisplaySize(this.scale.width, this.scale.height).setAlpha(a);
   }
 
   private drawBars(): void {
     const s = this.state;
     const g = this.barGraphics.clear();
+    const lowSpec = this.isLowSpecMode();
+    const view = this.cameras.main.worldView;
+    const pad = 96;
+    const cLeft = (view.width > 0 ? view.x : s.player.x - 680) - pad;
+    const cRight = (view.width > 0 ? view.right : s.player.x + 680) + pad;
+    const cTop = (view.height > 0 ? view.y : s.player.y - 420) - pad;
+    const cBot = (view.height > 0 ? view.bottom : s.player.y + 420) + pad;
+    const inView = (x: number, y: number) => x >= cLeft && x <= cRight && y >= cTop && y <= cBot;
+
     if (!this.textures.exists('world_decals')) {
       for (const c of s.chests ?? []) {
+        if (!inView(c.x, c.y)) continue;
         if (c.opened) {
           g.fillStyle(0x090d16, 0.25).fillEllipse(c.x + 2, c.y + 8, 24, 9);
           g.fillStyle(0x475569, 0.85).fillRect(c.x - 10, c.y - 4, 20, 10);
@@ -1634,11 +1806,11 @@ export class GameScene extends Phaser.Scene {
     }
     // Gatherable ingredients (R2): pulsing aura ring underneath the 2.5D gather_nodes sprites.
     const hasGatherTex = this.textures.exists('gather_nodes');
-    const pulse = 0.5 + 0.5 * Math.sin(this.animTime * 4);
+    const pulse = lowSpec ? 0.5 : 0.5 + 0.5 * Math.sin(this.animTime * 4);
     for (const n of s.resourceNodes ?? []) {
-      if (n.taken) continue;
+      if (n.taken || !inView(n.x, n.y)) continue;
       const glow = n.kind === 'grain' ? 0xfde047 : 0xc084fc;
-      g.fillStyle(glow, 0.14 + 0.14 * pulse).fillEllipse(n.x, n.y + 8, 36, 15);
+      if (!lowSpec) g.fillStyle(glow, 0.14 + 0.14 * pulse).fillEllipse(n.x, n.y + 8, 36, 15);
       g.lineStyle(1.8, glow, 0.78).strokeEllipse(n.x, n.y + 8, 30 + pulse * 4, 12 + pulse * 2);
       if (!hasGatherTex) {
         if (n.kind === 'grain') {
@@ -1652,7 +1824,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
-    if (s.well) {
+    if (s.well && inView(s.well.x, s.well.y)) {
       const w = s.well;
       const full = w.water + w.fish > 0;
       if (!hasGatherTex) {
@@ -1666,9 +1838,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
     for (const t of s.traps ?? []) {
-      if (t.uses <= 0) continue;
+      if (t.uses <= 0 || !inView(t.x, t.y)) continue;
       // 2.5D foreshortened rune trap pad
-      g.fillStyle(0x090d16, 0.28).fillEllipse(t.x + 1, t.y + 5, 32, 19);
+      if (!lowSpec) g.fillStyle(0x090d16, 0.28).fillEllipse(t.x + 1, t.y + 5, 32, 19);
       g.fillStyle(0xff9f1c, 0.24).fillEllipse(t.x, t.y + 3, 28, 17);
       g.lineStyle(2, 0xff9f1c, 0.9).strokeEllipse(t.x, t.y + 3, 28, 17);
       g.lineStyle(1.5, 0xfef08a, 0.8).lineBetween(t.x - 7, t.y + 3, t.x + 7, t.y + 3);
@@ -1682,7 +1854,9 @@ export class GameScene extends Phaser.Scene {
       const fillW = Math.round(w * r);
       if (fillW >= 3) {
         g.fillStyle(color, 1).fillRoundedRect(x - w / 2, y, fillW, h, Math.min(rad, Math.floor(fillW / 2)));
-        g.fillStyle(0xffffff, 0.34).fillRect(x - w / 2 + 1, y + 1, Math.max(1, fillW - 2), Math.max(1, Math.floor(h * 0.32)));
+        if (!lowSpec) {
+          g.fillStyle(0xffffff, 0.34).fillRect(x - w / 2 + 1, y + 1, Math.max(1, fillW - 2), Math.max(1, Math.floor(h * 0.32)));
+        }
       }
       if (shieldRatio > 0) {
         const sw = Math.round(w * Phaser.Math.Clamp(shieldRatio, 0, 1));
@@ -1692,34 +1866,49 @@ export class GameScene extends Phaser.Scene {
       }
     };
     const coreShieldRatio = (s.coreShield ?? 0) > 0 ? Math.min(1, s.coreShield! / Math.max(1, s.coreMaxHp * 0.4)) : 0;
-    bar(CORE_X, CORE_Y - 78, 96, s.coreHp / s.coreMaxHp, 0xc084fc, 8, coreShieldRatio);
+    if (inView(CORE_X, CORE_Y)) {
+      bar(CORE_X, CORE_Y - 78, 96, s.coreHp / s.coreMaxHp, 0xc084fc, 8, coreShieldRatio);
+    }
     bar(s.player.x, s.player.y - 48, 42, s.player.hp / s.player.maxHp, 0x22c55e, 7);
     for (const m of s.monsters) {
-      if (m.hp < m.maxHp) {
+      if (m.hp < m.maxHp && inView(m.x, m.y)) {
         const mw = m.defId === 'rift_wolf' || m.defId === 'golem' ? 36 : 26;
         bar(m.x, m.y - (m.defId === 'golem' || m.defId === 'rift_wolf' ? 32 : 24), mw, m.hp / m.maxHp, m.affix ? 0xe879f9 : 0xf43f5e, 4.5);
       }
     }
-    if (s.boss && s.boss.rules.hp > 0) bar(s.boss.x, s.boss.y - 68, 128, s.boss.rules.hp / s.boss.rules.maxHp, 0xff4d6d, 9);
+    if (s.boss && s.boss.rules.hp > 0 && inView(s.boss.x, s.boss.y)) {
+      bar(s.boss.x, s.boss.y - 68, 128, s.boss.rules.hp / s.boss.rules.maxHp, 0xff4d6d, 9);
+    }
   }
 
   private drawHud(fpsSnap?: FpsMonitorSnapshot): void {
     const s = this.state;
     const panelW = Math.min(288, Math.max(222, this.scale.width - (import.meta.env.DEV ? 148 : 20)));
     const hasPortrait = !!this.hudHeroPortrait;
-    const barX = hasPortrait ? 64 : 18;
+    const barX = hasPortrait ? 68 : 18;
     const barW = panelW - barX - 10;
 
     const left = phaseRemaining(s);
-    const time = Number.isFinite(left) ? `${Math.ceil(left)} วิ` : 'จันทร์เลือด';
+    const timeSec = Number.isFinite(left) ? Math.ceil(left) : -1;
+    const time = timeSec >= 0 ? `${timeSec} วิ` : 'จันทร์เลือด';
+    const nextXp = Math.max(1, xpToNext(s.player.level));
+    const hudHash = `${s.day}|${s.phase}|${timeSec}|${Math.ceil(s.player.hp)}/${s.player.maxHp}|${Math.ceil(s.coreHp)}/${s.coreMaxHp}|${Math.ceil(s.coreShield ?? 0)}|${s.player.level}|${Math.floor(s.player.xp)}|${s.kills}|${s.monsters.length}|${this.scale.width}x${this.scale.height}|${Boolean(s.pendingDraft)}|${this.sfx.isMuted()}`;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const minIntervalMs = this.isLowSpecMode() ? 140 : 95;
+    if (hudHash === this.lastHudHash && now - this.hudLastDrawMs < minIntervalMs) {
+      return;
+    }
+    this.hudLastDrawMs = now;
+    const layoutChanged = `${s.day}|${s.phase}|${this.scale.width}x${this.scale.height}|${Boolean(s.pendingDraft)}|${this.sfx.isMuted()}` !== this.lastHudHash.split('|').slice(0, 3).join('|');
+    this.lastHudHash = hudHash;
+
     this.hudTitle.setText(`วันที่ ${s.day}/7 · ${PHASE_LABEL[s.phase]} · ${time}`);
     this.hudHpText.setX(barX + 5).setText(`HP ${Math.ceil(s.player.hp)}/${s.player.maxHp}`);
     const shieldTxt = (s.coreShield ?? 0) > 0 ? ` (+โล่ ${Math.ceil(s.coreShield!)})` : '';
     this.hudCoreText.setX(barX + 5).setText(`แกนฐาน ${Math.ceil(s.coreHp)}/${s.coreMaxHp}${shieldTxt}`);
 
-    const nextXp = Math.max(1, xpToNext(s.player.level));
     const fpsText = fpsSnap
-      ? ` · FPS ${Math.round(fpsSnap.averageFps)}${fpsSnap.lowEndFallbackActive ? ' (30fps)' : ''}`
+      ? ` · FPS ${Math.round(fpsSnap.averageFps)}${this.isLowSpecMode() ? ' ⚡LowGPU' : ''}`
       : '';
     this.hudMetaText.setText(`Lv.${s.player.level} (${formatExpPercent(s.player.xp, nextXp)}) · ปราบ ${s.kills} · มอน ${s.monsters.length}${fpsText}`);
 
@@ -1737,14 +1926,15 @@ export class GameScene extends Phaser.Scene {
     if (this.systemToast.visible) this.positionSystemToast();
 
     const g = this.hudGraphics.clear();
-    // Classic RO / Concept Fantasy Gold & Slate Basic Info window frame
+    // Classic RO / Ornate Fantasy Gold & Slate Basic Info window frame
     drawRoWindow(g, 10, 10, panelW, panelH, { headerHeight: 24, bodyAlpha: 0.92 });
 
-    // Ornate Gold-Framed Hero Portrait Thumbnail inside Basic Info HUD
-    if (hasPortrait) {
+    // Portrait interior backing behind ui_portrait_frame
+    if (hasPortrait && !this.hudPortraitFrame) {
       g.fillStyle(0x16243d, 0.98).fillRoundedRect(17, 38, 42, 42, 4);
       g.lineStyle(1.8, RO_PALETTE.windowGoldAccent, 0.95).strokeRoundedRect(17, 38, 42, 42, 4);
-      g.lineStyle(1, RO_PALETTE.windowOuterBorder, 0.9).strokeRoundedRect(19, 40, 38, 38, 3);
+    } else if (hasPortrait) {
+      g.fillStyle(0x121d33, 0.98).fillRect(21, 41, 34, 34);
     }
 
     // Segmented HP / CORE / EXP bars
@@ -1762,59 +1952,113 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(RO_PALETTE.windowWell, 0.92).fillRoundedRect(16, 101, panelW - 12, wellH, 4);
     g.lineStyle(1, RO_PALETTE.windowBevelDark, 0.95).strokeRoundedRect(16, 101, panelW - 12, wellH, 4);
 
-    // Bottom-right 88x88 Tactical Mini-Radar with Fantasy Gold Bezel & Crosshairs
-    const radarSize = 88;
-    const rx = this.scale.width - 100;
-    const ry = this.scale.height - 138;
-    this.radarLabel.setPosition(rx, ry - 15).setText('🧭 N · RADAR');
-    g.fillStyle(RO_PALETTE.windowOuterBorder, 0.95).fillRoundedRect(rx - 3, ry - 3, radarSize + 6, radarSize + 6, 7);
-    g.fillStyle(0x09111e, 0.9).fillRoundedRect(rx, ry, radarSize, radarSize, 5);
-    g.lineStyle(1.8, RO_PALETTE.windowGoldAccent, 0.92).strokeRoundedRect(rx, ry, radarSize, radarSize, 5);
-    g.lineStyle(1, 0x38bdf8, 0.16).strokeCircle(rx + radarSize / 2, ry + radarSize / 2, radarSize * 0.34);
-    g.lineStyle(1, 0x94a3b8, 0.14)
-      .lineBetween(rx + radarSize / 2, ry + 4, rx + radarSize / 2, ry + radarSize - 4)
-      .lineBetween(rx + 4, ry + radarSize / 2, rx + radarSize - 4, ry + radarSize / 2);
-    const toRadar = (wx: number, wy: number) => ({
-      x: rx + 4 + Phaser.Math.Clamp(wx / WORLD, 0, 1) * (radarSize - 8),
-      y: ry + 4 + Phaser.Math.Clamp(wy / WORLD, 0, 1) * (radarSize - 8),
-    });
-    const corePt = toRadar(CORE_X, CORE_Y);
-    g.fillStyle(0x38bdf8, 0.95).fillRect(corePt.x - 3, corePt.y - 3, 6, 6);
-    if (s.well) {
-      const wp = toRadar(s.well.x, s.well.y);
-      g.fillStyle(s.well.water + s.well.fish > 0 ? 0x0ea5e9 : 0x475569, 0.95).fillCircle(wp.x, wp.y, 2.5);
+    // Bottom-right Circular Compass Minimap inside ornate ui_radar_frame (or fallback square bezel)
+    if (this.hudRadarFrame) {
+      const cx = this.scale.width - 66;
+      const cy = this.scale.height - 74.5;
+      const maxR = 30;
+      this.hudRadarFrame.setPosition(this.scale.width - 66, this.scale.height - 76);
+      this.radarLabel.setPosition(this.scale.width - 66, this.scale.height - 116).setText('N');
+      g.fillStyle(0x09111e, 0.94).fillCircle(cx, cy, 35.5);
+      g.lineStyle(1, 0x38bdf8, 0.2).strokeCircle(cx, cy, 20);
+      g.lineStyle(1, 0x94a3b8, 0.16)
+        .lineBetween(cx, cy - 33, cx, cy + 33)
+        .lineBetween(cx - 33, cy, cx + 33, cy);
+      const toRadar = (wx: number, wy: number) => {
+        let nx = (wx / WORLD - 0.5) * 2;
+        let ny = (wy / WORLD - 0.5) * 2;
+        const mag = Math.hypot(nx, ny);
+        if (mag > 1) {
+          nx /= mag;
+          ny /= mag;
+        }
+        return { x: cx + nx * maxR, y: cy + ny * maxR };
+      };
+      const corePt = toRadar(CORE_X, CORE_Y);
+      g.fillStyle(0x38bdf8, 0.95).fillRect(corePt.x - 3, corePt.y - 3, 6, 6);
+      if (s.well) {
+        const wp = toRadar(s.well.x, s.well.y);
+        g.fillStyle(s.well.water + s.well.fish > 0 ? 0x0ea5e9 : 0x475569, 0.95).fillCircle(wp.x, wp.y, 2.5);
+      }
+      for (const n of s.resourceNodes ?? []) {
+        if (n.taken) continue;
+        const np = toRadar(n.x, n.y);
+        g.fillStyle(n.kind === 'grain' ? 0xfacc15 : 0xc084fc, 0.9).fillCircle(np.x, np.y, 2);
+      }
+      for (const c of s.chests ?? []) {
+        if (c.opened) continue;
+        const cp = toRadar(c.x, c.y);
+        g.fillStyle(0xfbbf24, 0.95).fillRect(cp.x - 1.5, cp.y - 1.5, 3, 3);
+      }
+      for (const m of s.monsters) {
+        const mp = toRadar(m.x, m.y);
+        const elite = m.defId === 'rift_wolf' || !!m.affix;
+        g.fillStyle(elite ? 0xe879f9 : 0xf43f5e, 0.95).fillCircle(mp.x, mp.y, elite ? 2.6 : 1.7);
+      }
+      if (s.boss && s.boss.rules.hp > 0) {
+        const bp = toRadar(s.boss.x, s.boss.y);
+        g.fillStyle(0xff0055, 1).fillCircle(bp.x, bp.y, 3.6);
+        g.lineStyle(1, 0xfef08a, 0.9).strokeCircle(bp.x, bp.y, 4.4);
+      }
+      const playerPt = toRadar(s.player.x, s.player.y);
+      g.fillStyle(0xffffff, 1).fillCircle(playerPt.x, playerPt.y, 2.7);
+      g.lineStyle(1, 0xfde047, 1).strokeCircle(playerPt.x, playerPt.y, 3.2);
+    } else {
+      const radarSize = 88;
+      const rx = this.scale.width - 100;
+      const ry = this.scale.height - 138;
+      this.radarLabel.setPosition(rx, ry - 15).setText('🧭 N · RADAR');
+      g.fillStyle(RO_PALETTE.windowOuterBorder, 0.95).fillRoundedRect(rx - 3, ry - 3, radarSize + 6, radarSize + 6, 7);
+      g.fillStyle(0x09111e, 0.9).fillRoundedRect(rx, ry, radarSize, radarSize, 5);
+      g.lineStyle(1.8, RO_PALETTE.windowGoldAccent, 0.92).strokeRoundedRect(rx, ry, radarSize, radarSize, 5);
+      g.lineStyle(1, 0x38bdf8, 0.16).strokeCircle(rx + radarSize / 2, ry + radarSize / 2, radarSize * 0.34);
+      g.lineStyle(1, 0x94a3b8, 0.14)
+        .lineBetween(rx + radarSize / 2, ry + 4, rx + radarSize / 2, ry + radarSize - 4)
+        .lineBetween(rx + 4, ry + radarSize / 2, rx + radarSize - 4, ry + radarSize / 2);
+      const toRadar = (wx: number, wy: number) => ({
+        x: rx + 4 + Phaser.Math.Clamp(wx / WORLD, 0, 1) * (radarSize - 8),
+        y: ry + 4 + Phaser.Math.Clamp(wy / WORLD, 0, 1) * (radarSize - 8),
+      });
+      const corePt = toRadar(CORE_X, CORE_Y);
+      g.fillStyle(0x38bdf8, 0.95).fillRect(corePt.x - 3, corePt.y - 3, 6, 6);
+      if (s.well) {
+        const wp = toRadar(s.well.x, s.well.y);
+        g.fillStyle(s.well.water + s.well.fish > 0 ? 0x0ea5e9 : 0x475569, 0.95).fillCircle(wp.x, wp.y, 2.5);
+      }
+      for (const n of s.resourceNodes ?? []) {
+        if (n.taken) continue;
+        const np = toRadar(n.x, n.y);
+        g.fillStyle(n.kind === 'grain' ? 0xfacc15 : 0xc084fc, 0.9).fillCircle(np.x, np.y, 2);
+      }
+      for (const c of s.chests ?? []) {
+        if (c.opened) continue;
+        const cp = toRadar(c.x, c.y);
+        g.fillStyle(0xfbbf24, 0.95).fillRect(cp.x - 1.5, cp.y - 1.5, 3, 3);
+      }
+      for (const m of s.monsters) {
+        const mp = toRadar(m.x, m.y);
+        const elite = m.defId === 'rift_wolf' || !!m.affix;
+        g.fillStyle(elite ? 0xe879f9 : 0xf43f5e, 0.95).fillCircle(mp.x, mp.y, elite ? 2.6 : 1.7);
+      }
+      if (s.boss && s.boss.rules.hp > 0) {
+        const bp = toRadar(s.boss.x, s.boss.y);
+        g.fillStyle(0xff0055, 1).fillCircle(bp.x, bp.y, 3.8);
+        g.lineStyle(1, 0xfef08a, 0.9).strokeCircle(bp.x, bp.y, 4.5);
+      }
+      const playerPt = toRadar(s.player.x, s.player.y);
+      g.fillStyle(0xffffff, 1).fillCircle(playerPt.x, playerPt.y, 2.8);
+      g.lineStyle(1, 0xfde047, 1).strokeCircle(playerPt.x, playerPt.y, 3.2);
     }
-    for (const n of s.resourceNodes ?? []) {
-      if (n.taken) continue;
-      const np = toRadar(n.x, n.y);
-      g.fillStyle(n.kind === 'grain' ? 0xfacc15 : 0xc084fc, 0.9).fillCircle(np.x, np.y, 2);
-    }
-    for (const c of s.chests ?? []) {
-      if (c.opened) continue;
-      const cp = toRadar(c.x, c.y);
-      g.fillStyle(0xfbbf24, 0.95).fillRect(cp.x - 1.5, cp.y - 1.5, 3, 3);
-    }
-    for (const m of s.monsters) {
-      const mp = toRadar(m.x, m.y);
-      const elite = m.defId === 'rift_wolf' || !!m.affix;
-      g.fillStyle(elite ? 0xe879f9 : 0xf43f5e, 0.95).fillCircle(mp.x, mp.y, elite ? 2.6 : 1.7);
-    }
-    if (s.boss && s.boss.rules.hp > 0) {
-      const bp = toRadar(s.boss.x, s.boss.y);
-      g.fillStyle(0xff0055, 1).fillCircle(bp.x, bp.y, 3.8);
-      g.lineStyle(1, 0xfef08a, 0.9).strokeCircle(bp.x, bp.y, 4.5);
-    }
-    const playerPt = toRadar(s.player.x, s.player.y);
-    g.fillStyle(0xffffff, 1).fillCircle(playerPt.x, playerPt.y, 2.8);
-    g.lineStyle(1, 0xfde047, 1).strokeCircle(playerPt.x, playerPt.y, 3.2);
 
-    this.recallBtn.setVisible(s.phase === 'day' && s.status === 'playing' && !s.pendingDraft);
-    this.muteBtn.setText(`[M] ${this.sfx.isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด'}`);
-    this.codexBtn.setText(this.scale.width < 440 ? '[B] สูตร' : '[B] สูตรผสม');
-    this.layoutBottomButtons();
+    if (layoutChanged || this.recallBtn.visible !== (s.phase === 'day' && s.status === 'playing' && !s.pendingDraft)) {
+      this.recallBtn.setVisible(s.phase === 'day' && s.status === 'playing' && !s.pendingDraft);
+      this.muteBtn.setText(`[M] ${this.sfx.isMuted() ? 'เสียง: ปิด' : 'เสียง: เปิด'}`);
+      this.codexBtn.setText(this.scale.width < 440 ? '[B] สูตร' : '[B] สูตรผสม');
+      this.layoutBottomButtons();
+    }
     if (isPlayerDown(s)) {
       this.downBanner.setText(`ล้มลง! ฟื้นที่ฐานใน ${Math.ceil(s.respawnIn)} วิ`).setVisible(true);
-    } else {
+    } else if (this.downBanner.visible) {
       this.downBanner.setVisible(false);
     }
 
@@ -1875,8 +2119,9 @@ export class GameScene extends Phaser.Scene {
 
     const badges = buildSynergyHudBadges(this.state, this.data_.skills);
     const count = this.state.skills.length;
-    const slotSize = 38;
-    const step = 42;
+    const hasSkillSlotTex = this.textures.exists('ui_skill_slot');
+    const slotSize = hasSkillSlotTex ? 40 : 38;
+    const step = hasSkillSlotTex ? 44 : 42;
     const padX = 6;
     const padY = 5;
     const slotsW = count * step - 4 + padX * 2;
@@ -1896,10 +2141,14 @@ export class GameScene extends Phaser.Scene {
       const sx = padX + i * step;
       const sy = padY;
       const borderColor = o.gift ? 0xff9f1c : def ? RARITY_COLOR[def.rarity] : RO_PALETTE.windowBevelLight;
-      drawRoIconSlot(dockG, sx, sy, slotSize, borderColor);
+      if (hasSkillSlotTex) {
+        dock.add(this.add.image(sx + slotSize / 2, sy + slotSize / 2, 'ui_skill_slot').setDisplaySize(slotSize + 2, slotSize + 2));
+      } else {
+        drawRoIconSlot(dockG, sx, sy, slotSize, borderColor);
+      }
 
       if (this.textures.exists(`icon_${o.id}`)) {
-        dock.add(this.add.image(sx + slotSize / 2, sy + slotSize / 2 + 2, `icon_${o.id}`).setDisplaySize(24, 24));
+        dock.add(this.add.image(sx + slotSize / 2, sy + slotSize / 2 + 1, `icon_${o.id}`).setDisplaySize(24, 24));
       }
 
       skillTexts.push(
@@ -2003,7 +2252,11 @@ export class GameScene extends Phaser.Scene {
     this.state.skills.forEach((o, i) => {
       const def = this.data_.skills.find((d) => d.id === o.id);
       const borderColor = o.gift ? 0xff9f1c : def ? RARITY_COLOR[def.rarity] : RO_PALETTE.windowBevelLight;
-      drawRoIconSlot(dockG, padX + i * step, padY, slotSize, borderColor);
+      if (hasSkillSlotTex) {
+        dockG.lineStyle(1.4, borderColor, 0.78).strokeRoundedRect(padX + i * step, padY, slotSize, slotSize, 5);
+      } else {
+        drawRoIconSlot(dockG, padX + i * step, padY, slotSize, borderColor);
+      }
     });
     if (badges.length > 0) {
       let cx = padX;
@@ -2177,14 +2430,14 @@ export class GameScene extends Phaser.Scene {
       const slotY = y + Math.round((cardH - 58) / 2);
       drawRoIconSlot(slotG, slotX, slotY, 58, RARITY_COLOR[def.rarity]);
 
-      const textX = cardLeft + 80;
-      const wrapW = cardW - 118;
+      const textX = cardLeft + 84;
+      const wrapW = cardW - 122;
       const cardItems: Phaser.GameObjects.GameObject[] = [frame];
       if (this.textures.exists(`card_frame_${def.rarity}`)) {
-        cardItems.push(this.add.image(slotX + 29, slotY + 29, `card_frame_${def.rarity}`).setDisplaySize(50, 56));
+        cardItems.push(this.add.image(slotX + 29, slotY + 29, `card_frame_${def.rarity}`).setDisplaySize(54, 64));
       }
       if (hasIcon) {
-        cardItems.push(this.add.image(slotX + 29, slotY + 29, `icon_${id}`).setDisplaySize(42, 42));
+        cardItems.push(this.add.image(slotX + 29, slotY + 29, `icon_${id}`).setDisplaySize(36, 36));
       }
       const headTxt = this.add.text(textX, y + 8, head, {
         fontFamily: 'system-ui, sans-serif',
@@ -2300,10 +2553,10 @@ export class GameScene extends Phaser.Scene {
 
       const fusionItems: Phaser.GameObjects.GameObject[] = [frame, fSlotG];
       if (this.textures.exists('card_frame_fusion')) {
-        fusionItems.push(this.add.image(fSlotX + 28, fSlotY + 28, 'card_frame_fusion').setDisplaySize(48, 54));
+        fusionItems.push(this.add.image(fSlotX + 28, fSlotY + 28, 'card_frame_fusion').setDisplaySize(54, 64));
       }
       if (this.textures.exists(`icon_${fusion.resultSkill.id}`)) {
-        fusionItems.push(this.add.image(fSlotX + 28, fSlotY + 28, `icon_${fusion.resultSkill.id}`).setDisplaySize(40, 40));
+        fusionItems.push(this.add.image(fSlotX + 28, fSlotY + 28, `icon_${fusion.resultSkill.id}`).setDisplaySize(36, 36));
       }
       fusionItems.push(
         this.add
@@ -2996,11 +3249,13 @@ export class GameScene extends Phaser.Scene {
 
   private drawWorld(): void {
     const map = RunRng.fromSeed(this.state.seed).get('map');
+    const hasTiles = this.textures.exists('tile_ground_01');
     const hasDecals = this.textures.exists('world_decals');
     const decalStamp = hasDecals ? this.make.image({ key: 'world_decals', frame: 0, add: false }) : undefined;
     const plazaY = CORE_Y + 4;
-    if (this.textures.exists('tile_ground_01')) {
-      const rt = this.add.renderTexture(0, 0, WORLD, WORLD).setOrigin(0).setDepth(0);
+
+    const rt = hasTiles ? this.add.renderTexture(0, 0, WORLD, WORLD).setOrigin(0).setDepth(0) : null;
+    if (rt) {
       rt.beginDraw();
       for (let ty = 0; ty < WORLD; ty += 128) {
         for (let tx = 0; tx < WORLD; tx += 128) {
@@ -3008,40 +3263,6 @@ export class GameScene extends Phaser.Scene {
           rt.batchDrawFrame(`tile_ground_0${tileIdx}`, undefined, tx, ty);
         }
       }
-      // Bake non-repeating studio wildflower tufts + painted cardinal flagstone paths into static ground RenderTexture
-      if (decalStamp) {
-        for (let d = 0; d < 140; d++) {
-          const dx = map.int(64, WORLD - 64);
-          const dy = map.int(64, WORLD - 64);
-          if (Math.hypot(dx - CORE_X, dy - CORE_Y) < 268) continue;
-          const sc = 0.28 + (d % 4) * 0.04;
-          decalStamp.setFrame(0).setScale(sc).setFlipX(d % 2 === 0).setAlpha(0.92);
-          rt.draw(decalStamp, dx, dy);
-        }
-        // Studio-illustrated sandstone flagstone clusters along N/S/E/W pathways
-        for (const [isVert, dir] of [
-          [false, -1],
-          [false, 1],
-          [true, -1],
-          [true, 1],
-        ] as const) {
-          const len = isVert ? 440 : 540;
-          const start = isVert ? 156 : 228;
-          const steps = 12;
-          for (let step = 0; step < steps; step++) {
-            const t = step / (steps - 1);
-            const dist = start + t * len;
-            const wobble = Math.sin(step * 2.1 + dir) * 5;
-            const px = isVert ? CORE_X + wobble : CORE_X + dir * dist;
-            const py = isVert ? plazaY + dir * dist : plazaY + wobble * 0.7;
-            const sc = (0.45 - t * 0.06) * (step % 2 === 0 ? 1.0 : 0.92);
-            decalStamp.setFrame(1).setScale(sc).setFlipX((step + (dir > 0 ? 1 : 0)) % 2 === 0).setAlpha(0.96);
-            rt.draw(decalStamp, px, py);
-          }
-        }
-      }
-      rt.endDraw();
-      decalStamp?.destroy();
     } else {
       const gBg = this.add.graphics().setDepth(0);
       gBg.fillStyle(0x1d2b1f).fillRect(0, 0, WORLD, WORLD);
@@ -3052,7 +3273,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // World-space painterly meadow glades + soft outer boundary stone walkway + studio crystal pylons.
+    // World-space painterly meadow glades + soft outer boundary stone walkway (baked into static rt when available).
     const gRoads = this.add.graphics().setDepth(0.8);
     for (let i = 0; i < 36; i++) {
       const gx = map.int(120, WORLD - 120);
@@ -3081,11 +3302,13 @@ export class GameScene extends Phaser.Scene {
       gRoads.fillStyle(0x38bdf8, 0.18).fillEllipse(sx, sy - 6, 54, 28);
       gRoads.fillStyle(0x07121b, 0.28).fillEllipse(sx + 4, sy + 4, 34, 15);
       if (hasDecals) {
-        this.add
-          .sprite(sx, sy + 2, 'world_decals', 3)
-          .setOrigin(0.5, 0.88)
-          .setScale(0.48)
-          .setDepth(this.depthAtY(sy));
+        this.worldPropSprites.push(
+          this.add
+            .sprite(sx, sy + 2, 'world_decals', 3)
+            .setOrigin(0.5, 0.88)
+            .setScale(0.48)
+            .setDepth(this.depthAtY(sy)),
+        );
       }
     }
 
@@ -3113,12 +3336,55 @@ export class GameScene extends Phaser.Scene {
     drawRoadTrack(true, -1);
     drawRoadTrack(true, 1);
 
-    // Pre-rendered 2.5D Sanctuary Plaza around Core.
+    if (rt) {
+      rt.draw(gRoads, 0, 0);
+      gRoads.destroy();
+      // Bake non-repeating studio wildflower tufts + painted cardinal flagstone paths on top of road tracks
+      if (decalStamp) {
+        for (let d = 0; d < 140; d++) {
+          const dx = map.int(64, WORLD - 64);
+          const dy = map.int(64, WORLD - 64);
+          if (Math.hypot(dx - CORE_X, dy - CORE_Y) < 268) continue;
+          const sc = 0.28 + (d % 4) * 0.04;
+          decalStamp.setFrame(0).setScale(sc).setFlipX(d % 2 === 0).setAlpha(0.92);
+          rt.draw(decalStamp, dx, dy);
+        }
+        for (const [isVert, dir] of [
+          [false, -1],
+          [false, 1],
+          [true, -1],
+          [true, 1],
+        ] as const) {
+          const len = isVert ? 440 : 540;
+          const start = isVert ? 156 : 228;
+          const steps = 12;
+          for (let step = 0; step < steps; step++) {
+            const t = step / (steps - 1);
+            const dist = start + t * len;
+            const wobble = Math.sin(step * 2.1 + dir) * 5;
+            const px = isVert ? CORE_X + wobble : CORE_X + dir * dist;
+            const py = isVert ? plazaY + dir * dist : plazaY + wobble * 0.7;
+            const sc = (0.45 - t * 0.06) * (step % 2 === 0 ? 1.0 : 0.92);
+            decalStamp.setFrame(1).setScale(sc).setFlipX((step + (dir > 0 ? 1 : 0)) % 2 === 0).setAlpha(0.96);
+            rt.draw(decalStamp, px, py);
+          }
+        }
+      }
+    }
+    decalStamp?.destroy();
+
+    // Bake Sanctuary Plaza directly into static rt when present to eliminate extra full-plaza draw call
     if (this.textures.exists('sanctuary_plaza')) {
-      this.add.image(CORE_X, plazaY, 'sanctuary_plaza').setDepth(1.5);
+      if (rt) {
+        const plazaStamp = this.make.image({ key: 'sanctuary_plaza', add: false });
+        rt.draw(plazaStamp, CORE_X, plazaY);
+        plazaStamp.destroy();
+      } else {
+        this.add.image(CORE_X, plazaY, 'sanctuary_plaza').setDepth(1.5);
+      }
     }
 
-    // Deterministic 2.5D world props (oak trees, crystal clusters, mossy shrine arches, waystones) with min spacing & organic offset.
+    // Deterministic 2.5D world props (oak trees, crystal clusters, mossy shrine arches, waystones) with viewport culling
     const gPropShadows = this.add.graphics().setDepth(2.2);
     const hasProps = this.textures.exists('world_props');
     const placedProps: Array<{ x: number; y: number }> = [];
@@ -3134,18 +3400,24 @@ export class GameScene extends Phaser.Scene {
       placedProps.push({ x, y });
       if (hasProps) {
         const sc = 0.64 + ((i % 4) * 0.045);
-        // Subtle soft ground AO only for rock/obelisk props (tree & arch already carry painted cast shadow)
         if (kind === 1 || kind === 3) {
           gPropShadows.fillStyle(0x07170e, 0.24).fillEllipse(x + 5, y + 4, 48 * (sc / 0.7), 18 * (sc / 0.7));
         }
-        this.add
-          .sprite(x, y, 'world_props', kind)
-          .setOrigin(0.5, 0.84)
-          .setScale(sc)
-          .setDepth(this.depthAtY(y));
+        this.worldPropSprites.push(
+          this.add
+            .sprite(x, y, 'world_props', kind)
+            .setOrigin(0.5, 0.84)
+            .setScale(sc)
+            .setDepth(this.depthAtY(y)),
+        );
       } else {
         gPropShadows.fillStyle(0x2d6a4f, 0.9).fillCircle(x, y, 8);
       }
+    }
+    if (rt) {
+      rt.draw(gPropShadows, 0, 0);
+      gPropShadows.destroy();
+      rt.endDraw();
     }
 
     // 2.5D Illustrated Base Core crystal dais nested into Sanctuary Plaza center (GDD §5).

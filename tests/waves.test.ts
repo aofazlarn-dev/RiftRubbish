@@ -9,18 +9,25 @@ const monsters = monstersData.monsters as unknown as MonsterDef[];
 const waves = wavesData as unknown as WavesData;
 const combat = (seed: string) => RunRng.fromSeed(seed).get('combat');
 
-describe('wave data (balance §5.1)', () => {
-  it('raw HP per night matches the balance table', () => {
-    const expected = [448, 952, 1382, 1480, 2502, 3032, 2300];
+describe('wave data (expanded swarm)', () => {
+  it('raw HP per night matches the expanded wave table', () => {
+    const expected = [664, 1324, 1906, 2020, 3448, 4068, 3150];
     for (let night = 1; night <= 7; night++) {
       expect(waveTotalHp(waveForNight(waves, night), monsters)).toBe(expected[night - 1]);
     }
   });
 
-  it('monster counts per night match the balance table', () => {
-    const expected = [40, 60, 76, 59, 74, 80, 50];
+  it('monster counts per night match the expanded wave table', () => {
+    const expected = [60, 84, 106, 82, 104, 112, 70];
     waves.nights.forEach((n, i) => {
       expect(Object.values(n.spawns).reduce((a, b) => a + b, 0)).toBe(expected[i]);
+    });
+  });
+
+  it('day patrol groups are generously populated across days 1–7', () => {
+    waves.days.forEach((d) => {
+      const count = Object.values(d.spawns).reduce((a, b) => a + b, 0);
+      expect(count).toBeGreaterThanOrEqual(55);
     });
   });
 
@@ -38,11 +45,11 @@ describe('wave data (balance §5.1)', () => {
 describe('spawn schedule', () => {
   it('nights 1–6 spawn 30% / 40% / 30% and nothing in the last 5 seconds', () => {
     const spawns = buildNightSpawns(waveForNight(waves, 3), combat('s'));
-    expect(spawns).toHaveLength(76);
+    expect(spawns).toHaveLength(106);
     const inRange = (a: number, b: number) => spawns.filter((s) => s.t >= a && s.t < b).length;
-    expect(inRange(0, 10)).toBe(22);
-    expect(inRange(10, 25)).toBe(30);
-    expect(inRange(25, 35)).toBe(24);
+    expect(inRange(0, 10)).toBe(31);
+    expect(inRange(10, 25)).toBe(42);
+    expect(inRange(25, 35)).toBe(33);
     expect(inRange(35, 40)).toBe(0);
   });
 
@@ -54,11 +61,11 @@ describe('spawn schedule', () => {
     expect(a.map((s) => s.monsterId)).not.toEqual(c.map((s) => s.monsterId));
   });
 
-  it('night 7 trickles one monster every 1.8 s within the first 90 s', () => {
+  it('night 7 trickles one monster every 1.8 s across the boss encounter', () => {
     const spawns = buildNightSpawns(waveForNight(waves, 7), combat('boss'));
-    expect(spawns).toHaveLength(50);
+    expect(spawns).toHaveLength(70);
     expect(spawns[1].t - spawns[0].t).toBeCloseTo(1.8);
-    expect(spawns[49].t).toBeLessThan(90);
+    expect(spawns[69].t).toBeLessThan(130);
   });
 
   it('no affix before night 5; some affixes on night 6', () => {

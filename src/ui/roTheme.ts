@@ -303,8 +303,17 @@ export function createRoButton(
   const container = scene.add.container(x, y);
 
   const g = scene.add.graphics();
-  drawButtonSurface(g, w, h, spec, false, enabled);
-  container.add(g);
+  const usePlate = w >= h * 2.1 && scene.textures?.exists('ui_button_plate');
+  if (usePlate) {
+    const plate = scene.add.image(0, 0, 'ui_button_plate').setDisplaySize(w + 6, h + 4).setAlpha(enabled ? 0.98 : 0.45);
+    container.add(plate);
+    // Subtle inner tone ribbon so crimson/gold/teal CTAs keep clear color coding without CPU Canvas tinting
+    g.fillStyle(spec.top, enabled ? 0.34 : 0.16).fillRoundedRect(-w / 2 + 12, -h / 2 + 5, Math.max(8, w - 24), Math.max(6, h - 10), 4);
+    container.add(g);
+  } else {
+    drawButtonSurface(g, w, h, spec, false, enabled);
+    container.add(g);
+  }
 
   const txt = scene.add
     .text(0, 0, label, {
@@ -315,7 +324,7 @@ export function createRoButton(
       stroke: '#0b111e',
       strokeThickness: 3,
       align: 'center',
-      wordWrap: { width: w - 18 },
+      wordWrap: { width: w - 22 },
     })
     .setOrigin(0.5);
   container.add(txt);
@@ -323,11 +332,21 @@ export function createRoButton(
   if (enabled) {
     const hit = scene.add.rectangle(0, 0, w, h, 0x000000, 0).setInteractive({ useHandCursor: true });
     hit.on('pointerover', () => {
-      drawButtonSurface(g, w, h, spec, true, true);
+      if (usePlate) {
+        g.clear();
+        g.fillStyle(spec.hoverTop, 0.46).fillRoundedRect(-w / 2 + 12, -h / 2 + 5, Math.max(8, w - 24), Math.max(6, h - 10), 4);
+      } else {
+        drawButtonSurface(g, w, h, spec, true, true);
+      }
       container.setScale(1.015);
     });
     hit.on('pointerout', () => {
-      drawButtonSurface(g, w, h, spec, false, true);
+      if (usePlate) {
+        g.clear();
+        g.fillStyle(spec.top, 0.34).fillRoundedRect(-w / 2 + 12, -h / 2 + 5, Math.max(8, w - 24), Math.max(6, h - 10), 4);
+      } else {
+        drawButtonSurface(g, w, h, spec, false, true);
+      }
       container.setScale(1);
     });
     hit.on('pointerdown', () => {

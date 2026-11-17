@@ -5,6 +5,7 @@ import type { GameState } from '../core/state';
 
 export class DebugOverlay {
   private text: Phaser.GameObjects.Text;
+  private lastDrawMs = -1000;
 
   constructor(private scene: Phaser.Scene) {
     this.text = scene.add
@@ -25,11 +26,15 @@ export class DebugOverlay {
 
   update(state: GameState, objects: number): void {
     if (!this.text.visible) return;
+    const now = performance.now();
+    if (now - this.lastDrawMs < 250) return;
+    this.lastDrawMs = now;
     this.text.setX(this.scene.scale.width - 12);
     const fps = this.scene.game.loop.actualFps.toFixed(0);
+    const modeTag = (this.scene.game.renderer.type === Phaser.CANVAS) ? ' · CPU/Canvas' : '';
     this.text.setText(
       [
-        `FPS ${fps}`,
+        `FPS ${fps}${modeTag}`,
         `objects ${objects}`,
         `seed ${state.seed}${state.fromSeedLink ? ' (link: no shards)' : ''}`,
         `pos ${state.player.x.toFixed(0)},${state.player.y.toFixed(0)}`,
