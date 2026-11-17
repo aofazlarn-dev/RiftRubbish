@@ -34,6 +34,8 @@ export class TitleScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image('title_bg', 'assets/ui/title_bg.jpg');
+    this.load.image('ui_button_plate', 'assets/ui/ui_button_plate.png?v=ui1');
+    this.load.image('ui_skill_slot', 'assets/ui/ui_skill_slot.png?v=ui1');
   }
 
   create(): void {

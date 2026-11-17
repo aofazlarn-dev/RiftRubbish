@@ -6,7 +6,7 @@ import type Phaser from 'phaser';
  */
 export const RO_PALETTE = {
   windowOuterBorder: 0x0b111e,
-  windowBevelLight: 0x9bb5dc,
+  windowBevelLight: 0xe5c158,
   windowBevelDark: 0x2c3e5e,
   windowGoldAccent: 0xe5c158,
   windowBody: 0x182238,
@@ -16,7 +16,7 @@ export const RO_PALETTE = {
   rowSelectedBg: 0x27476e,
   headerTop: 0x3b5b8c,
   headerBottom: 0x253b61,
-  headerHighlight: 0x93c5fd,
+  headerHighlight: 0xfde68a,
   headerCrimsonTop: 0x7f1d3d,
   headerCrimsonBottom: 0x4c1127,
   hpFill: 0x22c55e,
@@ -170,9 +170,9 @@ export function drawRoWindow(
   g.lineStyle(1.5, RO_PALETTE.windowBevelLight, 0.85).strokeRoundedRect(x + 1, y + 1, w - 2, h - 2, 5);
   g.lineStyle(1, RO_PALETTE.windowBevelDark, 0.9).strokeRoundedRect(x + 2, y + 2, w - 4, h - 4, 4);
 
-  // Brass/gold corner L-ticks for RO-Rift signature trim
-  const tick = 7;
-  g.lineStyle(2, RO_PALETTE.windowGoldAccent, 0.92);
+  // Brass/gold corner L-ticks & ornate filigree studs for fantasy RPG trim
+  const tick = 8;
+  g.lineStyle(2, RO_PALETTE.windowGoldAccent, 0.95);
   // Top-left
   g.lineBetween(x + 1, y + tick, x + 1, y + 1);
   g.lineBetween(x + 1, y + 1, x + tick, y + 1);
@@ -185,6 +185,16 @@ export function drawRoWindow(
   // Bottom-right
   g.lineBetween(x + w - tick, y + h - 1, x + w - 1, y + h - 1);
   g.lineBetween(x + w - 1, y + h - tick, x + w - 1, y + h - 1);
+  // Corner gold studs
+  g.fillStyle(RO_PALETTE.windowGoldAccent, 0.95);
+  for (const [cx, cy] of [
+    [x + 2, y + 2],
+    [x + w - 2, y + 2],
+    [x + 2, y + h - 2],
+    [x + w - 2, y + h - 2],
+  ]) {
+    g.fillCircle(cx, cy, 2);
+  }
 }
 
 /**
@@ -204,10 +214,12 @@ export function drawRoGaugeBar(
   g.lineStyle(1, 0x475569, 0.9).strokeRoundedRect(x, y, w, h, 3);
 
   const innerW = Math.max(0, w - 2);
-  const fillW = r > 0 ? Math.max(3, Math.round(innerW * r)) : 0;
+  const fillW = r > 0 ? Math.max(4, Math.round(innerW * r)) : 0;
   if (fillW > 0) {
-    g.fillStyle(fillColor, 1).fillRoundedRect(x + 1, y + 1, fillW, Math.max(2, h - 2), 2);
-    const glossH = Math.max(2, Math.floor(h * 0.35));
+    const innerH = Math.max(2, h - 2);
+    const barRad = Math.max(0, Math.min(2, Math.floor(Math.min(fillW, innerH) / 2)));
+    g.fillStyle(fillColor, 1).fillRoundedRect(x + 1, y + 1, fillW, innerH, barRad);
+    const glossH = Math.max(1, Math.floor(h * 0.35));
     g.fillStyle(0xffffff, 0.3).fillRect(x + 2, y + 1, Math.max(1, fillW - 2), glossH);
   }
 
@@ -291,8 +303,17 @@ export function createRoButton(
   const container = scene.add.container(x, y);
 
   const g = scene.add.graphics();
-  drawButtonSurface(g, w, h, spec, false, enabled);
-  container.add(g);
+  const usePlate = w >= h * 2.1 && scene.textures?.exists('ui_button_plate');
+  if (usePlate) {
+    const plate = scene.add.image(0, 0, 'ui_button_plate').setDisplaySize(w + 6, h + 4).setAlpha(enabled ? 0.98 : 0.45);
+    container.add(plate);
+    // Subtle inner tone ribbon so crimson/gold/teal CTAs keep clear color coding without CPU Canvas tinting
+    g.fillStyle(spec.top, enabled ? 0.34 : 0.16).fillRoundedRect(-w / 2 + 12, -h / 2 + 5, Math.max(8, w - 24), Math.max(6, h - 10), 4);
+    container.add(g);
+  } else {
+    drawButtonSurface(g, w, h, spec, false, enabled);
+    container.add(g);
+  }
 
   const txt = scene.add
     .text(0, 0, label, {
@@ -303,7 +324,7 @@ export function createRoButton(
       stroke: '#0b111e',
       strokeThickness: 3,
       align: 'center',
-      wordWrap: { width: w - 18 },
+      wordWrap: { width: w - 22 },
     })
     .setOrigin(0.5);
   container.add(txt);
@@ -311,11 +332,21 @@ export function createRoButton(
   if (enabled) {
     const hit = scene.add.rectangle(0, 0, w, h, 0x000000, 0).setInteractive({ useHandCursor: true });
     hit.on('pointerover', () => {
-      drawButtonSurface(g, w, h, spec, true, true);
+      if (usePlate) {
+        g.clear();
+        g.fillStyle(spec.hoverTop, 0.46).fillRoundedRect(-w / 2 + 12, -h / 2 + 5, Math.max(8, w - 24), Math.max(6, h - 10), 4);
+      } else {
+        drawButtonSurface(g, w, h, spec, true, true);
+      }
       container.setScale(1.015);
     });
     hit.on('pointerout', () => {
-      drawButtonSurface(g, w, h, spec, false, true);
+      if (usePlate) {
+        g.clear();
+        g.fillStyle(spec.top, 0.34).fillRoundedRect(-w / 2 + 12, -h / 2 + 5, Math.max(8, w - 24), Math.max(6, h - 10), 4);
+      } else {
+        drawButtonSurface(g, w, h, spec, false, true);
+      }
       container.setScale(1);
     });
     hit.on('pointerdown', () => {

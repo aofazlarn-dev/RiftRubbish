@@ -132,7 +132,7 @@ export function tickSpawns(
   }
 }
 
-/** Daytime patrol groups, at least 12 tiles from the base (balance §5.2). */
+/** Daytime patrol groups, distributed across near-mid (8–13 tiles) and outer rings (13–20 tiles). */
 export function spawnDayPatrols(
   state: GameState,
   patrol: DayPatrol,
@@ -150,10 +150,15 @@ export function spawnDayPatrols(
   }
 
   const rest = ids.slice(near);
-  const centres = Array.from({ length: Math.max(1, patrol.groups) }, () => ringPoint(rng, 12, 20));
+  const groupCount = Math.max(1, patrol.groups);
+  const centres = Array.from({ length: groupCount }, (_, i) => {
+    // Alternate inner-mid exploration packs and outer meadow packs for lively daytime encounters.
+    const inner = i % 2 === 0;
+    return ringPoint(rng, inner ? 8 : 13, inner ? 13 : 20);
+  });
   rest.forEach((id, i) => {
     const c = centres[i % centres.length];
-    const p = ringPoint(rng, 0, 1.5, c.x, c.y);
+    const p = ringPoint(rng, 0, 2.2, c.x, c.y);
     spawnMonster(state, findDef(defs, id), p.x, p.y, { patrol: true });
   });
 }

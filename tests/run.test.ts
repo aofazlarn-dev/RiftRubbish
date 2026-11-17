@@ -105,14 +105,14 @@ describe('monsters (balance ยง3.3, ยง5.1)', () => {
     expect(s.coreHp).toBe(1000);
   });
 
-  it('never has more than 40 monsters alive; the rest wait in the queue', () => {
+  it('never has more than maxOnScreen (64) monsters alive; the rest wait in the queue', () => {
     const s = newState();
     s.phase = 'night';
     s.phaseElapsed = 39;
-    s.spawnQueue = Array.from({ length: 60 }, () => ({ t: 0, monsterId: 'slime', affix: false }));
+    s.spawnQueue = Array.from({ length: 80 }, () => ({ t: 0, monsterId: 'slime', affix: false }));
     tickSpawns(s, RunRng.fromSeed('cap').get('combat'), data.monsters, data.waves.maxOnScreen);
-    expect(s.monsters).toHaveLength(40);
-    expect(s.spawnQueue).toHaveLength(20);
+    expect(s.monsters).toHaveLength(64);
+    expect(s.spawnQueue).toHaveLength(16);
   });
 
   it('junk-shield affix adds a shield worth 50% of max HP (the +50% effective HP), HP unchanged', () => {
